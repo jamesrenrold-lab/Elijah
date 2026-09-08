@@ -44,6 +44,7 @@ public final class UndeadCrewmate extends Zombie {
     public static net.minecraft.world.entity.ai.attributes.AttributeSupplier.Builder createAttributes() {
         return Zombie.createAttributes()
                 .add(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED, 0.30D)
+                .add(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_SPEED, 2.5D)
                 .add(net.minecraft.world.entity.ai.attributes.Attributes.FOLLOW_RANGE, 32.0D);
     }
 
@@ -192,15 +193,16 @@ public final class UndeadCrewmate extends Zombie {
             if (target == null || !target.isAlive()) return;
             crew.getLookControl().setLookAt(target, 30.0F, 30.0F);
             double range = PirateConfig.CREW_ATTACK_RANGE.get();
-            if (crew.distanceToSqr(target) > range * range) {
-                crew.getNavigation().moveTo(target, PirateConfig.CREW_MOVE_SPEED.get());
-                return;
-            }
-            crew.getNavigation().stop();
-            if (crew.attackCooldown <= 0) {
+            double distance = crew.distanceToSqr(target);
+            double pressureRange = PirateConfig.CREW_PRESSURE_RANGE.get();
+            // Keep advancing while close enough to pressure the target. The
+            // swing is attempted in this zone, but damage still requires the
+            // intentionally tight half-block hit range.
+            crew.getNavigation().moveTo(target, PirateConfig.CREW_MOVE_SPEED.get());
+            if (distance <= pressureRange * pressureRange && crew.attackCooldown <= 0) {
                 crew.swing(InteractionHand.MAIN_HAND);
-                crew.doHurtTarget(target);
-                crew.attackCooldown = 20;
+                if (distance <= range * range) crew.doHurtTarget(target);
+                crew.attackCooldown = Math.max(1, (int) Math.round(20.0D / PirateConfig.CREW_ATTACK_SPEED.get()));
             }
         }
     }

@@ -16,6 +16,8 @@ public final class PirateConfig {
     public static final ForgeConfigSpec.IntValue CREW_LIFETIME_TICKS;
     public static final ForgeConfigSpec.IntValue CREW_MAX_COUNT;
     public static final ForgeConfigSpec.DoubleValue CREW_ATTACK_RANGE;
+    public static final ForgeConfigSpec.DoubleValue CREW_PRESSURE_RANGE;
+    public static final ForgeConfigSpec.DoubleValue CREW_ATTACK_SPEED;
     public static final ForgeConfigSpec.DoubleValue CREW_MOVE_SPEED;
     public static final ForgeConfigSpec.ConfigValue<String> GOLDEN_HONSHU_ITEM;
 
@@ -43,6 +45,8 @@ public final class PirateConfig {
         CREW_LIFETIME_TICKS = b.defineInRange("lifetimeTicks", 600, 20, 24000);
         CREW_MAX_COUNT = b.defineInRange("maximumCrewmates", 4, 1, 16);
         CREW_ATTACK_RANGE = b.defineInRange("attackRange", 0.5, 0.1, 4.0);
+        CREW_PRESSURE_RANGE = b.defineInRange("pressureRange", 1.0, 0.5, 6.0);
+        CREW_ATTACK_SPEED = b.defineInRange("attackSpeed", 2.5, 0.1, 20.0);
         CREW_MOVE_SPEED = b.defineInRange("moveSpeed", 1.15, 0.1, 4.0);
         GOLDEN_HONSHU_ITEM = b.define("goldenHonshuItem", "dungeons_and_combat:golden_honshu");
         b.pop();

@@ -3,12 +3,12 @@
 A pirate Origin built for Forge 47.4.4+ with Fabric Origins 1.10.x through Connector.
 The JAR includes the Origin data, powder-pouch screen, flintlock renderer, Dirty Tactics, undead crewmates and pirate passives.
 
-**Updating from an earlier release:** remove the old Elijah JAR and install 0.3.0 on the client and server. Do not keep two Elijah versions installed. Existing pouch contents are preserved.
+**Updating from an earlier release:** remove the old Elijah JAR and install 0.3.1 on the client and server. Do not keep two Elijah versions installed. Existing pouch contents are preserved.
 
 ## Install
 
 1. Download the `Elijah-Pirate-1.20.1` artifact from the latest successful GitHub Actions build and unzip it.
-2. Put `elijah-pirate-0.3.0.jar` in your Minecraft instance's `mods` folder.
+2. Put `elijah-pirate-0.3.1.jar` in your Minecraft instance's `mods` folder.
 3. On multiplayer, install that same JAR on the server and every player's client.
 4. Keep your existing Forge / Connector / Fabric Origins / Even More Origins Keybinds setup installed. Restart Minecraft and the server.
 5. Select **Elijah — The Powder Corsair**. An operator can select it for a player with:
@@ -36,7 +36,7 @@ Passives activate automatically and have no keybind.
 
 - **Primary Active Power — Dirty Tactics:** arms your next successful melee hit. That target gets **Slowness III for 2 seconds** and emits the **skeleton death** sound. It adds no extra damage. The **18-second cooldown starts when the hit lands**. Missing, shooting the flintlock, or hitting a shield does not consume the charge. One target per activation; no charge stacking. Dying or changing Origin clears a primed charge; relogs and respawns do not reset an active cooldown.
 
-- **Quaternary Active Power — Call of the Drowned Crew:** starts with **four** resource charges. Each press spends **one** charge and summons **one** undead crewmate, never a whole group. Each crewmate wears a golden Honshu (resolved from `dungeons_and_combat:golden_honshu` when that item is present), follows the nearest valid mob you most recently attacked or that most recently attacked you, and only swings at **0.5 blocks** or closer. It lasts **30 seconds** and one charge returns every **60 seconds**, with the bone/sailor resource bar showing the current charges. Each crewmate snapshots **80% of the summoner's current max health and attack damage**. Epic Fight's optional biped mob patch supplies sword/tachi animations; without Epic Fight, a vanilla combat goal provides the same half-block attack rule. The bundled texture is a pirate-captain fallback based on the requested [Undead Pirate Captain reference](https://www.minecraftskins.com/skin/21355492/undead-pirate-captain/).
+- **Quaternary Active Power — Call of the Drowned Crew:** starts with **four** resource charges. Each press spends **one** charge and summons **one** undead crewmate, never a whole group. Each crewmate wears the exact supplied 64×64 golden-and-red [Undead Pirate Captain skin](https://www.minecraftskins.com/skin/21355492/undead-pirate-captain/), follows the nearest valid mob you most recently attacked or that most recently attacked you, and keeps moving forward while attempting swings inside **1 block**. Damage still requires the intentionally close **0.5-block** range. It lasts **30 seconds** and one charge returns every **60 seconds**, with the bone/sailor resource bar showing the current charges. Each crewmate snapshots **80% of the summoner's current max health and attack damage** and uses **2.5 attack speed** (about an 8-tick attack interval). Epic Fight's optional biped mob patch supplies sword/tachi animations; without Epic Fight, a vanilla combat goal provides the same pressure-and-hit behavior.
 
 Bind **Primary Active Power**, **Secondary Active Power**, **Tertiary Active Power** and **Quaternary Active Power** in Minecraft's Controls menu. The Powder Pouch uses `key.origins.tertiary_active`, and the crew uses `key.origins.quaternary_active`; both are the first added bindings from your existing [Even More Origins Keybinds](https://www.curseforge.com/minecraft/mc-mods/even-more-origins-keybinds) mod.
 
@@ -75,6 +75,8 @@ Defaults:
 | `lifetimeTicks` | 600 (30 seconds) |
 | `maximumCrewmates` | 4 |
 | `attackRange` | 0.5 blocks |
+| `pressureRange` | 1.0 block |
+| `attackSpeed` | 2.5 |
 | `goldenHonshuItem` | `dungeons_and_combat:golden_honshu` |
 
 The nine-item capacity is fixed. Damage, recoil and crewmate stats are calculated on the server. Crew resources are an Origins resource, so they sync to the client and render with the bundled resource-bar sheet. The flintlock cooldown and combat state persist through relogs and respawns.

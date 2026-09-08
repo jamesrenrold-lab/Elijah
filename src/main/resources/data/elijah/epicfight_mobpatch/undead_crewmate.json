@@ -43,21 +43,21 @@
       "behavior_series": [
         {
           "weight": 100.0,
-          "cooldown": 18,
+          "cooldown": 8,
           "canBeInterrupted": true,
           "looping": true,
           "behaviors": [
             {
               "conditions": [
                 {"predicate": "within_eye_height"},
-                {"predicate": "within_distance", "min": 0.0, "max": 0.55}
+                {"predicate": "within_distance", "min": 0.0, "max": 1.0}
               ],
               "animation": "epicfight:biped/combat/mob_onehand1"
             },
             {
               "conditions": [
                 {"predicate": "within_eye_height"},
-                {"predicate": "within_distance", "min": 0.0, "max": 0.55}
+                {"predicate": "within_distance", "min": 0.0, "max": 1.0}
               ],
               "animation": "epicfight:biped/combat/mob_onehand2"
             }

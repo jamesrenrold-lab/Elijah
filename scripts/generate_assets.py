@@ -39,68 +39,79 @@ def make_resource_bar():
 
 
 def make_pirate_skin():
-    # A compact 64x64 classic-arm undead pirate texture. The in-game renderer
-    # uses this as a stable bundled fallback for the linked reference skin.
+    # A 64x64 classic-arm undead pirate texture based on the attached captain
+    # reference: a pale skull, green-gold captain hat, red coat and dark boots.
     image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    skin = (112, 145, 118, 255)
-    shadow = (68, 91, 78, 255)
-    coat = (31, 38, 53, 255)
-    coat_light = (52, 61, 82, 255)
-    red = (120, 36, 42, 255)
-    gold = (195, 157, 62, 255)
-    bone = (204, 197, 166, 255)
-    dark = (20, 19, 24, 255)
+    bone = (222, 216, 174, 255)
+    bone_shadow = (169, 157, 113, 255)
+    eye = (24, 20, 20, 255)
+    hat = (166, 176, 45, 255)
+    hat_shadow = (93, 104, 29, 255)
+    red = (126, 22, 24, 255)
+    red_shadow = (73, 14, 20, 255)
+    gold = (220, 164, 42, 255)
+    leather = (86, 43, 20, 255)
+    steel = (83, 91, 91, 255)
+    dark = (28, 24, 30, 255)
 
-    # Head front / back / sides.
-    draw.rectangle((8, 8, 15, 15), fill=skin)
-    draw.rectangle((10, 8, 13, 10), fill=dark)  # hat brim shadow
-    draw.rectangle((10, 11, 11, 12), fill=dark)
-    draw.rectangle((13, 11, 14, 12), fill=dark)
-    draw.point((12, 14), fill=bone)
-    draw.rectangle((0, 8, 7, 15), fill=shadow)
-    draw.rectangle((16, 8, 23, 15), fill=shadow)
-    draw.rectangle((8, 0, 15, 7), fill=dark)
-    draw.rectangle((8, 16, 15, 23), fill=shadow)
-    # Tricorne hat and bandana across the head.
-    draw.rectangle((7, 6, 16, 8), fill=dark)
-    draw.rectangle((9, 4, 14, 6), fill=dark)
-    draw.rectangle((8, 7, 15, 8), fill=red)
-    draw.rectangle((11, 7, 12, 8), fill=gold)
+    def box(coords, color):
+        draw.rectangle(coords, fill=color)
 
-    # Torso: dark coat, red sash, gold buttons.
-    draw.rectangle((20, 20, 27, 31), fill=coat)
-    draw.rectangle((28, 20, 35, 31), fill=coat_light)
-    draw.rectangle((36, 20, 43, 31), fill=coat)
-    draw.rectangle((44, 20, 51, 31), fill=coat_light)
-    draw.rectangle((20, 24, 35, 26), fill=red)
-    draw.rectangle((28, 24, 29, 26), fill=gold)
-    draw.rectangle((32, 24, 33, 26), fill=gold)
-    draw.rectangle((34, 20, 35, 31), fill=dark)
-    # Back and side torso regions.
-    draw.rectangle((20, 16, 35, 19), fill=dark)
-    draw.rectangle((36, 16, 51, 19), fill=dark)
-    draw.rectangle((20, 32, 35, 35), fill=coat)
-    draw.rectangle((36, 32, 51, 35), fill=coat)
+    # Head faces: skull and the green-gold captain hat.
+    for coords, color in [
+        ((8, 8, 15, 15), bone), ((24, 8, 31, 15), bone_shadow),
+        ((0, 8, 7, 15), bone_shadow), ((16, 8, 23, 15), bone_shadow),
+        ((8, 0, 15, 7), hat), ((16, 0, 23, 7), hat_shadow),
+        ((8, 16, 15, 23), bone_shadow), ((16, 16, 23, 23), dark)
+    ]:
+        box(coords, color)
+    box((8, 6, 15, 8), hat_shadow)
+    box((10, 6, 13, 7), hat)
+    box((9, 10, 10, 11), eye)
+    box((13, 10, 14, 11), eye)
+    box((11, 13, 12, 14), eye)
+    box((10, 15, 13, 15), bone_shadow)
 
-    # Arms: coat sleeves with bone hands.
-    for x in (44, 52):
-        draw.rectangle((x, 20, x + 3, 31), fill=coat)
-        draw.rectangle((x + 4, 20, x + 7, 31), fill=coat_light)
-        draw.rectangle((x, 32, x + 3, 35), fill=skin)
-        draw.rectangle((x + 4, 32, x + 7, 35), fill=shadow)
-    # Legs and boots.
-    draw.rectangle((4, 20, 11, 31), fill=coat)
-    draw.rectangle((12, 20, 19, 31), fill=coat_light)
-    draw.rectangle((4, 32, 11, 35), fill=dark)
-    draw.rectangle((12, 32, 19, 35), fill=dark)
-    draw.rectangle((4, 36, 11, 47), fill=coat)
-    draw.rectangle((12, 36, 19, 47), fill=coat_light)
-    draw.rectangle((4, 44, 11, 47), fill=dark)
-    draw.rectangle((12, 44, 19, 47), fill=dark)
-    # Extra-layer areas are transparent but keep a few pirate accents.
-    draw.rectangle((40, 36, 47, 39), fill=red)
-    draw.rectangle((48, 36, 55, 39), fill=gold)
+    # Torso front/back/sides: red captain's coat with a gray throat guard.
+    for coords in ((20, 20, 27, 31), (32, 20, 39, 31), (16, 20, 19, 31), (28, 20, 31, 31)):
+        box(coords, red)
+    box((20, 20, 27, 22), red_shadow)
+    box((23, 20, 24, 25), steel)
+    box((20, 27, 27, 29), leather)
+    box((20, 28, 27, 28), gold)
+    for x in (21, 25):
+        box((x, 24, x, 25), gold)
+    box((32, 20, 39, 22), red_shadow)
+    box((32, 27, 39, 29), leather)
+    box((32, 28, 39, 28), gold)
+    box((20, 16, 27, 19), gold)
+    box((28, 16, 35, 19), leather)
+    box((20, 32, 27, 35), red_shadow)
+    box((32, 32, 39, 35), red_shadow)
+
+    # Classic 4px arms: red sleeves, gold cuffs and bone hands. Each model
+    # face is filled so no transparent UV face renders as a black placeholder.
+    for front_x, y in ((44, 20), (36, 52)):
+        for x, shade in ((front_x, red), (front_x - 4, red_shadow),
+                         (front_x + 4, red_shadow), (front_x + 8, red_shadow)):
+            box((x, y, x + 3, y + 11), shade)
+        box((front_x, y + 9, front_x + 3, y + 11), gold)
+        box((front_x, y + 12, front_x + 3, y + 15), bone)
+        box((front_x + 4, y + 12, front_x + 7, y + 15), bone_shadow)
+        box((front_x, y - 4, front_x + 3, y - 1), gold)
+        box((front_x + 4, y - 4, front_x + 7, y - 1), leather)
+
+    # Legs: dark trousers, brown boots and red coat tails; fill front, back
+    # and side faces for both right and left legs.
+    for front_x, y in ((4, 20), (20, 52)):
+        for x, shade in ((front_x, dark), (front_x + 8, red_shadow),
+                         (front_x - 4, dark), (front_x + 4, dark)):
+            box((x, y, x + 7, y + 11), shade)
+        box((front_x, y + 8, front_x + 7, y + 9), leather)
+        box((front_x, y + 10, front_x + 7, y + 11), gold)
+        box((front_x, y - 4, front_x + 7, y - 1), red_shadow)
+        box((front_x + 8, y - 4, front_x + 15, y - 1), leather)
     image.save(SKIN)
 
 
@@ -108,4 +119,5 @@ if __name__ == "__main__":
     GUI.parent.mkdir(parents=True, exist_ok=True)
     SKIN.parent.mkdir(parents=True, exist_ok=True)
     make_resource_bar()
-    make_pirate_skin()
+    # The exact 64x64 captain skin is checked in separately from the generated
+    # bar sheet; do not overwrite it with the optional fallback generator.

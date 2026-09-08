@@ -235,6 +235,12 @@ public final class ElijahPirate {
                 double heldItemBonus = crewAttack.getValue() - crewAttack.getBaseValue();
                 crewAttack.setBaseValue(Math.max(0.0D, desiredAttack - heldItemBonus));
             }
+            AttributeInstance crewSpeed = crew.getAttribute(Attributes.ATTACK_SPEED);
+            if (crewSpeed != null) {
+                double desiredSpeed = PirateConfig.CREW_ATTACK_SPEED.get();
+                double heldItemBonus = crewSpeed.getValue() - crewSpeed.getBaseValue();
+                crewSpeed.setBaseValue(Math.max(0.1D, desiredSpeed - heldItemBonus));
+            }
             if (target instanceof Mob mob && mob.isAlive()) crew.setTarget(mob);
             crew.setCustomName(Component.translatable("entity.elijah.undead_crewmate"));
             crew.setCustomNameVisible(false);
