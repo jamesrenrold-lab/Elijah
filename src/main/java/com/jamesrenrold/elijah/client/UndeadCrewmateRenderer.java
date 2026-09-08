@@ -14,7 +14,7 @@ public final class UndeadCrewmateRenderer extends HumanoidMobRenderer<UndeadCrew
             "elijah", "textures/entity/undead_pirate_captain.png");
 
     public UndeadCrewmateRenderer(EntityRendererProvider.Context context) {
-        super(context, new ZombieModel<>(context.bakeLayer(ModelLayers.ZOMBIE), false), 0.5F);
+        super(context, new ZombieModel<>(context.bakeLayer(ModelLayers.ZOMBIE)), 0.5F);
         this.addLayer(new ItemInHandLayer<>(this, context.getItemInHandRenderer()));
     }
 

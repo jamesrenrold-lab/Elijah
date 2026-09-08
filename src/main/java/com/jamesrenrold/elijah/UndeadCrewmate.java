@@ -206,14 +206,14 @@ public final class UndeadCrewmate extends Zombie {
     }
 
     @Override
-    protected void addAdditionalSaveData(CompoundTag tag) {
+    public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
         if (ownerId != null) tag.putUUID("Owner", ownerId);
         tag.putInt("AttackCooldown", attackCooldown);
     }
 
     @Override
-    protected void readAdditionalSaveData(CompoundTag tag) {
+    public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         ownerId = tag.hasUUID("Owner") ? tag.getUUID("Owner") : null;
         attackCooldown = tag.getInt("AttackCooldown");
