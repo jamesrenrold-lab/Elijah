@@ -28,6 +28,11 @@ jobs:
           gradle-version: '8.8'
       - name: Validate origin data
         run: python3 scripts/validate.py
+      - name: Verify fractional XP bonuses
+        run: |
+          mkdir -p build/logic-tests
+          javac -d build/logic-tests src/main/java/com/jamesrenrold/elijah/ExperienceBonus.java scripts/ExperienceBonusTest.java
+          java -cp build/logic-tests ExperienceBonusTest
       - name: Compile and reobfuscate Forge mod
         run: gradle build --stacktrace
       - name: Package installation notes

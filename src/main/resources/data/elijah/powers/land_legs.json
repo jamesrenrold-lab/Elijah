@@ -1,0 +1,19 @@
+{
+  "type": "origins:conditioned_attribute",
+  "name": "Land Legs",
+  "description": "You move 5% slower on land. This penalty is removed while you are in water.",
+  "tick_rate": 1,
+  "update_health": false,
+  "modifier": {
+    "name": "Land Legs: movement speed",
+    "attribute": "minecraft:generic.movement_speed",
+    "operation": "multiply_total",
+    "value": -0.05
+  },
+  "condition": {
+    "type": "origins:fluid_height",
+    "fluid": "minecraft:water",
+    "comparison": "<=",
+    "compare_to": 0.0
+  }
+}

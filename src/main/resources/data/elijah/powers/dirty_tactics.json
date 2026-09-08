@@ -1,0 +1,17 @@
+{
+  "type": "origins:active_self",
+  "name": "Dirty Tactics",
+  "description": "Tertiary ability: prime your next successful melee hit. It plays a skeleton death sound and applies Slowness III for 2 seconds. The 18-second cooldown starts when the hit lands. Misses do not spend the charge; only one target is affected.",
+  "entity_action": {
+    "type": "origins:execute_command",
+    "command": "elijah dirty_tactics"
+  },
+  "cooldown": 5,
+  "hud_render": {
+    "should_render": false
+  },
+  "key": {
+    "key": "key.origins.tertiary_active",
+    "continuous": false
+  }
+}

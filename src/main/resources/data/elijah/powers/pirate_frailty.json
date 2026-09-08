@@ -1,0 +1,19 @@
+{
+  "type": "origins:attribute",
+  "name": "Pirate Frailty",
+  "description": "Your total armor is reduced by 15%, and you have 4 less maximum health (2 fewer hearts).",
+  "modifiers": [
+    {
+      "name": "Pirate Frailty: armor",
+      "attribute": "minecraft:generic.armor",
+      "operation": "multiply_total",
+      "value": -0.15
+    },
+    {
+      "name": "Pirate Frailty: health",
+      "attribute": "minecraft:generic.max_health",
+      "operation": "addition",
+      "value": -4.0
+    }
+  ]
+}

@@ -19,6 +19,10 @@ public final class PowderPouch extends ItemStackHandler {
     public static final Capability<PowderPouch> CAPABILITY =
             CapabilityManager.get(new CapabilityToken<>() {});
     public long nextShotTick;
+    public boolean dirtyTacticsArmed;
+    public long dirtyTacticsReadyAt;
+    public boolean wisdomOfTheSea;
+    public int xpBonusRemainder;
 
     public PowderPouch() { super(1); }
 
@@ -42,12 +46,20 @@ public final class PowderPouch extends ItemStackHandler {
     public CompoundTag serializeNBT() {
         CompoundTag tag = super.serializeNBT();
         tag.putLong("NextShotTick", nextShotTick);
+        tag.putBoolean("DirtyTacticsArmed", dirtyTacticsArmed);
+        tag.putLong("DirtyTacticsReadyAt", dirtyTacticsReadyAt);
+        tag.putBoolean("WisdomOfTheSea", wisdomOfTheSea);
+        tag.putInt("XpBonusRemainder", xpBonusRemainder);
         return tag;
     }
 
     @Override
     public void deserializeNBT(CompoundTag tag) {
         nextShotTick = tag.getLong("NextShotTick");
+        dirtyTacticsArmed = tag.getBoolean("DirtyTacticsArmed");
+        dirtyTacticsReadyAt = tag.getLong("DirtyTacticsReadyAt");
+        wisdomOfTheSea = tag.getBoolean("WisdomOfTheSea");
+        xpBonusRemainder = Math.floorMod(tag.getInt("XpBonusRemainder"), 10);
         // Enforce the one-slot layout even for malformed/old save data.
         super.setStackInSlot(0, ItemStack.EMPTY);
         ListTag items = tag.getList("Items", Tag.TAG_COMPOUND);

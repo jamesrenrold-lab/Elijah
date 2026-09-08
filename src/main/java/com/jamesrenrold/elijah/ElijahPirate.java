@@ -84,6 +84,7 @@ public final class ElijahPirate {
             old.getCapability(PowderPouch.CAPABILITY).ifPresent(previous ->
                     event.getEntity().getCapability(PowderPouch.CAPABILITY).ifPresent(current -> {
                         current.deserializeNBT(previous.serializeNBT());
+                        if (event.isWasDeath()) current.dirtyTacticsArmed = false;
                         if (event.isWasDeath() && !old.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
                             current.setStackInSlot(0, ItemStack.EMPTY);
                         }
@@ -113,6 +114,9 @@ public final class ElijahPirate {
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("pouch").executes(context -> openPouch(context.getSource())))
                 .then(Commands.literal("fire").executes(context -> fire(context.getSource())))
+                .then(Commands.literal("dirty_tactics").executes(context -> PirateAbilities.armDirtyTactics(context.getSource())))
+                .then(Commands.literal("sea_on").executes(context -> PirateAbilities.setWisdom(context.getSource(), true)))
+                .then(Commands.literal("sea_off").executes(context -> PirateAbilities.setWisdom(context.getSource(), false)))
                 .then(Commands.literal("unload").executes(context -> unload(context.getSource()))));
     }
 
@@ -175,6 +179,8 @@ public final class ElijahPirate {
         ServerPlayer player = source.getPlayerOrException();
         if (player.containerMenu instanceof PowderMenu) player.closeContainer();
         player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch -> {
+            pouch.dirtyTacticsArmed = false;
+            pouch.wisdomOfTheSea = false;
             ItemStack powder = pouch.extractItem(0, PowderPouch.LIMIT, false);
             if (!powder.isEmpty()) {
                 player.getInventory().add(powder);

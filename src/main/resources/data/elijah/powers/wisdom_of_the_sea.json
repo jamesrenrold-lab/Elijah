@@ -1,0 +1,33 @@
+{
+  "type": "origins:multiple",
+  "name": "Wisdom of the Sea",
+  "description": "Gain 30% more experience points and permanently swim 25% faster. Fractional experience bonuses carry over between pickups.",
+  "experience": {
+    "type": "origins:action_on_callback",
+    "entity_action_gained": {
+      "type": "origins:execute_command",
+      "command": "elijah sea_on"
+    },
+    "entity_action_added": {
+      "type": "origins:execute_command",
+      "command": "elijah sea_on"
+    },
+    "entity_action_respawned": {
+      "type": "origins:execute_command",
+      "command": "elijah sea_on"
+    },
+    "entity_action_lost": {
+      "type": "origins:execute_command",
+      "command": "elijah sea_off"
+    }
+  },
+  "swimming": {
+    "type": "origins:attribute",
+    "modifier": {
+      "name": "Wisdom of the Sea: swim speed",
+      "attribute": "forge:swim_speed",
+      "operation": "multiply_total",
+      "value": 0.25
+    }
+  }
+}

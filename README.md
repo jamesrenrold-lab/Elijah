@@ -1,14 +1,16 @@
 # Elijah Pirate — Minecraft 1.20.1
 
 A pirate Origin built for Forge 47.4.4+ with Fabric Origins 1.10.x through Connector.
-The JAR includes the Origin data, powder-pouch screen and flintlock renderer.
+The JAR includes the Origin data, powder-pouch screen, flintlock renderer, Dirty Tactics and pirate passives.
+
+**Updating from 0.1.0:** remove the old Elijah JAR and install 0.2.0 on the client and server. Do not keep both versions installed. Existing pouch contents are preserved.
 
 ## Install
 
 1. Download the `Elijah-Pirate-1.20.1` artifact from the latest successful GitHub Actions build and unzip it.
-2. Put `elijah-pirate-0.1.0.jar` in your Minecraft instance's `mods` folder.
+2. Put `elijah-pirate-0.2.0.jar` in your Minecraft instance's `mods` folder.
 3. On multiplayer, install that same JAR on the server and every player's client.
-4. Keep your existing Forge / Connector / Fabric Origins setup installed. Restart Minecraft and the server.
+4. Keep your existing Forge / Connector / Fabric Origins / Even More Origins Keybinds setup installed. Restart Minecraft and the server.
 5. Select **Elijah — The Powder Corsair**. An operator can select it for a player with:
    `/origin set <player> origins:origin elijah:pirate`
 
@@ -23,7 +25,21 @@ There is no additional datapack ZIP or resource pack to install for this version
 - Successful hits apply **Darkness, Blindness and Slowness I for 20 ticks / 1 second**, regardless of powder count. Darkness and Blindness affect player vision; they do not alter mob AI. Normal shields, invulnerability and damage-cancellation rules apply.
 - The firing cooldown is **20 ticks / 1 second**. Projectile speed is 3.5 blocks/tick with slight gravity; it disappears after 30 ticks or its first collision. It does not explode or destroy blocks.
 
-Bind **Primary Active Power** and **Secondary Active Power** in Minecraft's Controls menu. These use the normal Origins bindings and coexist with Even More Origins Keybinds; no extra binding is needed for these first two powers.
+- **Tertiary Active Power — Dirty Tactics:** arms your next successful melee hit. That target gets **Slowness III for 2 seconds** and emits the **skeleton death** sound. It adds no extra damage. The **18-second cooldown starts when the hit lands**. Missing, shooting the flintlock, or hitting a shield does not consume the charge. One target per activation; no charge stacking. Dying or changing Origin clears a primed charge; relogs and respawns do not reset an active cooldown.
+
+Bind **Primary Active Power**, **Secondary Active Power** and **Tertiary Active Power** in Minecraft's Controls menu. Dirty Tactics uses `key.origins.tertiary_active`, the first added binding from your existing [Even More Origins Keybinds](https://www.curseforge.com/minecraft/mc-mods/even-more-origins-keybinds) mod.
+
+## Passives
+
+| Passive | Effect |
+|---|---|
+| Wisdom of the Sea | **+30% experience points**, with fractional progress carried between pickups; **+25% swim-speed attribute** at all times. |
+| Land Legs | **-5% movement speed outside water**, removed as soon as the water condition updates (once per tick). |
+| Pirate Frailty | **-15% total armor** and **-4 maximum health points (2 hearts)** at all times. |
+
+With otherwise vanilla stats, maximum health is 16 points / 8 hearts. Armor and speed penalties multiply the total value, so equipment bonuses are included. Attribute modifiers belong to the Origin and are removed when it is lost. The XP bonus applies to positive XP-point gains, not direct level adjustments or XP removal; XP spent repairing equipment is not player XP gained. Ten separate 1-point gains still award 13 points in total.
+
+All original flintlock settings remain unchanged, including the 11-damage maximum.
 
 ## Inventory persistence
 
@@ -48,10 +64,10 @@ The nine-item capacity is fixed. Damage and recoil are calculated on the server.
 
 ## Building and development
 
-GitHub Actions installs Java 17 and Gradle 8.8, uses Gradle caching, runs data validation, compiles and reobfuscates the Forge JAR, then uploads the installable artifact. Push related changes together to avoid unnecessary builds.
+GitHub Actions installs Java 17 and Gradle 8.8, uses Gradle caching, runs data validation and fractional-XP regression checks, compiles and reobfuscates the Forge JAR, then uploads the installable artifact. Push related changes together to avoid unnecessary builds.
 
 To build locally with Java 17 and Gradle 8.8 installed: `gradle build`. The installable JAR is in `build/libs/`.
 
-Operator-only diagnostic commands: `/elijah pouch`, `/elijah fire`, `/elijah unload`. Origins executes these internally through its power actions, so ordinary players do not need operator permissions to use their Origin. As in the other command-based Origins, Apoli's `executeCommand` permission level must remain at its default of 2 or higher.
+Operator-only diagnostic commands: `/elijah pouch`, `/elijah fire`, `/elijah dirty_tactics`, `/elijah unload`. The hidden `/elijah sea_on` and `/elijah sea_off` commands are managed by the Wisdom of the Sea lifecycle callbacks. Origins executes these internally through its power actions, so ordinary players do not need operator permissions to use their Origin. As in the other command-based Origins, Apoli's `executeCommand` permission level must remain at its default of 2 or higher.
 
-Compile success verifies the Forge API integration, not in-game behavior in the complete modpack. The first gameplay check should cover the slot limit, firing at 1 and 9 powder, recoil, effects, and survival respawn.
+Compile success verifies the Forge API integration, not in-game behavior in the complete modpack. The first gameplay check should cover the slot limit, firing at 1 and 9 powder, recoil, effects, and survival respawn, Dirty Tactics on a melee hit, and passive stats after switching Origin.
