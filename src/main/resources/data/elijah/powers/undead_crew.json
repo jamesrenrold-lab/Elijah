@@ -1,0 +1,40 @@
+{
+  "type": "origins:active_self",
+  "name": "Call of the Drowned Crew",
+  "description": "Quaternary ability: spend one of four crew resources to summon one undead crewmate wearing a golden Honshu. It lives for 30 seconds; one resource returns every 60 seconds. Crewmates follow the mob you most recently attacked or that most recently attacked you, rushing it and only swinging within half a block. Epic Fight uses its biped weapon animations when installed.",
+  "entity_action": {
+    "type": "origins:if_else",
+    "condition": {
+      "type": "origins:resource",
+      "resource": "elijah:crew_resource",
+      "comparison": ">",
+      "compare_to": 0
+    },
+    "if_action": {
+      "type": "origins:and",
+      "actions": [
+        {
+          "type": "origins:execute_command",
+          "command": "elijah crew"
+        },
+        {
+          "type": "origins:change_resource",
+          "resource": "elijah:crew_resource",
+          "change": -1
+        }
+      ]
+    },
+    "else_action": {
+      "type": "origins:execute_command",
+      "command": "tellraw @s {\"text\":\"No crew resource is ready.\",\"color\":\"gold\"}"
+    }
+  },
+  "cooldown": 5,
+  "hud_render": {
+    "should_render": false
+  },
+  "key": {
+    "key": "key.origins.quaternary_active",
+    "continuous": false
+  }
+}

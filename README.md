@@ -1,14 +1,14 @@
 # Elijah Pirate — Minecraft 1.20.1
 
 A pirate Origin built for Forge 47.4.4+ with Fabric Origins 1.10.x through Connector.
-The JAR includes the Origin data, powder-pouch screen, flintlock renderer, Dirty Tactics and pirate passives.
+The JAR includes the Origin data, powder-pouch screen, flintlock renderer, Dirty Tactics, undead crewmates and pirate passives.
 
-**Updating from 0.1.0, 0.2.0 or 0.2.1:** remove the old Elijah JAR and install 0.2.2 on the client and server. Do not keep both versions installed. Existing pouch contents are preserved.
+**Updating from an earlier release:** remove the old Elijah JAR and install 0.3.0 on the client and server. Do not keep two Elijah versions installed. Existing pouch contents are preserved.
 
 ## Install
 
 1. Download the `Elijah-Pirate-1.20.1` artifact from the latest successful GitHub Actions build and unzip it.
-2. Put `elijah-pirate-0.2.2.jar` in your Minecraft instance's `mods` folder.
+2. Put `elijah-pirate-0.3.0.jar` in your Minecraft instance's `mods` folder.
 3. On multiplayer, install that same JAR on the server and every player's client.
 4. Keep your existing Forge / Connector / Fabric Origins / Even More Origins Keybinds setup installed. Restart Minecraft and the server.
 5. Select **Elijah — The Powder Corsair**. An operator can select it for a player with:
@@ -23,6 +23,7 @@ There is no additional datapack ZIP or resource pack to install for this version
 | Primary Active Power | Dirty Tactics |
 | Secondary Active Power | Flintlock Kick |
 | Tertiary Active Power | Powder Pouch |
+| Quaternary Active Power | Call of the Drowned Crew |
 
 Passives activate automatically and have no keybind.
 
@@ -34,6 +35,8 @@ Passives activate automatically and have no keybind.
 - The firing cooldown is **20 ticks / 1 second**. Projectile speed is 3.5 blocks/tick with slight gravity; it disappears after 30 ticks or its first collision. It does not explode or destroy blocks.
 
 - **Primary Active Power — Dirty Tactics:** arms your next successful melee hit. That target gets **Slowness III for 2 seconds** and emits the **skeleton death** sound. It adds no extra damage. The **18-second cooldown starts when the hit lands**. Missing, shooting the flintlock, or hitting a shield does not consume the charge. One target per activation; no charge stacking. Dying or changing Origin clears a primed charge; relogs and respawns do not reset an active cooldown.
+
+- **Quaternary Active Power — Call of the Drowned Crew:** starts with **four** resource charges. Each press spends **one** charge and summons **one** undead crewmate, never a whole group. Each crewmate wears a golden Honshu (resolved from `dungeons_and_combat:golden_honshu` when that item is present), follows the nearest valid mob you most recently attacked or that most recently attacked you, and only swings at **0.5 blocks** or closer. It lasts **30 seconds** and one charge returns every **60 seconds**, with the bone/sailor resource bar showing the current charges. Each crewmate snapshots **80% of the summoner's current max health and attack damage**. Epic Fight's optional biped mob patch supplies sword/tachi animations; without Epic Fight, a vanilla combat goal provides the same half-block attack rule. The bundled texture is a pirate-captain fallback based on the requested [Undead Pirate Captain reference](https://www.minecraftskins.com/skin/21355492/undead-pirate-captain/).
 
 Bind **Primary Active Power**, **Secondary Active Power** and **Tertiary Active Power** in Minecraft's Controls menu. The Powder Pouch uses `key.origins.tertiary_active`, the first added binding from your existing [Even More Origins Keybinds](https://www.curseforge.com/minecraft/mc-mods/even-more-origins-keybinds) mod.
 
@@ -69,8 +72,12 @@ Defaults:
 | `recoilPerGunpowder` | 0.22 |
 | `cooldownTicks` | 20 |
 | `effectDurationTicks` | 20 |
+| `lifetimeTicks` | 600 (30 seconds) |
+| `maximumCrewmates` | 4 |
+| `attackRange` | 0.5 blocks |
+| `goldenHonshuItem` | `dungeons_and_combat:golden_honshu` |
 
-The nine-item capacity is fixed. Damage and recoil are calculated on the server. The cooldown also persists through relogs and respawns.
+The nine-item capacity is fixed. Damage, recoil and crewmate stats are calculated on the server. Crew resources are an Origins resource, so they sync to the client and render with the bundled resource-bar sheet. The flintlock cooldown and combat state persist through relogs and respawns.
 
 ## Building and development
 
@@ -78,6 +85,6 @@ GitHub Actions installs Java 17 and Gradle 8.8, uses Gradle caching, runs data v
 
 To build locally with Java 17 and Gradle 8.8 installed: `gradle build`. The installable JAR is in `build/libs/`.
 
-Operator-only diagnostic commands: `/elijah pouch`, `/elijah fire`, `/elijah dirty_tactics`, `/elijah unload`. The hidden `/elijah sea_on` and `/elijah sea_off` commands are managed by the Wisdom of the Sea lifecycle callbacks. Origins executes these internally through its power actions, so ordinary players do not need operator permissions to use their Origin. As in the other command-based Origins, Apoli's `executeCommand` permission level must remain at its default of 2 or higher.
+Operator-only diagnostic commands: `/elijah pouch`, `/elijah fire`, `/elijah dirty_tactics`, `/elijah crew`, `/elijah unload`. The hidden `/elijah sea_on` and `/elijah sea_off` commands are managed by the Wisdom of the Sea lifecycle callbacks. Origins executes these internally through its power actions, so ordinary players do not need operator permissions to use their Origin. As in the other command-based Origins, Apoli's `executeCommand` permission level must remain at its default of 2 or higher.
 
 Compile success verifies the Forge API integration, not in-game behavior in the complete modpack. The first gameplay check should cover the slot limit, firing at 1 and 9 powder, recoil, effects, and survival respawn, Dirty Tactics on a melee hit, and passive stats after switching Origin.

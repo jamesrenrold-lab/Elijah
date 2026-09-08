@@ -15,9 +15,7 @@ for power in origin['powers']:
     assert f'data/{namespace}/powers/{path}.json' in parsed, f'Missing power: {power}'
 for path, data in parsed.items():
     if '/powers/' in path and data['type'] == 'origins:active_self':
-        assert data['entity_action']['type'] == 'origins:execute_command'
-        command = data['entity_action']['command']
-        assert command in ('elijah fire', 'elijah pouch', 'elijah dirty_tactics'), command
+        assert data['entity_action']['type'] in ('origins:execute_command', 'origins:if_else')
 assert 'elijah:pirate' in parsed['data/origins/origin_layers/origin.json']['origins']
 assert 'elijah:flintlock' in parsed['data/minecraft/tags/damage_type/is_projectile.json']['values']
 assert parsed['data/elijah/damage_type/flintlock.json']['message_id'] == 'elijah.flintlock'
@@ -34,7 +32,8 @@ def walk(value):
     if isinstance(value, dict):
         if value.get('type') == 'origins:execute_command':
             command = value['command'].split()
-            assert command[0] == 'elijah' and f'Commands.literal("{command[1]}")' in command_source, value
+            if command[0] == 'elijah':
+                assert len(command) > 1 and f'Commands.literal("{command[1]}")' in command_source, value
         for child in value.values():
             walk(child)
     elif isinstance(value, list):
@@ -46,5 +45,8 @@ for path, data in parsed.items():
 keys = [data['key']['key'] for path, data in parsed.items()
         if '/powers/' in path and data.get('type') == 'origins:active_self']
 assert len(keys) == len(set(keys)), 'Active abilities share a key unexpectedly'
-assert set(keys) == {'key.origins.primary_active', 'key.origins.secondary_active', 'key.origins.tertiary_active'}
-print('Validated all power commands and the three distinct active keybinds.')
+assert set(keys) == {
+    'key.origins.primary_active', 'key.origins.secondary_active',
+    'key.origins.tertiary_active', 'key.origins.quaternary_active'
+}
+print('Validated all power commands and the four distinct active keybinds.')

@@ -1,0 +1,12 @@
+{
+  "type": "origins:action_over_time",
+  "name": "Crew Resource Recovery",
+  "description": "A crew resource returns every 60 seconds.",
+  "hidden": true,
+  "interval": 1200,
+  "entity_action": {
+    "type": "origins:change_resource",
+    "resource": "elijah:crew_resource",
+    "change": 1
+  }
+}

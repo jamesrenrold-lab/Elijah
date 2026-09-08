@@ -7,7 +7,7 @@ modId="elijah"
 version="${mod_version}"
 displayName="Elijah Pirate"
 authors="jamesrenrold-lab"
-description='''Pirate Origin: a dedicated nine-gunpowder pouch and a recoil-driven flintlock that briefly darkens, blinds and slows its target.'''
+description='''Pirate Origin: a dedicated nine-gunpowder pouch, recoil-driven flintlock, dirty tactics and a short-lived undead crew.'''
 
 [[dependencies.elijah]]
 modId="forge"

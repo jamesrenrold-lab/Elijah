@@ -6,9 +6,13 @@
     "type": "origins:execute_command",
     "command": "elijah dirty_tactics"
   },
-  "cooldown": 5,
+  "cooldown": 360,
   "hud_render": {
-    "should_render": false
+    "should_render": true,
+    "sprite_location": "elijah:textures/gui/resource_bar.png",
+    "bar_index": 0,
+    "icon_index": 0,
+    "order": 0
   },
   "key": {
     "key": "key.origins.primary_active",

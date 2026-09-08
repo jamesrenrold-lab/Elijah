@@ -6,6 +6,8 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+
+import java.util.UUID;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.common.capabilities.CapabilityToken;
@@ -23,6 +25,8 @@ public final class PowderPouch extends ItemStackHandler {
     public long dirtyTacticsReadyAt;
     public boolean wisdomOfTheSea;
     public int xpBonusRemainder;
+    public UUID lastCombatTarget;
+    public long lastCombatTargetTick;
 
     public PowderPouch() { super(1); }
 
@@ -50,6 +54,8 @@ public final class PowderPouch extends ItemStackHandler {
         tag.putLong("DirtyTacticsReadyAt", dirtyTacticsReadyAt);
         tag.putBoolean("WisdomOfTheSea", wisdomOfTheSea);
         tag.putInt("XpBonusRemainder", xpBonusRemainder);
+        if (lastCombatTarget != null) tag.putUUID("LastCombatTarget", lastCombatTarget);
+        tag.putLong("LastCombatTargetTick", lastCombatTargetTick);
         return tag;
     }
 
@@ -60,6 +66,8 @@ public final class PowderPouch extends ItemStackHandler {
         dirtyTacticsReadyAt = tag.getLong("DirtyTacticsReadyAt");
         wisdomOfTheSea = tag.getBoolean("WisdomOfTheSea");
         xpBonusRemainder = Math.floorMod(tag.getInt("XpBonusRemainder"), 10);
+        lastCombatTarget = tag.hasUUID("LastCombatTarget") ? tag.getUUID("LastCombatTarget") : null;
+        lastCombatTargetTick = tag.getLong("LastCombatTargetTick");
         // Enforce the one-slot layout even for malformed/old save data.
         super.setStackInSlot(0, ItemStack.EMPTY);
         ListTag items = tag.getList("Items", Tag.TAG_COMPOUND);

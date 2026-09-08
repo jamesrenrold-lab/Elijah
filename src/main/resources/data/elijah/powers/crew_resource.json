@@ -1,0 +1,15 @@
+{
+  "type": "origins:resource",
+  "name": "Undead Crew Resources",
+  "description": "Four summon charges. One charge returns every 60 seconds.",
+  "min": 0,
+  "max": 4,
+  "start_value": 4,
+  "hud_render": {
+    "should_render": true,
+    "sprite_location": "elijah:textures/gui/resource_bar.png",
+    "bar_index": 1,
+    "icon_index": 1,
+    "order": 1
+  }
+}

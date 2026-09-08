@@ -10,8 +10,10 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.player.PlayerXpEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -42,6 +44,22 @@ public final class PirateAbilities {
         return 1;
     }
 
+    /** Records the latest mob involved in the pirate's combat, for crew targeting. */
+    public static void rememberCombatTarget(ServerPlayer player, LivingEntity target) {
+        if (target == null || target == player || !(target instanceof net.minecraft.world.entity.Mob)) return;
+        player.getCapability(PowderPouch.CAPABILITY).ifPresent(state -> {
+            state.lastCombatTarget = target.getUUID();
+            state.lastCombatTargetTick = player.serverLevel().getGameTime();
+        });
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onPlayerAttacked(LivingAttackEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || !player.isAlive()) return;
+        Entity attacker = event.getSource().getEntity();
+        if (attacker instanceof LivingEntity living && attacker != player) rememberCombatTarget(player, living);
+    }
+
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onMeleeHit(LivingHurtEvent event) {
         // This event runs after the normal hit/shield checks, but before absorption,
@@ -52,6 +70,7 @@ public final class PirateAbilities {
                 || !player.isAlive() || player.isSpectator()) return;
         LivingEntity target = event.getEntity();
         if (target == player || !target.isAlive()) return;
+        rememberCombatTarget(player, target);
         PowderPouch state = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
         if (state == null || !state.dirtyTacticsArmed) return;
         // Consume before applying anything: one target per activation, including sweep attacks.
@@ -61,6 +80,13 @@ public final class PirateAbilities {
         player.serverLevel().playSound(null, target.getX(), target.getY(), target.getZ(),
                 SoundEvents.SKELETON_DEATH, SoundSource.PLAYERS, 1.0F, 1.0F);
         message(player, "Dirty Tactics! 18s cooldown");
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onPlayerDamagesMob(LivingHurtEvent event) {
+        if (event.getAmount() <= 0 || !(event.getSource().getEntity() instanceof ServerPlayer player)
+                || !player.isAlive() || player.isSpectator()) return;
+        rememberCombatTarget(player, event.getEntity());
     }
 
     public static int setWisdom(CommandSourceStack source, boolean enabled) throws CommandSyntaxException {

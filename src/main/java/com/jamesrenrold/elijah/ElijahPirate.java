@@ -16,6 +16,8 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
@@ -33,6 +35,7 @@ import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
@@ -56,11 +59,16 @@ public final class ElijahPirate {
             "flintlock_ball", () -> EntityType.Builder.<FlintlockBall>of(FlintlockBall::new, MobCategory.MISC)
                     .sized(0.18F, 0.18F).clientTrackingRange(8).updateInterval(1)
                     .build(MOD_ID + ":flintlock_ball"));
+    public static final RegistryObject<EntityType<UndeadCrewmate>> UNDEAD_CREWMATE = ENTITIES.register(
+            "undead_crewmate", () -> EntityType.Builder.<UndeadCrewmate>of(UndeadCrewmate::new, MobCategory.MONSTER)
+                    .sized(0.6F, 1.95F).clientTrackingRange(10).updateInterval(3)
+                    .build(MOD_ID + ":undead_crewmate"));
 
     public ElijahPirate() {
         IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
         MENUS.register(bus);
         ENTITIES.register(bus);
+        bus.addListener(this::entityAttributes);
         bus.addListener(this::registerCapabilities);
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, PirateConfig.SPEC);
         MinecraftForge.EVENT_BUS.addGenericListener(Entity.class, this::attach);
@@ -71,6 +79,10 @@ public final class ElijahPirate {
 
     private void registerCapabilities(RegisterCapabilitiesEvent event) {
         event.register(PowderPouch.class);
+    }
+
+    private void entityAttributes(EntityAttributeCreationEvent event) {
+        event.put(UNDEAD_CREWMATE.get(), UndeadCrewmate.createAttributes().build());
     }
 
     private void attach(AttachCapabilitiesEvent<Entity> event) {
@@ -118,6 +130,7 @@ public final class ElijahPirate {
                 .then(Commands.literal("pouch").executes(context -> openPouch(context.getSource())))
                 .then(Commands.literal("fire").executes(context -> fire(context.getSource())))
                 .then(Commands.literal("dirty_tactics").executes(context -> PirateAbilities.armDirtyTactics(context.getSource())))
+                .then(Commands.literal("crew").executes(context -> summonCrew(context.getSource())))
                 .then(Commands.literal("sea_on").executes(context -> PirateAbilities.setWisdom(context.getSource(), true)))
                 .then(Commands.literal("sea_off").executes(context -> PirateAbilities.setWisdom(context.getSource(), false)))
                 .then(Commands.literal("unload").executes(context -> unload(context.getSource()))));
@@ -179,6 +192,60 @@ public final class ElijahPirate {
         level.playSound(null, player.blockPosition(), SoundEvents.CROSSBOW_SHOOT, SoundSource.PLAYERS, 0.8F, 0.65F);
         player.displayClientMessage(Component.literal("Flintlock: " + count + " powder fired").withStyle(ChatFormatting.GOLD), true);
         return 1;
+    }
+
+    private int summonCrew(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        if (!player.isAlive() || player.isSpectator()) return 0;
+        ServerLevel level = player.serverLevel();
+        int max = PirateConfig.CREW_MAX_COUNT.get();
+        int current = level.getEntitiesOfClass(UndeadCrewmate.class, player.getBoundingBox().inflate(64.0D),
+                crew -> player.getUUID().equals(crew.getOwnerId()) && crew.isAlive()).size();
+        if (current >= max) {
+            player.displayClientMessage(Component.literal("Your undead crew is already at its limit.")
+                    .withStyle(ChatFormatting.GOLD), true);
+            return 0;
+        }
+        // Origins supplies four charges; one key press always spends one and
+        // summons exactly one crewmate.
+        int amount = 1;
+        LivingEntity target = player.getLastHurtMob();
+        if (target == null || !(target instanceof Mob) || !target.isAlive()) target = player.getLastHurtByMob();
+        for (int i = 0; i < amount; i++) {
+            double angle = (Math.PI * 2.0D * (current % max)) / Math.max(1, max);
+            double x = player.getX() + Math.cos(angle) * 1.35D;
+            double z = player.getZ() + Math.sin(angle) * 1.35D;
+            UndeadCrewmate crew = UNDEAD_CREWMATE.get().create(level);
+            if (crew == null) continue;
+            crew.moveTo(x, player.getY(), z, player.getYRot(), 0.0F);
+            crew.setOwnerId(player.getUUID());
+            crew.equipHonshu();
+            // Snapshot the summoner's current combat stats. Account for the
+            // Honshu's own held-item modifier so total crew attack remains 80%.
+            AttributeInstance crewHealth = crew.getAttribute(Attributes.MAX_HEALTH);
+            if (crewHealth != null) {
+                double desiredHealth = Math.max(1.0D, player.getMaxHealth() * 0.80D);
+                double existingHealthBonus = crewHealth.getValue() - crewHealth.getBaseValue();
+                crewHealth.setBaseValue(Math.max(1.0D, desiredHealth - existingHealthBonus));
+                crew.setHealth(crew.getMaxHealth());
+            }
+            AttributeInstance crewAttack = crew.getAttribute(Attributes.ATTACK_DAMAGE);
+            if (crewAttack != null) {
+                double desiredAttack = Math.max(0.0D, player.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.80D);
+                double heldItemBonus = crewAttack.getValue() - crewAttack.getBaseValue();
+                crewAttack.setBaseValue(Math.max(0.0D, desiredAttack - heldItemBonus));
+            }
+            if (target instanceof Mob mob && mob.isAlive()) crew.setTarget(mob);
+            crew.setCustomName(Component.translatable("entity.elijah.undead_crewmate"));
+            crew.setCustomNameVisible(false);
+            crew.finalizeSpawn(level, level.getCurrentDifficultyAt(player.blockPosition()),
+                    net.minecraft.world.entity.MobSpawnType.MOB_SUMMONED, null, null);
+            level.addFreshEntity(crew);
+        }
+        level.playSound(null, player.blockPosition(), SoundEvents.ZOMBIE_AMBIENT, SoundSource.PLAYERS, 0.8F, 0.65F);
+        player.displayClientMessage(Component.literal("The undead crew answers the call! (" + amount + ")")
+                .withStyle(ChatFormatting.GOLD), true);
+        return amount;
     }
 
     private static double clampVelocity(double value) { return Math.max(-3.8, Math.min(3.8, value)); }

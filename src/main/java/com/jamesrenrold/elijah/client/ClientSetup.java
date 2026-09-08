@@ -18,5 +18,6 @@ public final class ClientSetup {
     @SubscribeEvent
     public static void renderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ElijahPirate.FLINTLOCK_BALL.get(), FlintlockRenderer::new);
+        event.registerEntityRenderer(ElijahPirate.UNDEAD_CREWMATE.get(), UndeadCrewmateRenderer::new);
     }
 }

@@ -1,6 +1,7 @@
 {
   "container.elijah.powder_pouch": "Powder Pouch",
   "entity.elijah.flintlock_ball": "Flintlock Ball",
+  "entity.elijah.undead_crewmate": "Undead Crewmate",
   "death.attack.elijah.flintlock": "%1$s was shot by %2$s",
   "death.attack.elijah.flintlock.item": "%1$s was shot by %2$s using %3$s"
 }
