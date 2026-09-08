@@ -3,12 +3,12 @@
 A pirate Origin built for Forge 47.4.4+ with Fabric Origins 1.10.x through Connector.
 The JAR includes the Origin data, powder-pouch screen, flintlock renderer, Dirty Tactics and pirate passives.
 
-**Updating from 0.1.0:** remove the old Elijah JAR and install 0.2.0 on the client and server. Do not keep both versions installed. Existing pouch contents are preserved.
+**Updating from 0.1.0 or 0.2.0:** remove the old Elijah JAR and install 0.2.1 on the client and server. Do not keep both versions installed. Existing pouch contents are preserved.
 
 ## Install
 
 1. Download the `Elijah-Pirate-1.20.1` artifact from the latest successful GitHub Actions build and unzip it.
-2. Put `elijah-pirate-0.2.0.jar` in your Minecraft instance's `mods` folder.
+2. Put `elijah-pirate-0.2.1.jar` in your Minecraft instance's `mods` folder.
 3. On multiplayer, install that same JAR on the server and every player's client.
 4. Keep your existing Forge / Connector / Fabric Origins / Even More Origins Keybinds setup installed. Restart Minecraft and the server.
 5. Select **Elijah — The Powder Corsair**. An operator can select it for a player with:
@@ -18,16 +18,24 @@ There is no additional datapack ZIP or resource pack to install for this version
 
 ## Abilities
 
-- **Secondary Active Power — Powder Pouch:** opens one separate slot. Only gunpowder fits, with a hard limit of **9**. Drag, right-click, number-key swap and shift-click use normal inventory controls. Excess powder stays in the player's inventory/cursor.
-- **Primary Active Power — Flintlock Kick:** fires a small black ball and consumes **all** powder in the pouch. No powder means no shot, recoil or cooldown. The shot works without holding a weapon.
+| Keybind | Ability |
+|---|---|
+| Primary Active Power | Dirty Tactics |
+| Secondary Active Power | Flintlock Kick |
+| Tertiary Active Power | Powder Pouch |
+
+Passives activate automatically and have no keybind.
+
+- **Tertiary Active Power — Powder Pouch:** opens one separate slot. Only gunpowder fits, with a hard limit of **9**. Drag, right-click, number-key swap and shift-click use normal inventory controls. Excess powder stays in the player's inventory/cursor.
+- **Secondary Active Power — Flintlock Kick:** fires a small black ball and consumes **all** powder in the pouch. No powder means no shot, recoil or cooldown. The shot works without holding a weapon.
 - More powder gives more recoil in the direction opposite your aim. Shoot downward to propel yourself upward; normal collision and fall damage still apply.
 - Damage is secondary: **2 + 1 per gunpowder**, from **3 damage at 1** to **11 damage at 9** (before armor). Two damage points equal one heart.
 - Successful hits apply **Darkness, Blindness and Slowness I for 20 ticks / 1 second**, regardless of powder count. Darkness and Blindness affect player vision; they do not alter mob AI. Normal shields, invulnerability and damage-cancellation rules apply.
 - The firing cooldown is **20 ticks / 1 second**. Projectile speed is 3.5 blocks/tick with slight gravity; it disappears after 30 ticks or its first collision. It does not explode or destroy blocks.
 
-- **Tertiary Active Power — Dirty Tactics:** arms your next successful melee hit. That target gets **Slowness III for 2 seconds** and emits the **skeleton death** sound. It adds no extra damage. The **18-second cooldown starts when the hit lands**. Missing, shooting the flintlock, or hitting a shield does not consume the charge. One target per activation; no charge stacking. Dying or changing Origin clears a primed charge; relogs and respawns do not reset an active cooldown.
+- **Primary Active Power — Dirty Tactics:** arms your next successful melee hit. That target gets **Slowness III for 2 seconds** and emits the **skeleton death** sound. It adds no extra damage. The **18-second cooldown starts when the hit lands**. Missing, shooting the flintlock, or hitting a shield does not consume the charge. One target per activation; no charge stacking. Dying or changing Origin clears a primed charge; relogs and respawns do not reset an active cooldown.
 
-Bind **Primary Active Power**, **Secondary Active Power** and **Tertiary Active Power** in Minecraft's Controls menu. Dirty Tactics uses `key.origins.tertiary_active`, the first added binding from your existing [Even More Origins Keybinds](https://www.curseforge.com/minecraft/mc-mods/even-more-origins-keybinds) mod.
+Bind **Primary Active Power**, **Secondary Active Power** and **Tertiary Active Power** in Minecraft's Controls menu. The Powder Pouch uses `key.origins.tertiary_active`, the first added binding from your existing [Even More Origins Keybinds](https://www.curseforge.com/minecraft/mc-mods/even-more-origins-keybinds) mod.
 
 ## Passives
 
