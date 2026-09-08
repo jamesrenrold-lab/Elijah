@@ -1,0 +1,17 @@
+{
+  "type": "origins:active_self",
+  "name": "Powder Pouch",
+  "description": "Secondary ability: open a separate inventory slot holding only gunpowder, up to nine. Drag, right-click or shift-click powder into the pouch. Every shot uses the full load.",
+  "entity_action": {
+    "type": "origins:execute_command",
+    "command": "elijah pouch"
+  },
+  "cooldown": 5,
+  "hud_render": {
+    "should_render": false
+  },
+  "key": {
+    "key": "key.origins.secondary_active",
+    "continuous": false
+  }
+}

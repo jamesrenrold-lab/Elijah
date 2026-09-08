@@ -1,0 +1,14 @@
+{
+  "name": "Elijah — The Powder Corsair",
+  "description": "A pirate who turns gunpowder into movement and disruption. Load the powder pouch, then fire a flintlock shot that throws you backward and briefly blinds your target.",
+  "icon": {
+    "item": "minecraft:gunpowder"
+  },
+  "impact": 2,
+  "order": 30,
+  "powers": [
+    "elijah:flintlock",
+    "elijah:powder_pouch",
+    "elijah:pouch_lifecycle"
+  ]
+}

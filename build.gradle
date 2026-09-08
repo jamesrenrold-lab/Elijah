@@ -1,0 +1,35 @@
+plugins {
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+}
+
+version = mod_version
+group = 'com.jamesrenrold.elijah'
+base { archivesName = 'elijah-pirate' }
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    mappings channel: 'official', version: minecraft_version
+    runs {
+        server {
+            workingDirectory project.file('run')
+            args '--nogui'
+            mods { elijah { source sourceSets.main } }
+        }
+    }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    inputs.property 'mod_version', mod_version
+    filesMatching('META-INF/mods.toml') { expand mod_version: mod_version }
+}
+
+tasks.named('jar', Jar).configure {
+    manifest.attributes('Implementation-Version': project.version)
+    finalizedBy 'reobfJar'
+}
+
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }

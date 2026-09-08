@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="elijah"
+version="${mod_version}"
+displayName="Elijah Pirate"
+authors="jamesrenrold-lab"
+description='''Pirate Origin: a dedicated nine-gunpowder pouch and a recoil-driven flintlock that briefly darkens, blinds and slows its target.'''
+
+[[dependencies.elijah]]
+modId="forge"
+mandatory=true
+versionRange="[47.4.4,48)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.elijah]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.20.2)"
+ordering="NONE"
+side="BOTH"
