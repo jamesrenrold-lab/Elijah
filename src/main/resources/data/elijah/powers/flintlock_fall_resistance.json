@@ -1,0 +1,13 @@
+{
+  "type": "origins:modify_damage_taken",
+  "name": "Flintlock Landing",
+  "description": "You take 85% less fall damage, letting you use the flintlock's recoil without being punished by the landing.",
+  "damage_condition": {
+    "type": "origins:from_falling"
+  },
+  "modifier": {
+    "name": "Flintlock Landing: fall damage resistance",
+    "operation": "multiply_base",
+    "value": -0.85
+  }
+}

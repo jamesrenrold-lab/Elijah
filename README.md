@@ -3,12 +3,12 @@
 A pirate Origin built for Forge 47.4.4+ with Fabric Origins 1.10.x through Connector.
 The JAR includes the Origin data, powder-pouch screen, flintlock renderer, Dirty Tactics and pirate passives.
 
-**Updating from 0.1.0 or 0.2.0:** remove the old Elijah JAR and install 0.2.1 on the client and server. Do not keep both versions installed. Existing pouch contents are preserved.
+**Updating from 0.1.0, 0.2.0 or 0.2.1:** remove the old Elijah JAR and install 0.2.2 on the client and server. Do not keep both versions installed. Existing pouch contents are preserved.
 
 ## Install
 
 1. Download the `Elijah-Pirate-1.20.1` artifact from the latest successful GitHub Actions build and unzip it.
-2. Put `elijah-pirate-0.2.1.jar` in your Minecraft instance's `mods` folder.
+2. Put `elijah-pirate-0.2.2.jar` in your Minecraft instance's `mods` folder.
 3. On multiplayer, install that same JAR on the server and every player's client.
 4. Keep your existing Forge / Connector / Fabric Origins / Even More Origins Keybinds setup installed. Restart Minecraft and the server.
 5. Select **Elijah — The Powder Corsair**. An operator can select it for a player with:
@@ -28,8 +28,8 @@ Passives activate automatically and have no keybind.
 
 - **Tertiary Active Power — Powder Pouch:** opens one separate slot. Only gunpowder fits, with a hard limit of **9**. Drag, right-click, number-key swap and shift-click use normal inventory controls. Excess powder stays in the player's inventory/cursor.
 - **Secondary Active Power — Flintlock Kick:** fires a small black ball and consumes **all** powder in the pouch. No powder means no shot, recoil or cooldown. The shot works without holding a weapon.
-- More powder gives more recoil in the direction opposite your aim. Shoot downward to propel yourself upward; normal collision and fall damage still apply.
-- Damage is secondary: **2 + 1 per gunpowder**, from **3 damage at 1** to **11 damage at 9** (before armor). Two damage points equal one heart.
+- More powder gives more recoil in the direction opposite your aim. Shoot downward to propel yourself upward. The Origin grants **85% fall-damage resistance**, so only 15% of normal fall damage remains.
+- Damage is secondary: the powder component is **2 + 1 per gunpowder**, from **3 damage at 1** to **11 damage at 9** before armor. The shot then adds **20% of the player's current `irons_spellbooks:spell_power` attribute** and **30% of current `generic.attack_damage`**. Two damage points equal one heart.
 - Successful hits apply **Darkness, Blindness and Slowness I for 20 ticks / 1 second**, regardless of powder count. Darkness and Blindness affect player vision; they do not alter mob AI. Normal shields, invulnerability and damage-cancellation rules apply.
 - The firing cooldown is **20 ticks / 1 second**. Projectile speed is 3.5 blocks/tick with slight gravity; it disappears after 30 ticks or its first collision. It does not explode or destroy blocks.
 
@@ -47,7 +47,7 @@ Bind **Primary Active Power**, **Secondary Active Power** and **Tertiary Active 
 
 With otherwise vanilla stats, maximum health is 16 points / 8 hearts. Armor and speed penalties multiply the total value, so equipment bonuses are included. Attribute modifiers belong to the Origin and are removed when it is lost. The XP bonus applies to positive XP-point gains, not direct level adjustments or XP removal; XP spent repairing equipment is not player XP gained. Ten separate 1-point gains still award 13 points in total.
 
-All original flintlock settings remain unchanged, including the 11-damage maximum.
+The 11-damage value is the maximum powder component; spell-power and physical-attack scaling are added on top of it.
 
 ## Inventory persistence
 
@@ -63,6 +63,8 @@ Defaults:
 |---|---:|
 | `baseDamage` | 2.0 |
 | `damagePerGunpowder` | 1.0 |
+| `spellPowerDamageScale` | 0.20 |
+| `physicalDamageScale` | 0.30 |
 | `baseRecoil` | 0.25 |
 | `recoilPerGunpowder` | 0.22 |
 | `cooldownTicks` | 20 |

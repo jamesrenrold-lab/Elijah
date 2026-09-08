@@ -1,7 +1,7 @@
 {
   "type": "origins:active_self",
   "name": "Flintlock Kick",
-  "description": "Secondary ability: consume all 1–9 loaded gunpowder to shoot a small black ball. More powder means stronger recoil and 3–11 damage. A successful hit gives Darkness, Blindness and Slowness I for one second. Aim downward to launch yourself upward. One-second firing cooldown.",
+  "description": "Secondary ability: consume all 1–9 loaded gunpowder to shoot a small black ball. The powder component deals 3–11 damage, then adds 20% of current spell power and 30% of current physical attack damage. More powder means stronger recoil. A successful hit gives Darkness, Blindness and Slowness I for one second. Aim downward to launch yourself upward. One-second firing cooldown.",
   "entity_action": {
     "type": "origins:execute_command",
     "command": "elijah fire"

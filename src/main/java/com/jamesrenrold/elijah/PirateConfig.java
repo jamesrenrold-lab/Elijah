@@ -6,6 +6,8 @@ public final class PirateConfig {
     public static final ForgeConfigSpec SPEC;
     public static final ForgeConfigSpec.DoubleValue BASE_DAMAGE;
     public static final ForgeConfigSpec.DoubleValue DAMAGE_PER_POWDER;
+    public static final ForgeConfigSpec.DoubleValue SPELL_POWER_DAMAGE_SCALE;
+    public static final ForgeConfigSpec.DoubleValue PHYSICAL_DAMAGE_SCALE;
     public static final ForgeConfigSpec.DoubleValue BASE_RECOIL;
     public static final ForgeConfigSpec.DoubleValue RECOIL_PER_POWDER;
     public static final ForgeConfigSpec.IntValue COOLDOWN_TICKS;
@@ -18,6 +20,8 @@ public final class PirateConfig {
                 .push("flintlock");
         BASE_DAMAGE = b.defineInRange("baseDamage", 2.0, 0.0, 1000.0);
         DAMAGE_PER_POWDER = b.defineInRange("damagePerGunpowder", 1.0, 0.0, 1000.0);
+        SPELL_POWER_DAMAGE_SCALE = b.defineInRange("spellPowerDamageScale", 0.20, 0.0, 10.0);
+        PHYSICAL_DAMAGE_SCALE = b.defineInRange("physicalDamageScale", 0.30, 0.0, 10.0);
         BASE_RECOIL = b.defineInRange("baseRecoil", 0.25, 0.0, 4.0);
         RECOIL_PER_POWDER = b.defineInRange("recoilPerGunpowder", 0.22, 0.0, 2.0);
         COOLDOWN_TICKS = b.defineInRange("cooldownTicks", 20, 1, 12000);

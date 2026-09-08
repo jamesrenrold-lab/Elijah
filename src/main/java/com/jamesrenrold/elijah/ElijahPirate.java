@@ -17,6 +17,9 @@ import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlags;
@@ -145,7 +148,12 @@ public final class ElijahPirate {
             return 0;
         }
         Vec3 aim = player.getLookAngle().normalize();
-        float damage = (float) (PirateConfig.BASE_DAMAGE.get() + PirateConfig.DAMAGE_PER_POWDER.get() * count);
+        double physicalAttackDamage = player.getAttributeValue(Attributes.ATTACK_DAMAGE);
+        double spellPower = currentSpellPower(player);
+        float damage = (float) (PirateConfig.BASE_DAMAGE.get()
+                + PirateConfig.DAMAGE_PER_POWDER.get() * count
+                + spellPower * PirateConfig.SPELL_POWER_DAMAGE_SCALE.get()
+                + physicalAttackDamage * PirateConfig.PHYSICAL_DAMAGE_SCALE.get());
         FlintlockBall ball = new FlintlockBall(level, player, damage, PirateConfig.EFFECT_TICKS.get());
         // Start at the eyes, just below the crosshair; swept collision prevents tunnelling.
         ball.setPos(player.getX(), player.getEyeY() - 0.1, player.getZ());
@@ -174,6 +182,14 @@ public final class ElijahPirate {
     }
 
     private static double clampVelocity(double value) { return Math.max(-3.8, Math.min(3.8, value)); }
+
+    private static double currentSpellPower(Player player) {
+        Attribute spellPowerAttribute = ForgeRegistries.ATTRIBUTES.getValue(
+                new ResourceLocation("irons_spellbooks", "spell_power"));
+        if (spellPowerAttribute == null) return 0.0D;
+        AttributeInstance instance = player.getAttribute(spellPowerAttribute);
+        return instance == null ? 0.0D : instance.getValue();
+    }
 
     private int unload(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();

@@ -21,6 +21,11 @@ for path, data in parsed.items():
 assert 'elijah:pirate' in parsed['data/origins/origin_layers/origin.json']['origins']
 assert 'elijah:flintlock' in parsed['data/minecraft/tags/damage_type/is_projectile.json']['values']
 assert parsed['data/elijah/damage_type/flintlock.json']['message_id'] == 'elijah.flintlock'
+fall_resistance = parsed['data/elijah/powers/flintlock_fall_resistance.json']
+assert fall_resistance['type'] == 'origins:modify_damage_taken'
+assert fall_resistance['damage_condition']['type'] == 'origins:from_falling'
+assert fall_resistance['modifier']['operation'] == 'multiply_base'
+assert fall_resistance['modifier']['value'] == -0.85
 print(f'Validated {len(parsed)} JSON resources, pack metadata, mod metadata and power references.')
 
 # Fail before compilation if a power command or key is not actually wired up.
