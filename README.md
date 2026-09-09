@@ -14,7 +14,7 @@ The JAR includes the Origin data, powder-pouch screen, flintlock renderer, Dirty
 5. Select **Elijah — The Powder Corsair**. An operator can select it for a player with:
    `/origin set <player> origins:origin elijah:pirate`
 
-There is no additional datapack ZIP or resource pack to install for this version.
+There is no additional datapack ZIP or resource pack to install for this version. HUD bars use the standard Origins/Apoli resource-bar texture supplied by Origins. HUD bars use the standard Origins/Apoli resource-bar texture supplied by Origins.
 
 ## Abilities
 
@@ -79,7 +79,7 @@ Defaults:
 | `attackSpeed` | 2.5 |
 | `goldenHonshuItem` | `dungeons_and_combat:golden_honshu` |
 
-The nine-item capacity is fixed. Damage, recoil and crewmate stats are calculated on the server. Crew resources are an Origins resource, so they sync to the client and render with the bundled resource-bar sheet. The flintlock cooldown and combat state persist through relogs and respawns.
+The nine-item capacity is fixed. Damage, recoil and crewmate stats are calculated on the server. Crew resources are an Origins resource, so they sync to the client and render with the standard Origins/Apoli resource-bar sheet. The flintlock cooldown and combat state persist through relogs and respawns.
 
 ## Building and development
 
@@ -90,3 +90,4 @@ To build locally with Java 17 and Gradle 8.8 installed: `gradle build`. The inst
 Operator-only diagnostic commands: `/elijah pouch`, `/elijah fire`, `/elijah dirty_tactics`, `/elijah crew`, `/elijah unload`. The hidden `/elijah sea_on` and `/elijah sea_off` commands are managed by the Wisdom of the Sea lifecycle callbacks. Origins executes these internally through its power actions, so ordinary players do not need operator permissions to use their Origin. As in the other command-based Origins, Apoli's `executeCommand` permission level must remain at its default of 2 or higher.
 
 Compile success verifies the Forge API integration, not in-game behavior in the complete modpack. The first gameplay check should cover the slot limit, firing at 1 and 9 powder, recoil, effects, and survival respawn, Dirty Tactics on a melee hit, and passive stats after switching Origin.
+
