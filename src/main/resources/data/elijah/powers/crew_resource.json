@@ -7,8 +7,7 @@
   "start_value": 4,
   "hud_render": {
     "should_render": true,
-    "bar_index": 1,
-    "icon_index": 1,
-    "order": 1
+    "sprite_location": "origins:textures/gui/resource_bar.png",
+    "bar_index": 2
   }
 }
