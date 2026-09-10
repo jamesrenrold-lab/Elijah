@@ -35,6 +35,7 @@ public final class PowderPouch extends ItemStackHandler {
     public boolean bloodFlightWasMayFly;
     public long bloodOverdriveUntil;
     public long bloodLastDegenerationTick;
+    public long bloodLastEnemyHitTick;
 
     public PowderPouch() { super(1); }
 
@@ -72,6 +73,7 @@ public final class PowderPouch extends ItemStackHandler {
         tag.putBoolean("BloodFlightWasMayFly", bloodFlightWasMayFly);
         tag.putLong("BloodOverdriveUntil", bloodOverdriveUntil);
         tag.putLong("BloodLastDegenerationTick", bloodLastDegenerationTick);
+        tag.putLong("BloodLastEnemyHitTick", bloodLastEnemyHitTick);
         return tag;
     }
 
@@ -92,6 +94,7 @@ public final class PowderPouch extends ItemStackHandler {
         bloodFlightWasMayFly = tag.getBoolean("BloodFlightWasMayFly");
         bloodOverdriveUntil = tag.getLong("BloodOverdriveUntil");
         bloodLastDegenerationTick = tag.getLong("BloodLastDegenerationTick");
+        bloodLastEnemyHitTick = tag.getLong("BloodLastEnemyHitTick");
         // Enforce the one-slot layout even for malformed/old save data.
         super.setStackInSlot(0, ItemStack.EMPTY);
         ListTag items = tag.getList("Items", Tag.TAG_COMPOUND);
