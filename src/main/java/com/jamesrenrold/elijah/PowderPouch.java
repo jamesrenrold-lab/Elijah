@@ -25,10 +25,10 @@ public final class PowderPouch extends ItemStackHandler {
     /** The flintlock's ready-to-fire chamber. */
     public static final int CHAMBER_SLOT = 0;
     public static final int CHAMBER_LIMIT = 9;
-    /** Eight reserve slots, displayed as a 4x2 grid. */
+    /** Four reserve slots, displayed as a 2x2 grid. */
     public static final int RESERVE_START = 1;
-    public static final int RESERVE_SLOTS = 8;
-    public static final int RESERVE_LIMIT = 9;
+    public static final int RESERVE_SLOTS = 4;
+    public static final int RESERVE_LIMIT = 64;
     /** Generated powder output; it cannot be manually filled. */
     public static final int GENERATOR_SLOT = RESERVE_START + RESERVE_SLOTS;
     public static final int GENERATOR_LIMIT = 5;
@@ -159,26 +159,59 @@ public final class PowderPouch extends ItemStackHandler {
         bloodLastEnemyHitTick = tag.getLong("BloodLastEnemyHitTick");
         nextGeneratorTick = tag.getLong("NextGeneratorTick");
         // Do not call ItemStackHandler.deserializeNBT here: Forge resizes its internal
-        // list to the serialized Size field, and old pouches were Size=1. Read the
-        // entries manually so old player data migrates into the fixed 10-slot layout.
+        // list to the serialized Size field. Read entries manually so both the old
+        // one-slot pouch and the previous 10-slot pouch migrate safely.
         for (int slot = 0; slot < TOTAL_SLOTS; slot++) {
             super.setStackInSlot(slot, ItemStack.EMPTY);
         }
+        int serializedSize = tag.contains("Size", Tag.TAG_INT) ? tag.getInt("Size") : 1;
         ListTag items = tag.getList("Items", Tag.TAG_COMPOUND);
         for (int index = 0; index < items.size(); index++) {
             CompoundTag entry = items.getCompound(index);
-            int slot = entry.getInt("Slot");
-            if (slot < 0 || slot >= TOTAL_SLOTS) continue;
+            int serializedSlot = entry.getInt("Slot");
             CompoundTag stackTag = entry.contains("Stack", Tag.TAG_COMPOUND)
                     ? entry.getCompound("Stack") : entry;
             ItemStack stack = ItemStack.of(stackTag);
-            if (!stack.isEmpty()) super.setStackInSlot(slot, stack);
+            if (stack.isEmpty()) continue;
+
+            if (serializedSize > TOTAL_SLOTS) {
+                // The previous build had eight reserve slots and put the generator
+                // at slot 9. Consolidate its reserve powder into the new 2x2 grid.
+                if (serializedSlot >= 1 && serializedSlot <= 8) {
+                    int remaining = stack.is(Items.GUNPOWDER) ? stack.getCount() : 0;
+                    for (int slot = RESERVE_START; remaining > 0 && slot < GENERATOR_SLOT; slot++) {
+                        ItemStack existing = getStackInSlot(slot);
+                        int room = existing.isEmpty() ? RESERVE_LIMIT
+                                : (existing.is(Items.GUNPOWDER) ? RESERVE_LIMIT - existing.getCount() : 0);
+                        if (room <= 0) continue;
+                        int moved = Math.min(room, remaining);
+                        if (existing.isEmpty()) super.setStackInSlot(slot, new ItemStack(Items.GUNPOWDER, moved));
+                        else {
+                            ItemStack merged = existing.copy();
+                            merged.grow(moved);
+                            super.setStackInSlot(slot, merged);
+                        }
+                        remaining -= moved;
+                    }
+                } else if (serializedSlot == 9 && stack.is(Items.GUNPOWDER)) {
+                    ItemStack generator = stack.copy();
+                    generator.setCount(Math.min(GENERATOR_LIMIT, generator.getCount()));
+                    super.setStackInSlot(GENERATOR_SLOT, generator);
+                } else if (serializedSlot == CHAMBER_SLOT) {
+                    stack.setCount(Math.min(CHAMBER_LIMIT, stack.getCount()));
+                    super.setStackInSlot(CHAMBER_SLOT, stack);
+                }
+            } else if (serializedSlot >= 0 && serializedSlot < TOTAL_SLOTS) {
+                int limit = getSlotLimit(serializedSlot);
+                stack.setCount(Math.min(limit, stack.getCount()));
+                super.setStackInSlot(serializedSlot, stack);
+            }
         }
         // Sanitize old or malformed data while preserving the old chamber slot.
         for (int slot = 0; slot < TOTAL_SLOTS; slot++) {
             ItemStack stack = getStackInSlot(slot);
             if (stack.isEmpty()) continue;
-            if (slot == GENERATOR_SLOT || !isItemValid(slot, stack)) {
+            if (slot != GENERATOR_SLOT && !isItemValid(slot, stack)) {
                 super.setStackInSlot(slot, ItemStack.EMPTY);
                 continue;
             }
