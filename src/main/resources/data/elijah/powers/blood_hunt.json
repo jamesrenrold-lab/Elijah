@@ -1,17 +1,20 @@
 {
   "type": "origins:active_self",
   "name": "Blood Hunt",
-  "description": "Senary ability, available only during Blood Rush: for 25 seconds prevent natural regeneration and all interactions except weapon swings, and gain 20% additional lifesteal. Blood damage ticks start low and grow every five seconds you go without hitting an enemy; a successful hit resets the ramp.",
+  "description": "Senary ability, available only during Blood Rush: for 15 seconds prevent natural regeneration and all interactions except weapon swings, and gain 20% additional lifesteal. Blood damage ticks start low and grow every five seconds you go without hitting an enemy; a successful hit resets the ramp. Its degeneration cannot reduce you below one health.",
   "entity_action": {
     "type": "origins:execute_command",
     "command": "elijah blood_hunt"
   },
-  "cooldown": 5,
+  "cooldown": 300,
   "hud_render": {
-    "should_render": false
+    "should_render": true,
+    "sprite_location": "origins:textures/gui/resource_bar.png",
+    "bar_index": 6
   },
   "key": {
     "key": "key.origins.senary_active",
     "continuous": false
   }
 }
+
