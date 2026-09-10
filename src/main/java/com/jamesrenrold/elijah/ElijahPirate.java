@@ -225,7 +225,7 @@ public final class ElijahPirate {
         // summons exactly one crewmate.
         int amount = 1;
         LivingEntity target = player.getLastHurtMob();
-        if (target == null || !(target instanceof Mob) || !target.isAlive()) target = player.getLastHurtByMob();
+        if (target == null || !target.isAlive()) target = player.getLastHurtByMob();
         for (int i = 0; i < amount; i++) {
             double angle = (Math.PI * 2.0D * (current % max)) / Math.max(1, max);
             double x = player.getX() + Math.cos(angle) * 1.35D;
@@ -256,7 +256,7 @@ public final class ElijahPirate {
                 double heldItemBonus = crewSpeed.getValue() - crewSpeed.getBaseValue();
                 crewSpeed.setBaseValue(Math.max(0.1D, desiredSpeed - heldItemBonus));
             }
-            if (target instanceof Mob mob && mob.isAlive()) crew.setTarget(mob);
+            if (target != null && target.isAlive()) crew.setTarget(target);
             crew.setCustomName(Component.translatable("entity.elijah.undead_crewmate"));
             crew.setCustomNameVisible(false);
             crew.finalizeSpawn(level, level.getCurrentDifficultyAt(player.blockPosition()),
@@ -264,7 +264,7 @@ public final class ElijahPirate {
             level.addFreshEntity(crew);
             // finalizeSpawn and third-party mob patches may clear AI state;
             // restore the remembered combat target after the entity is live.
-            if (target instanceof Mob mob && mob.isAlive()) crew.setTarget(mob);
+            if (target != null && target.isAlive()) crew.setTarget(target);
         }
         level.playSound(null, player.blockPosition(), SoundEvents.ZOMBIE_AMBIENT, SoundSource.PLAYERS, 0.8F, 0.65F);
         player.displayClientMessage(Component.literal("The undead crew answers the call! (" + amount + ")")
@@ -298,3 +298,4 @@ public final class ElijahPirate {
         return 1;
     }
 }
+
