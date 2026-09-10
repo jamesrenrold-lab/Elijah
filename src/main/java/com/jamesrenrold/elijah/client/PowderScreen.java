@@ -9,9 +9,9 @@ import net.minecraft.world.entity.player.Inventory;
 public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
     public PowderScreen(PowderMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
-        imageWidth = 176;
-        imageHeight = 180;
-        inventoryLabelY = 86;
+        imageWidth = 220;
+        imageHeight = 206;
+        inventoryLabelY = 112;
     }
 
     @Override
@@ -19,13 +19,22 @@ public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
         int x = leftPos, y = topPos;
         g.fill(x - 1, y - 1, x + imageWidth + 1, y + imageHeight + 1, 0xFFB8924C);
         g.fill(x, y, x + imageWidth, y + imageHeight, 0xFF17232A);
-        g.fill(x + 4, y + 4, x + 172, y + 21, 0xFF253842);
-        g.fill(x + 7, y + 81, x + 169, y + 82, 0xFF665C43);
+        g.fill(x + 4, y + 4, x + 216, y + 21, 0xFF253842);
+        g.fill(x + 19, y + 98, x + 211, y + 99, 0xFF665C43);
         for (int row = 0; row < 3; row++) {
-            for (int column = 0; column < 9; column++) slot(g, x + 8 + column * 18, y + 98 + row * 18, false);
+            for (int column = 0; column < 9; column++) slot(g, x + 20 + column * 18, y + 124 + row * 18, false);
         }
-        for (int column = 0; column < 9; column++) slot(g, x + 8 + column * 18, y + 156, false);
+        for (int column = 0; column < 9; column++) slot(g, x + 20 + column * 18, y + 182, false);
+        // Chamber.
         slot(g, x + 80, y + 31, true);
+        // 4x2 reserve grid.
+        for (int row = 0; row < 2; row++) {
+            for (int column = 0; column < 4; column++) {
+                slot(g, x + 20 + column * 18, y + 45 + row * 18, true);
+            }
+        }
+        // Automatic generator output.
+        slot(g, x + 122, y + 54, true);
         for (int i = 0; i < 9; i++) {
             int color = i < menu.powderCount() ? 0xFFDEC07E : 0xFF3A4548;
             g.fill(x + 58 + i * 7, y + 54, x + 63 + i * 7, y + 58, color);
@@ -40,8 +49,12 @@ public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
     @Override
     protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
         g.drawCenteredString(font, title, imageWidth / 2, 9, 0xFFE6CE98);
+        g.drawString(font, "Load", 78, 23, 0xFFBFC7C8, false);
         g.drawString(font, menu.powderCount() + "/9", 105, 35, 0xFFE6CE98, false);
-        g.drawCenteredString(font, "Gunpowder only", imageWidth / 2, 63, 0xFFBFC7C8);
+        g.drawString(font, "Reserve 4x2", 18, 23, 0xFFBFC7C8, false);
+        g.drawString(font, menu.reserveCount() + "/72", 18, 82, 0xFFE6CE98, false);
+        g.drawString(font, "Generator", 116, 35, 0xFFBFC7C8, false);
+        g.drawString(font, menu.generatorCount() + "/5", 143, 57, 0xFFE6CE98, false);
         g.drawString(font, playerInventoryTitle, 8, inventoryLabelY, 0xFFBFC7C8, false);
     }
 
@@ -52,3 +65,4 @@ public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
         renderTooltip(g, mouseX, mouseY);
     }
 }
+
