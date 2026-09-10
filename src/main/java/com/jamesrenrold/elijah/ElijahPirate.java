@@ -134,10 +134,10 @@ public final class ElijahPirate {
     }
 
     private void commands(RegisterCommandsEvent event) {
-        // Origins execute_command actions supply permission level 2. Ordinary players
-        // can use their Origin keybinds, but cannot grant themselves the abilities by command.
+        // These are private Origin plumbing commands. Keeping the root command
+        // unrestricted lets Connector/Apoli invoke them reliably for ordinary
+        // players when an Origin keybind fires.
         event.getDispatcher().register(Commands.literal("elijah")
-                .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("pouch").executes(context -> openPouch(context.getSource())))
                 .then(Commands.literal("fire").executes(context -> fire(context.getSource())))
                 .then(Commands.literal("dirty_tactics").executes(context -> PirateAbilities.armDirtyTactics(context.getSource())))
@@ -262,6 +262,9 @@ public final class ElijahPirate {
             crew.finalizeSpawn(level, level.getCurrentDifficultyAt(player.blockPosition()),
                     net.minecraft.world.entity.MobSpawnType.MOB_SUMMONED, null, null);
             level.addFreshEntity(crew);
+            // finalizeSpawn and third-party mob patches may clear AI state;
+            // restore the remembered combat target after the entity is live.
+            if (target instanceof Mob mob && mob.isAlive()) crew.setTarget(mob);
         }
         level.playSound(null, player.blockPosition(), SoundEvents.ZOMBIE_AMBIENT, SoundSource.PLAYERS, 0.8F, 0.65F);
         player.displayClientMessage(Component.literal("The undead crew answers the call! (" + amount + ")")
