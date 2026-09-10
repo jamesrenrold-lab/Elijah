@@ -19,18 +19,10 @@ public final class PowderMenu extends AbstractContainerMenu {
         super(ElijahPirate.POWDER_MENU.get(), id);
         this.pouch = pouch;
         this.owner = inventory.player;
-        // Ready-to-fire chamber.
-        addSlot(new SlotItemHandler(pouch, 0, 80, 31) {
-            @Override
-            public int getMaxStackSize() { return PowderPouch.CHAMBER_LIMIT; }
-
-            @Override
-            public int getMaxStackSize(ItemStack stack) { return PowderPouch.CHAMBER_LIMIT; }
-        });
-        // Reserve: eight gunpowder slots arranged as a 4x2 grid.
+        // Reserve: four gunpowder slots arranged as a 2x2 grid.
         for (int row = 0; row < 2; row++) {
-            for (int column = 0; column < 4; column++) {
-                final int slot = PowderPouch.RESERVE_START + row * 4 + column;
+            for (int column = 0; column < 2; column++) {
+                final int slot = PowderPouch.RESERVE_START + row * 2 + column;
                 addSlot(new SlotItemHandler(pouch, slot, 20 + column * 18, 45 + row * 18) {
                     @Override
                     public int getMaxStackSize() { return PowderPouch.RESERVE_LIMIT; }
@@ -40,8 +32,8 @@ public final class PowderMenu extends AbstractContainerMenu {
                 });
             }
         }
-        // Generator output: removable, but not manually fillable.
-        addSlot(new SlotItemHandler(pouch, PowderPouch.GENERATOR_SLOT, 122, 54) {
+        // Automatic generator output, moved left into the old load position.
+        addSlot(new SlotItemHandler(pouch, PowderPouch.GENERATOR_SLOT, 80, 54) {
             @Override
             public boolean mayPlace(ItemStack stack) { return false; }
 
@@ -50,6 +42,14 @@ public final class PowderMenu extends AbstractContainerMenu {
 
             @Override
             public int getMaxStackSize(ItemStack stack) { return PowderPouch.GENERATOR_LIMIT; }
+        });
+        // Ready-to-fire chamber, moved to the old generator position.
+        addSlot(new SlotItemHandler(pouch, PowderPouch.CHAMBER_SLOT, 122, 54) {
+            @Override
+            public int getMaxStackSize() { return PowderPouch.CHAMBER_LIMIT; }
+
+            @Override
+            public int getMaxStackSize(ItemStack stack) { return PowderPouch.CHAMBER_LIMIT; }
         });
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 9; column++) {
@@ -109,4 +109,3 @@ public final class PowderMenu extends AbstractContainerMenu {
         return original;
     }
 }
-
