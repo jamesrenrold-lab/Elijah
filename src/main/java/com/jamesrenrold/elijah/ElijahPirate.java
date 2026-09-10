@@ -112,7 +112,7 @@ public final class ElijahPirate {
                             current.bloodLastEnemyHitTick = 0L;
                         }
                         if (event.isWasDeath() && !old.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
-                            current.setStackInSlot(0, ItemStack.EMPTY);
+                            current.clearPowder();
                         }
                     }));
         } finally {
@@ -124,11 +124,13 @@ public final class ElijahPirate {
         if (!(event.getEntity() instanceof ServerPlayer player)
                 || player.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) return;
         player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch -> {
-            ItemStack powder = pouch.extractItem(0, PowderPouch.LIMIT, false);
-            if (!powder.isEmpty()) {
-                ItemEntity drop = new ItemEntity(player.level(), player.getX(), player.getY(), player.getZ(), powder);
-                drop.setDefaultPickUpDelay();
-                event.getDrops().add(drop);
+            for (int slot = 0; slot < PowderPouch.TOTAL_SLOTS; slot++) {
+                ItemStack powder = pouch.extractItem(slot, pouch.getStackInSlot(slot).getCount(), false);
+                if (!powder.isEmpty()) {
+                    ItemEntity drop = new ItemEntity(player.level(), player.getX(), player.getY(), player.getZ(), powder);
+                    drop.setDefaultPickUpDelay();
+                    event.getDrops().add(drop);
+                }
             }
         });
     }
@@ -289,10 +291,12 @@ public final class ElijahPirate {
         player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch -> {
             pouch.dirtyTacticsArmed = false;
             pouch.wisdomOfTheSea = false;
-            ItemStack powder = pouch.extractItem(0, PowderPouch.LIMIT, false);
-            if (!powder.isEmpty()) {
-                player.getInventory().add(powder);
-                if (!powder.isEmpty()) player.drop(powder, false);
+            for (int slot = 0; slot < PowderPouch.TOTAL_SLOTS; slot++) {
+                ItemStack powder = pouch.extractItem(slot, pouch.getStackInSlot(slot).getCount(), false);
+                if (!powder.isEmpty()) {
+                    player.getInventory().add(powder);
+                    if (!powder.isEmpty()) player.drop(powder, false);
+                }
             }
         });
         return 1;
