@@ -5,6 +5,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -24,6 +25,7 @@ import net.minecraftforge.event.entity.living.LivingHealEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.registries.ForgeRegistries;
 import org.joml.Vector3f;
 
 import java.util.UUID;
@@ -38,6 +40,8 @@ public final class BloodAbilities {
     private static final int OVERDRIVE_TICKS = 20 * 20;
     private static final UUID BLOOD_SPEED_ID = UUID.fromString("75c9a1d0-8840-4a6b-b3d9-8fa4c3f88a11");
     private static final UUID BLOOD_ATTACK_SPEED_ID = UUID.fromString("b3a7c750-c8c5-4a9a-8c67-5ce2ef6cb4f9");
+    private static final UUID BLOOD_LIFESTEAL_ID = UUID.fromString("f7ad2d3e-3e63-4da4-9f77-8fc6c9eb4e35");
+    private static final UUID HUNT_LIFESTEAL_ID = UUID.fromString("9e8b1f7e-2f5f-4f84-a4e9-1b9b2a6d4c61");
     private static final DustParticleOptions RED_EYE =
             new DustParticleOptions(new Vector3f(0.95F, 0.02F, 0.02F), 0.65F);
 
@@ -129,6 +133,7 @@ public final class BloodAbilities {
         state.bloodOverdriveUntil = 0L;
         state.bloodLastEnemyHitTick = 0L;
         state.bloodLastDegenerationTick = 0L;
+        state.bloodAllowLifestealUntil = 0L;
         removeBloodModifiers(player);
     }
 
@@ -151,13 +156,31 @@ public final class BloodAbilities {
                 "Blood Rush movement speed", 0.10D);
         addModifier(player.getAttribute(Attributes.ATTACK_SPEED), BLOOD_ATTACK_SPEED_ID,
                 "Blood Rush attack speed", 0.10D);
+        addModifier(lifeStealAttribute(player), BLOOD_LIFESTEAL_ID,
+                "Blood Rush life steal", 0.10D, AttributeModifier.Operation.ADDITION);
     }
 
     private static void addModifier(AttributeInstance instance, UUID id, String name, double value) {
+        addModifier(instance, id, name, value, AttributeModifier.Operation.MULTIPLY_TOTAL);
+    }
+
+    private static void addModifier(AttributeInstance instance, UUID id, String name, double value,
+                                    AttributeModifier.Operation operation) {
         if (instance != null && instance.getModifier(id) == null) {
             instance.addTransientModifier(new AttributeModifier(id, name, value,
-                    AttributeModifier.Operation.MULTIPLY_TOTAL));
+                    operation));
         }
+    }
+
+    private static AttributeInstance lifeStealAttribute(ServerPlayer player) {
+        net.minecraft.world.entity.ai.attributes.Attribute attribute =
+                ForgeRegistries.ATTRIBUTES.getValue(new ResourceLocation("attributeslib", "life_steal"));
+        return attribute == null ? null : player.getAttribute(attribute);
+    }
+
+    private static void ensureHuntLifeSteal(ServerPlayer player) {
+        addModifier(lifeStealAttribute(player), HUNT_LIFESTEAL_ID,
+                "Blood Hunt additional life steal", 0.20D, AttributeModifier.Operation.ADDITION);
     }
 
     private static void removeBloodModifiers(ServerPlayer player) {
@@ -165,6 +188,9 @@ public final class BloodAbilities {
         AttributeInstance attackSpeed = player.getAttribute(Attributes.ATTACK_SPEED);
         if (speed != null) speed.removeModifier(BLOOD_SPEED_ID);
         if (attackSpeed != null) attackSpeed.removeModifier(BLOOD_ATTACK_SPEED_ID);
+        AttributeInstance lifeSteal = lifeStealAttribute(player);
+        if (lifeSteal != null) lifeSteal.removeModifier(BLOOD_LIFESTEAL_ID);
+        if (lifeSteal != null) lifeSteal.removeModifier(HUNT_LIFESTEAL_ID);
     }
 
     @SubscribeEvent
@@ -179,6 +205,12 @@ public final class BloodAbilities {
             if (player.tickCount % 2 == 0) spawnEyeParticle(player);
         } else {
             removeBloodModifiers(player);
+        }
+
+        if (state.bloodHuntUntil > now) ensureHuntLifeSteal(player);
+        else {
+            AttributeInstance lifeSteal = lifeStealAttribute(player);
+            if (lifeSteal != null) lifeSteal.removeModifier(HUNT_LIFESTEAL_ID);
         }
 
         if (state.bloodHuntUntil <= now && state.bloodHuntUntil != 0L) endHunt(player, state);
@@ -242,18 +274,6 @@ public final class BloodAbilities {
     }
 
     @SubscribeEvent
-    public static void onLifesteal(LivingHurtEvent event) {
-        if (!(event.getSource().getEntity() instanceof ServerPlayer player)
-                || event.getAmount() <= 0.0F || !player.isAlive()) return;
-        PowderPouch state = pouch(player);
-        if (state == null) return;
-        long now = player.serverLevel().getGameTime();
-        double percent = state.bloodBuffUntil > now ? 0.10D : 0.0D;
-        if (state.bloodHuntUntil > now) percent += 0.20D;
-        if (percent > 0.0D) player.heal((float) (event.getAmount() * percent));
-    }
-
-    @SubscribeEvent
     public static void onEnemyHit(LivingHurtEvent event) {
         if (!(event.getSource().getEntity() instanceof ServerPlayer player)
                 || event.getEntity() == player || event.getAmount() <= 0.0F) return;
@@ -262,12 +282,22 @@ public final class BloodAbilities {
         long now = player.serverLevel().getGameTime();
         if (state.bloodHuntUntil > now || state.bloodOverdriveUntil > now) {
             state.bloodLastEnemyHitTick = now;
+            // AttributesLib applies life_steal in its post-damage hook. Permit
+            // that heal through the Hunt natural-regeneration gate.
+            state.bloodAllowLifestealUntil = now + 2L;
         }
     }
 
     @SubscribeEvent
     public static void onNaturalHeal(LivingHealEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player && isHuntActive(player)) event.setCanceled(true);
+        if (!(event.getEntity() instanceof ServerPlayer player) || !isHuntActive(player)) return;
+        PowderPouch state = pouch(player);
+        long now = player.serverLevel().getGameTime();
+        if (state != null && state.bloodAllowLifestealUntil >= now) {
+            state.bloodAllowLifestealUntil = 0L;
+            return;
+        }
+        event.setCanceled(true);
     }
 
     @SubscribeEvent
