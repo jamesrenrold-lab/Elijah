@@ -26,7 +26,7 @@ public final class PirateAbilities {
 
     public static int armDirtyTactics(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        if (!player.isAlive() || player.isSpectator()) return 0;
+        if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
         PowderPouch state = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
         if (state == null) return 0;
         if (state.dirtyTacticsArmed) {
