@@ -92,7 +92,6 @@ public final class PowderPouch extends ItemStackHandler {
         }
         output.setCount(Math.min(GENERATOR_LIMIT, output.getCount()));
         super.setStackInSlot(GENERATOR_SLOT, output);
-        setChanged();
     }
 
     @SubscribeEvent
@@ -115,7 +114,6 @@ public final class PowderPouch extends ItemStackHandler {
         for (int slot = 0; slot < TOTAL_SLOTS; slot++) {
             super.setStackInSlot(slot, ItemStack.EMPTY);
         }
-        setChanged();
     }
 
     @Override
