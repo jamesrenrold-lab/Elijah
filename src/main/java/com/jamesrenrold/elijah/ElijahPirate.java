@@ -99,7 +99,17 @@ public final class ElijahPirate {
             old.getCapability(PowderPouch.CAPABILITY).ifPresent(previous ->
                     event.getEntity().getCapability(PowderPouch.CAPABILITY).ifPresent(current -> {
                         current.deserializeNBT(previous.serializeNBT());
-                        if (event.isWasDeath()) current.dirtyTacticsArmed = false;
+                        if (event.isWasDeath()) {
+                            current.dirtyTacticsArmed = false;
+                            current.bloodBuffUntil = 0L;
+                            current.bloodCooldownUntil = 0L;
+                            current.bloodHuntUntil = 0L;
+                            current.bloodLockedTarget = null;
+                            current.bloodFlightUntil = 0L;
+                            current.bloodFlightWasMayFly = false;
+                            current.bloodOverdriveUntil = 0L;
+                            current.bloodLastDegenerationTick = 0L;
+                        }
                         if (event.isWasDeath() && !old.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
                             current.setStackInSlot(0, ItemStack.EMPTY);
                         }
@@ -131,6 +141,10 @@ public final class ElijahPirate {
                 .then(Commands.literal("fire").executes(context -> fire(context.getSource())))
                 .then(Commands.literal("dirty_tactics").executes(context -> PirateAbilities.armDirtyTactics(context.getSource())))
                 .then(Commands.literal("crew").executes(context -> summonCrew(context.getSource())))
+                .then(Commands.literal("blood_rush").executes(context -> BloodAbilities.activateBloodRush(context.getSource())))
+                .then(Commands.literal("blood_overdrive").executes(context -> BloodAbilities.triggerOverdrive(context.getSource())))
+                .then(Commands.literal("blood_hunt").executes(context -> BloodAbilities.activateHunt(context.getSource())))
+                .then(Commands.literal("blood_wings").executes(context -> BloodAbilities.activateWings(context.getSource())))
                 .then(Commands.literal("sea_on").executes(context -> PirateAbilities.setWisdom(context.getSource(), true)))
                 .then(Commands.literal("sea_off").executes(context -> PirateAbilities.setWisdom(context.getSource(), false)))
                 .then(Commands.literal("unload").executes(context -> unload(context.getSource()))));
@@ -138,7 +152,7 @@ public final class ElijahPirate {
 
     private int openPouch(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        if (!player.isAlive() || player.isSpectator()) return 0;
+        if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
         player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch ->
                 NetworkHooks.openScreen(player, new SimpleMenuProvider(
                         (id, inventory, ignored) -> new PowderMenu(id, inventory, pouch),
@@ -148,7 +162,7 @@ public final class ElijahPirate {
 
     private int fire(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        if (!player.isAlive() || player.isSpectator()) return 0;
+        if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
         PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
         if (pouch == null) return 0;
         ServerLevel level = player.serverLevel();
@@ -196,7 +210,7 @@ public final class ElijahPirate {
 
     private int summonCrew(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        if (!player.isAlive() || player.isSpectator()) return 0;
+        if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
         ServerLevel level = player.serverLevel();
         int max = PirateConfig.CREW_MAX_COUNT.get();
         int current = level.getEntitiesOfClass(UndeadCrewmate.class, player.getBoundingBox().inflate(64.0D),
@@ -266,6 +280,7 @@ public final class ElijahPirate {
 
     private int unload(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
+        BloodAbilities.clearTransient(player);
         if (player.containerMenu instanceof PowderMenu) player.closeContainer();
         player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch -> {
             pouch.dirtyTacticsArmed = false;
