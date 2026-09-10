@@ -19,7 +19,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.fml.ModList;
 import net.minecraftforge.network.NetworkHooks;
 import net.minecraftforge.registries.ForgeRegistries;
 
@@ -51,11 +50,10 @@ public final class UndeadCrewmate extends Zombie {
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(0, new FloatGoal(this));
-        // Epic Fight installs its AnimatedAttackGoal from the mob-patch JSON.
-        // On a plain Forge install, use the compact fallback goal below.
-        if (!ModList.get().isLoaded("epicfight")) {
-            this.goalSelector.addGoal(2, new CrewCombatGoal(this));
-        }
+        // Always keep a server-side chase/attack goal. Epic Fight can still
+        // replace the animation, but its optional mob patch must not be the
+        // only thing responsible for target movement.
+        this.goalSelector.addGoal(2, new CrewCombatGoal(this));
     }
 
     @Override
@@ -129,6 +127,15 @@ public final class UndeadCrewmate extends Zombie {
             setTarget(target != null && target.isAlive() && !isAlliedTo(target) ? target : null);
         }
         super.tick();
+        // Some animation/AI patches clear the target during Mob.tick(). Put it
+        // back after the goal pass as well so the next chase tick cannot lose it.
+        if (!level().isClientSide && getTarget() == null) {
+            ServerPlayer owner = getOwnerPlayer();
+            if (owner != null) {
+                LivingEntity target = findNearestCombatTarget(owner);
+                if (target != null) setTarget(target);
+            }
+        }
         if (level().isClientSide) return;
         if (attackCooldown > 0) attackCooldown--;
     }
