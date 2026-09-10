@@ -21,6 +21,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.network.NetworkHooks;
 import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraftforge.fml.ModList;
 
 import java.util.EnumSet;
 import java.util.UUID;
@@ -50,10 +51,14 @@ public final class UndeadCrewmate extends Zombie {
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(0, new FloatGoal(this));
-        // Always keep a server-side chase/attack goal. Epic Fight can still
-        // replace the animation, but its optional mob patch must not be the
-        // only thing responsible for target movement.
-        this.goalSelector.addGoal(2, new CrewCombatGoal(this));
+        // Epic Fight supplies the movement/attack controller when its mob
+        // patch is loaded. Running our vanilla fallback at the same time
+        // steals the MOVE/LOOK flags and makes the crew swing without Epic
+        // Fight's animated combat state. Only use the fallback when Epic
+        // Fight is actually absent.
+        if (!ModList.get().isLoaded("epicfight")) {
+            this.goalSelector.addGoal(2, new CrewCombatGoal(this));
+        }
     }
 
     @Override
@@ -242,3 +247,4 @@ public final class UndeadCrewmate extends Zombie {
     }
 
 }
+
