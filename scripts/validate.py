@@ -47,6 +47,8 @@ keys = [data['key']['key'] for path, data in parsed.items()
 assert len(keys) == len(set(keys)), 'Active abilities share a key unexpectedly'
 assert set(keys) == {
     'key.origins.primary_active', 'key.origins.secondary_active',
-    'key.origins.tertiary_active', 'key.origins.quaternary_active'
+    'key.origins.tertiary_active', 'key.origins.quaternary_active',
+    'key.origins.quinary_active', 'key.origins.senary_active',
+    'key.origins.septenary_active'
 }
-print('Validated all power commands and the four distinct active keybinds.')
+print('Validated all power commands and the seven distinct active keybinds.')
