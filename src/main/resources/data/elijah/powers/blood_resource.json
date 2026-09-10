@@ -1,7 +1,7 @@
 {
   "type": "origins:resource",
   "name": "Blood Rush",
-  "description": "Build blood charge from 0 to 100. Blood Rush grants a short burst of speed, attack speed and lifesteal; filling the meter unleashes a 20-second overdrive.",
+  "description": "Build blood charge from 0 to 100. Blood Rush grants a short burst of speed, attack speed and lifesteal; filling the meter unleashes a 20-second overdrive with escalating health-degeneration ticks and a red screen tint.",
   "min": 0,
   "max": 100,
   "start_value": 0,
