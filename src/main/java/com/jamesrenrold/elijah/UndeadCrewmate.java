@@ -110,48 +110,50 @@ public final class UndeadCrewmate extends Zombie {
 
     @Override
     public void tick() {
+        // Set the target before Mob.tick() runs its goal selector. Previously
+        // this happened after super.tick(), so Epic Fight's chasing/attack
+        // goals saw a null target for an entire tick and could stop pursuing.
+        if (!level().isClientSide) {
+            if (tickCount >= PirateConfig.CREW_LIFETIME_TICKS.get()) {
+                discard();
+                return;
+            }
+
+            ServerPlayer owner = getOwnerPlayer();
+            if (owner == null || !owner.isAlive() || owner.isSpectator() || owner.level() != level()) {
+                discard();
+                return;
+            }
+
+            LivingEntity target = findNearestCombatTarget(owner);
+            setTarget(target != null && target.isAlive() && !isAlliedTo(target) ? target : null);
+        }
         super.tick();
         if (level().isClientSide) return;
-        if (tickCount >= PirateConfig.CREW_LIFETIME_TICKS.get()) {
-            discard();
-            return;
-        }
-
-        ServerPlayer owner = getOwnerPlayer();
-        if (owner == null || !owner.isAlive() || owner.isSpectator() || owner.level() != level()) {
-            discard();
-            return;
-        }
-
-        LivingEntity target = findNearestCombatTarget(owner);
-        if (target == null || !target.isAlive() || isAlliedTo(target)) {
-            setTarget(null);
-        } else {
-            setTarget(target);
-        }
         if (attackCooldown > 0) attackCooldown--;
     }
 
     private LivingEntity findNearestCombatTarget(ServerPlayer owner) {
+        // Prefer the timestamped target captured by the combat events. Vanilla's
+        // last-hurt fields can retain an older mob and otherwise make the crew
+        // switch away from the target involved in the latest exchange.
+        final UUID[] rememberedId = new UUID[1];
+        final long[] rememberedTick = new long[1];
+        owner.getCapability(PowderPouch.CAPABILITY).ifPresent(state -> {
+            rememberedId[0] = state.lastCombatTarget;
+            rememberedTick[0] = state.lastCombatTargetTick;
+        });
+        long now = owner.serverLevel().getGameTime();
+        if (rememberedId[0] != null && (rememberedTick[0] <= 0 || now - rememberedTick[0] <= 1200L)) {
+            Entity entity = ((ServerLevel) level()).getEntity(rememberedId[0]);
+            if (entity instanceof LivingEntity candidate && isValidTarget(candidate, owner)) return candidate;
+        }
+
         LivingEntity best = null;
         double bestDistance = Double.MAX_VALUE;
         LivingEntity[] candidates = {owner.getLastHurtMob(), owner.getLastHurtByMob()};
         for (LivingEntity candidate : candidates) {
             if (isValidTarget(candidate, owner)) {
-                double distance = owner.distanceToSqr(candidate);
-                if (distance < bestDistance) {
-                    best = candidate;
-                    bestDistance = distance;
-                }
-            }
-        }
-        final UUID[] rememberedId = new UUID[1];
-        owner.getCapability(PowderPouch.CAPABILITY).ifPresent(state -> {
-            rememberedId[0] = state.lastCombatTarget;
-        });
-        if (rememberedId[0] != null) {
-            Entity entity = ((ServerLevel) level()).getEntity(rememberedId[0]);
-            if (entity instanceof LivingEntity candidate && isValidTarget(candidate, owner)) {
                 double distance = owner.distanceToSqr(candidate);
                 if (distance < bestDistance) {
                     best = candidate;
