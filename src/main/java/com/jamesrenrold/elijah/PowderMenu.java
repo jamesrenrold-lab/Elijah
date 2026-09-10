@@ -19,25 +19,60 @@ public final class PowderMenu extends AbstractContainerMenu {
         super(ElijahPirate.POWDER_MENU.get(), id);
         this.pouch = pouch;
         this.owner = inventory.player;
+        // Ready-to-fire chamber.
         addSlot(new SlotItemHandler(pouch, 0, 80, 31) {
             @Override
-            public int getMaxStackSize() { return PowderPouch.LIMIT; }
+            public int getMaxStackSize() { return PowderPouch.CHAMBER_LIMIT; }
 
             @Override
-            public int getMaxStackSize(ItemStack stack) { return PowderPouch.LIMIT; }
+            public int getMaxStackSize(ItemStack stack) { return PowderPouch.CHAMBER_LIMIT; }
+        });
+        // Reserve: eight gunpowder slots arranged as a 4x2 grid.
+        for (int row = 0; row < 2; row++) {
+            for (int column = 0; column < 4; column++) {
+                final int slot = PowderPouch.RESERVE_START + row * 4 + column;
+                addSlot(new SlotItemHandler(pouch, slot, 20 + column * 18, 45 + row * 18) {
+                    @Override
+                    public int getMaxStackSize() { return PowderPouch.RESERVE_LIMIT; }
+
+                    @Override
+                    public int getMaxStackSize(ItemStack stack) { return PowderPouch.RESERVE_LIMIT; }
+                });
+            }
+        }
+        // Generator output: removable, but not manually fillable.
+        addSlot(new SlotItemHandler(pouch, PowderPouch.GENERATOR_SLOT, 122, 54) {
+            @Override
+            public boolean mayPlace(ItemStack stack) { return false; }
+
+            @Override
+            public int getMaxStackSize() { return PowderPouch.GENERATOR_LIMIT; }
+
+            @Override
+            public int getMaxStackSize(ItemStack stack) { return PowderPouch.GENERATOR_LIMIT; }
         });
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 9; column++) {
                 addSlot(new Slot(inventory, column + row * 9 + 9,
-                        8 + column * 18, 98 + row * 18));
+                        20 + column * 18, 124 + row * 18));
             }
         }
         for (int column = 0; column < 9; column++) {
-            addSlot(new Slot(inventory, column, 8 + column * 18, 156));
+            addSlot(new Slot(inventory, column, 20 + column * 18, 182));
         }
     }
 
-    public int powderCount() { return pouch.getStackInSlot(0).getCount(); }
+    public int powderCount() { return pouch.getStackInSlot(PowderPouch.CHAMBER_SLOT).getCount(); }
+
+    public int reserveCount() {
+        int count = 0;
+        for (int slot = PowderPouch.RESERVE_START; slot < PowderPouch.GENERATOR_SLOT; slot++) {
+            count += pouch.getStackInSlot(slot).getCount();
+        }
+        return count;
+    }
+
+    public int generatorCount() { return pouch.getStackInSlot(PowderPouch.GENERATOR_SLOT).getCount(); }
 
     @Override
     public boolean stillValid(Player player) {
@@ -51,16 +86,20 @@ public final class PowderMenu extends AbstractContainerMenu {
         if (!slot.hasItem()) return ItemStack.EMPTY;
         ItemStack stack = slot.getItem();
         ItemStack original = stack.copy();
-        if (index == 0) {
-            if (!moveItemStackTo(stack, 1, 37, true)) return ItemStack.EMPTY;
-        } else if (pouch.isItemValid(0, stack)) {
-            // Use the handler directly: it preserves any overflow in the source slot.
-            ItemStack remainder = pouch.insertItem(0, stack, false);
+        if (index < PowderPouch.TOTAL_SLOTS) {
+            if (!moveItemStackTo(stack, PowderPouch.TOTAL_SLOTS, slots.size(), true)) return ItemStack.EMPTY;
+        } else if (pouch.isItemValid(PowderPouch.CHAMBER_SLOT, stack)) {
+            // Shift-clicking powder fills the chamber first, then the reserve grid.
+            ItemStack remainder = pouch.insertItem(PowderPouch.CHAMBER_SLOT, stack, false);
+            for (int reserve = PowderPouch.RESERVE_START;
+                 !remainder.isEmpty() && reserve < PowderPouch.GENERATOR_SLOT; reserve++) {
+                remainder = pouch.insertItem(reserve, remainder, false);
+            }
             if (remainder.getCount() == stack.getCount()) return ItemStack.EMPTY;
             stack.setCount(remainder.getCount());
-        } else if (index < 28) {
-            if (!moveItemStackTo(stack, 28, 37, false)) return ItemStack.EMPTY;
-        } else if (!moveItemStackTo(stack, 1, 28, false)) {
+        } else if (index < 37) {
+            if (!moveItemStackTo(stack, 37, slots.size(), false)) return ItemStack.EMPTY;
+        } else if (!moveItemStackTo(stack, PowderPouch.TOTAL_SLOTS, 37, false)) {
             return ItemStack.EMPTY;
         }
         if (stack.isEmpty()) slot.set(ItemStack.EMPTY);
@@ -70,3 +109,4 @@ public final class PowderMenu extends AbstractContainerMenu {
         return original;
     }
 }
+
