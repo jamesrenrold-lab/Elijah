@@ -109,6 +109,7 @@ public final class ElijahPirate {
                             current.bloodFlightWasMayFly = false;
                             current.bloodOverdriveUntil = 0L;
                             current.bloodLastDegenerationTick = 0L;
+                            current.bloodLastEnemyHitTick = 0L;
                         }
                         if (event.isWasDeath() && !old.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
                             current.setStackInSlot(0, ItemStack.EMPTY);
