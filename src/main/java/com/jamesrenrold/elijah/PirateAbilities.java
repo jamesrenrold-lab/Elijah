@@ -82,6 +82,7 @@ public final class PirateAbilities {
         // Consume before applying anything: one target per activation, including sweep attacks.
         state.dirtyTacticsArmed = false;
         state.dirtyTacticsReadyAt = player.serverLevel().getServer().overworld().getGameTime() + DIRTY_COOLDOWN_TICKS;
+        event.setAmount(event.getAmount() + 3.0F);
         target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, DIRTY_SLOWNESS_TICKS, 2), player);
         player.serverLevel().playSound(null, target.getX(), target.getY(), target.getZ(),
                 SoundEvents.SKELETON_DEATH, SoundSource.PLAYERS, 1.0F, 1.0F);
