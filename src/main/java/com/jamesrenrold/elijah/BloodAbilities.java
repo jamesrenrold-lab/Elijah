@@ -35,7 +35,7 @@ import java.util.UUID;
 public final class BloodAbilities {
     private static final int BLOOD_BUFF_TICKS = 10 * 20;
     private static final int BLOOD_COOLDOWN_TICKS = 15 * 20;
-    private static final int HUNT_TICKS = 25 * 20;
+    private static final int HUNT_TICKS = 15 * 20;
     private static final int FLIGHT_TICKS = 20 * 20;
     private static final int OVERDRIVE_TICKS = 20 * 20;
     private static final UUID BLOOD_SPEED_ID = UUID.fromString("75c9a1d0-8840-4a6b-b3d9-8fa4c3f88a11");
@@ -230,7 +230,13 @@ public final class BloodAbilities {
             state.bloodLastDegenerationTick = now;
             long idleTicks = Math.max(0L, now - state.bloodLastEnemyHitTick);
             float damage = Math.min(6.0F, 1.0F + (idleTicks / 100L));
-            if (player.isAlive()) player.hurt(player.damageSources().magic(), damage);
+            // Blood Hunt and Overdrive are dangerous, but their degeneration
+            // must never be the thing that kills the player. Leave one health
+            // point and stop ticking once that floor is reached.
+            if (player.isAlive()) {
+                float safeDamage = Math.min(damage, Math.max(0.0F, player.getHealth() - 1.0F));
+                if (safeDamage > 0.0F) player.hurt(player.damageSources().magic(), safeDamage);
+            }
         }
         if (state.bloodOverdriveUntil != 0L && state.bloodOverdriveUntil <= now) {
             state.bloodOverdriveUntil = 0L;
@@ -331,3 +337,4 @@ public final class BloodAbilities {
 
     private BloodAbilities() {}
 }
+
