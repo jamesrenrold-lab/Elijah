@@ -20,7 +20,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
-import net.minecraftforge.event.entity.player.PlayerHealEvent;
+import net.minecraftforge.event.entity.living.LivingHealEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -118,6 +118,11 @@ public final class BloodAbilities {
         return state != null && state.bloodHuntUntil > player.serverLevel().getGameTime();
     }
 
+    private static boolean isFlightActive(ServerPlayer player) {
+        PowderPouch state = pouch(player);
+        return state != null && state.bloodFlightUntil > player.serverLevel().getGameTime();
+    }
+
     public static void clearTransient(ServerPlayer player) {
         PowderPouch state = pouch(player);
         if (state == null) return;
@@ -146,7 +151,7 @@ public final class BloodAbilities {
     private static Mob nearestMob(ServerPlayer player) {
         AABB area = player.getBoundingBox().inflate(32.0D);
         return player.serverLevel().getEntitiesOfClass(Mob.class, area,
-                        mob -> mob.isAlive() && mob != player && !player.isAlliedTo(mob))
+                        mob -> mob.isAlive() && !player.isAlliedTo(mob))
                 .stream().min(Comparator.comparingDouble(player::distanceToSqr)).orElse(null);
     }
 
@@ -265,7 +270,7 @@ public final class BloodAbilities {
     }
 
     @SubscribeEvent
-    public static void onNaturalHeal(PlayerHealEvent event) {
+    public static void onNaturalHeal(LivingHealEvent event) {
         if (event.getEntity() instanceof ServerPlayer player && isHuntActive(player)) event.setCanceled(true);
     }
 
