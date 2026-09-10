@@ -13,7 +13,6 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -178,7 +177,7 @@ public final class UndeadCrewmate extends Zombie {
 
     private boolean isValidTarget(LivingEntity candidate, ServerPlayer owner) {
         return candidate != null && candidate != owner && candidate.isAlive()
-                && candidate instanceof Mob && !candidate.isSpectator()
+                && !(candidate instanceof ServerPlayer) && !candidate.isSpectator()
                 && owner.distanceToSqr(candidate) <= 48.0D * 48.0D;
     }
 
