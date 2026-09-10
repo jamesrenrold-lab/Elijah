@@ -25,20 +25,20 @@ public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
             for (int column = 0; column < 9; column++) slot(g, x + 20 + column * 18, y + 124 + row * 18, false);
         }
         for (int column = 0; column < 9; column++) slot(g, x + 20 + column * 18, y + 182, false);
-        // Chamber.
-        slot(g, x + 80, y + 31, true);
-        // 4x2 reserve grid.
+        // 2x2 reserve grid.
         for (int row = 0; row < 2; row++) {
-            for (int column = 0; column < 4; column++) {
+            for (int column = 0; column < 2; column++) {
                 slot(g, x + 20 + column * 18, y + 45 + row * 18, true);
             }
         }
-        // Automatic generator output.
+        // Generator moved left; load chamber moved to the old generator position.
+        slot(g, x + 80, y + 54, true);
         slot(g, x + 122, y + 54, true);
         for (int i = 0; i < 9; i++) {
             int color = i < menu.powderCount() ? 0xFFDEC07E : 0xFF3A4548;
-            g.fill(x + 58 + i * 7, y + 54, x + 63 + i * 7, y + 58, color);
+            g.fill(x + 100 + i * 7, y + 42, x + 105 + i * 7, y + 46, color);
         }
+        drawCrossedFlintlocks(g, x + 101, y + 20);
     }
 
     private void slot(GuiGraphics g, int x, int y, boolean powder) {
@@ -49,13 +49,32 @@ public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
     @Override
     protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
         g.drawCenteredString(font, title, imageWidth / 2, 9, 0xFFE6CE98);
-        g.drawString(font, "Load", 78, 23, 0xFFBFC7C8, false);
-        g.drawString(font, menu.powderCount() + "/9", 105, 35, 0xFFE6CE98, false);
-        g.drawString(font, "Reserve 4x2", 18, 23, 0xFFBFC7C8, false);
-        g.drawString(font, menu.reserveCount() + "/72", 18, 82, 0xFFE6CE98, false);
-        g.drawString(font, "Generator", 116, 35, 0xFFBFC7C8, false);
-        g.drawString(font, menu.generatorCount() + "/5", 143, 57, 0xFFE6CE98, false);
-        g.drawString(font, playerInventoryTitle, 8, inventoryLabelY, 0xFFBFC7C8, false);
+        g.drawString(font, "RESERVE", 18, 34, 0xFFBFC7C8, false);
+        g.drawString(font, "GENERATOR", 63, 34, 0xFFBFC7C8, false);
+        g.drawString(font, "LOAD", 139, 34, 0xFFBFC7C8, false);
+    }
+
+    /** Small pixel-art crossed flintlocks for the upper-middle of the pouch. */
+    private void drawCrossedFlintlocks(GuiGraphics g, int x, int y) {
+        int dark = 0xFF34251A;
+        int wood = 0xFF8A5A2B;
+        int metal = 0xFFD1B16B;
+        // Diagonal one: barrel up-right, stock down-left.
+        pixel(g, x - 11, y + 11, dark); pixel(g, x - 9, y + 9, wood);
+        pixel(g, x - 7, y + 7, wood); pixel(g, x - 5, y + 5, metal);
+        pixel(g, x - 3, y + 3, metal); pixel(g, x - 1, y + 1, metal);
+        pixel(g, x + 1, y - 1, dark); pixel(g, x + 3, y - 3, dark);
+        pixel(g, x + 5, y - 5, dark); pixel(g, x + 7, y - 7, dark);
+        // Diagonal two: barrel up-left, stock down-right.
+        pixel(g, x + 11, y + 11, dark); pixel(g, x + 9, y + 9, wood);
+        pixel(g, x + 7, y + 7, wood); pixel(g, x + 5, y + 5, metal);
+        pixel(g, x + 3, y + 3, metal); pixel(g, x + 1, y + 1, metal);
+        pixel(g, x - 1, y - 1, dark); pixel(g, x - 3, y - 3, dark);
+        pixel(g, x - 5, y - 5, dark); pixel(g, x - 7, y - 7, dark);
+    }
+
+    private void pixel(GuiGraphics g, int x, int y, int color) {
+        g.fill(x, y, x + 3, y + 3, color);
     }
 
     @Override
@@ -65,4 +84,3 @@ public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
         renderTooltip(g, mouseX, mouseY);
     }
 }
-
