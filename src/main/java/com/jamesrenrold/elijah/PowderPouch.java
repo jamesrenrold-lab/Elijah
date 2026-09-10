@@ -158,7 +158,22 @@ public final class PowderPouch extends ItemStackHandler {
         bloodLastDegenerationTick = tag.getLong("BloodLastDegenerationTick");
         bloodLastEnemyHitTick = tag.getLong("BloodLastEnemyHitTick");
         nextGeneratorTick = tag.getLong("NextGeneratorTick");
-        super.deserializeNBT(tag);
+        // Do not call ItemStackHandler.deserializeNBT here: Forge resizes its internal
+        // list to the serialized Size field, and old pouches were Size=1. Read the
+        // entries manually so old player data migrates into the fixed 10-slot layout.
+        for (int slot = 0; slot < TOTAL_SLOTS; slot++) {
+            super.setStackInSlot(slot, ItemStack.EMPTY);
+        }
+        ListTag items = tag.getList("Items", Tag.TAG_COMPOUND);
+        for (int index = 0; index < items.size(); index++) {
+            CompoundTag entry = items.getCompound(index);
+            int slot = entry.getInt("Slot");
+            if (slot < 0 || slot >= TOTAL_SLOTS) continue;
+            CompoundTag stackTag = entry.contains("Stack", Tag.TAG_COMPOUND)
+                    ? entry.getCompound("Stack") : entry;
+            ItemStack stack = ItemStack.of(stackTag);
+            if (!stack.isEmpty()) super.setStackInSlot(slot, stack);
+        }
         // Sanitize old or malformed data while preserving the old chamber slot.
         for (int slot = 0; slot < TOTAL_SLOTS; slot++) {
             ItemStack stack = getStackInSlot(slot);
@@ -193,4 +208,3 @@ public final class PowderPouch extends ItemStackHandler {
         public void invalidate() { optional.invalidate(); }
     }
 }
-
