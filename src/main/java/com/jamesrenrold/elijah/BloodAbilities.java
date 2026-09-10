@@ -26,7 +26,6 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.joml.Vector3f;
 
-import java.util.Comparator;
 import java.util.UUID;
 
 /** Server-side state and actions for the pirate's temporary Blood Rush powers. */
@@ -68,6 +67,7 @@ public final class BloodAbilities {
         long now = player.serverLevel().getGameTime();
         state.bloodOverdriveUntil = now + OVERDRIVE_TICKS;
         state.bloodLastDegenerationTick = now;
+        state.bloodLastEnemyHitTick = now;
         player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, OVERDRIVE_TICKS, 0, false, true, true));
         player.addEffect(new MobEffectInstance(MobEffects.DARKNESS, OVERDRIVE_TICKS, 0, false, true, true));
         player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, OVERDRIVE_TICKS, 0, false, true, true));
@@ -80,16 +80,12 @@ public final class BloodAbilities {
         if (!requireBuff(player)) return 0;
         PowderPouch state = pouch(player);
         if (state == null || isHuntActive(player)) return 0;
-        Mob target = nearestMob(player);
-        if (target == null) {
-            message(player, "No nearby mob to lock onto.");
-            return 0;
-        }
         state.bloodHuntUntil = player.serverLevel().getGameTime() + HUNT_TICKS;
-        state.bloodLockedTarget = target.getUUID();
+        state.bloodLastDegenerationTick = player.serverLevel().getGameTime();
+        state.bloodLastEnemyHitTick = player.serverLevel().getGameTime();
+        state.bloodLockedTarget = null;
         player.closeContainer();
-        player.setCamera(target);
-        message(player, "Blood Hunt locked — weapon swings only");
+        message(player, "Blood Hunt active — weapon swings only; hunger grows when you stop hitting");
         return 1;
     }
 
@@ -131,6 +127,8 @@ public final class BloodAbilities {
         state.bloodBuffUntil = 0L;
         state.bloodCooldownUntil = 0L;
         state.bloodOverdriveUntil = 0L;
+        state.bloodLastEnemyHitTick = 0L;
+        state.bloodLastDegenerationTick = 0L;
         removeBloodModifiers(player);
     }
 
@@ -146,13 +144,6 @@ public final class BloodAbilities {
 
     private static PowderPouch pouch(ServerPlayer player) {
         return player.getCapability(PowderPouch.CAPABILITY).orElse(null);
-    }
-
-    private static Mob nearestMob(ServerPlayer player) {
-        AABB area = player.getBoundingBox().inflate(32.0D);
-        return player.serverLevel().getEntitiesOfClass(Mob.class, area,
-                        mob -> mob.isAlive() && !player.isAlliedTo(mob))
-                .stream().min(Comparator.comparingDouble(player::distanceToSqr)).orElse(null);
     }
 
     private static void ensureBloodModifiers(ServerPlayer player) {
@@ -190,32 +181,26 @@ public final class BloodAbilities {
             removeBloodModifiers(player);
         }
 
-        if (state.bloodHuntUntil > now) {
-            Entity target = state.bloodLockedTarget == null ? null
-                    : player.serverLevel().getEntity(state.bloodLockedTarget);
-            if (!(target instanceof LivingEntity living) || !living.isAlive()) {
-                endHunt(player, state);
-            } else if (player.getCamera() != living) {
-                player.setCamera(living);
-            }
-        } else if (state.bloodHuntUntil != 0L) {
-            endHunt(player, state);
-        }
+        if (state.bloodHuntUntil <= now && state.bloodHuntUntil != 0L) endHunt(player, state);
 
         if (state.bloodFlightUntil > now) {
             if (!player.isFallFlying() && !player.onGround()) player.startFallFlying();
             player.addEffect(new MobEffectInstance(MobEffects.DOLPHINS_GRACE, 30, 2, false, true, true));
-            // Blood Wings is deliberately Elytra-free: the mayfly flag supplies
-            // flight while these red motes visibly stream off the player.
+            // Blood Wings is deliberately Elytra-free: the fall-flying state
+            // supplies gliding while these red motes visibly stream off the player.
             if (player.tickCount % 2 == 0) spawnFlightParticles(player);
         } else if (state.bloodFlightUntil != 0L) {
             endFlight(player, state);
         }
 
-        if (state.bloodOverdriveUntil > now && now - state.bloodLastDegenerationTick >= 20L) {
+        boolean bloodDamagePhase = state.bloodHuntUntil > now || state.bloodOverdriveUntil > now;
+        if (bloodDamagePhase && now - state.bloodLastDegenerationTick >= 20L) {
             state.bloodLastDegenerationTick = now;
-            if (player.isAlive()) player.hurt(player.damageSources().magic(), 1.0F);
-        } else if (state.bloodOverdriveUntil != 0L && state.bloodOverdriveUntil <= now) {
+            long idleTicks = Math.max(0L, now - state.bloodLastEnemyHitTick);
+            float damage = Math.min(6.0F, 1.0F + (idleTicks / 100L));
+            if (player.isAlive()) player.hurt(player.damageSources().magic(), damage);
+        }
+        if (state.bloodOverdriveUntil != 0L && state.bloodOverdriveUntil <= now) {
             state.bloodOverdriveUntil = 0L;
         }
     }
@@ -248,7 +233,6 @@ public final class BloodAbilities {
     private static void endHunt(ServerPlayer player, PowderPouch state) {
         state.bloodHuntUntil = 0L;
         state.bloodLockedTarget = null;
-        if (player.getCamera() != player) player.setCamera(player);
     }
 
     private static void endFlight(ServerPlayer player, PowderPouch state) {
@@ -267,6 +251,18 @@ public final class BloodAbilities {
         double percent = state.bloodBuffUntil > now ? 0.10D : 0.0D;
         if (state.bloodHuntUntil > now) percent += 0.20D;
         if (percent > 0.0D) player.heal((float) (event.getAmount() * percent));
+    }
+
+    @SubscribeEvent
+    public static void onEnemyHit(LivingHurtEvent event) {
+        if (!(event.getSource().getEntity() instanceof ServerPlayer player)
+                || event.getEntity() == player || event.getAmount() <= 0.0F) return;
+        PowderPouch state = pouch(player);
+        if (state == null) return;
+        long now = player.serverLevel().getGameTime();
+        if (state.bloodHuntUntil > now || state.bloodOverdriveUntil > now) {
+            state.bloodLastEnemyHitTick = now;
+        }
     }
 
     @SubscribeEvent
