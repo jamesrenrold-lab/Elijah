@@ -55,6 +55,12 @@ public final class PirateAbilities {
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onPlayerAttacked(LivingAttackEvent event) {
+        if (event.getSource().getEntity() instanceof ServerPlayer attacker
+                && event.getEntity() != attacker && event.getEntity().isAlive()) {
+            // This early event also catches Epic Fight's attack path when the
+            // normal vanilla hurt event is bypassed or reduced to zero damage.
+            rememberCombatTarget(attacker, event.getEntity());
+        }
         if (!(event.getEntity() instanceof ServerPlayer player) || !player.isAlive()) return;
         Entity attacker = event.getSource().getEntity();
         if (attacker instanceof LivingEntity living && attacker != player) rememberCombatTarget(player, living);
