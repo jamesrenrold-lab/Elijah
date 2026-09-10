@@ -14,7 +14,7 @@ The JAR includes the Origin data, powder-pouch screen, flintlock renderer, Dirty
 5. Select **Elijah — The Powder Corsair**. An operator can select it for a player with:
    `/origin set <player> origins:origin elijah:pirate`
 
-There is no additional datapack ZIP or resource pack to install for this version. HUD bars use the standard Origins/Apoli resource-bar texture supplied by Origins. HUD bars use the standard Origins/Apoli resource-bar texture supplied by Origins.
+There is no additional datapack ZIP or resource pack to install for this version. HUD bars use the standard Origins/Apoli resource-bar texture supplied by Origins.
 
 ## Abilities
 
@@ -27,7 +27,7 @@ There is no additional datapack ZIP or resource pack to install for this version
 
 Passives activate automatically and have no keybind.
 
-- **Tertiary Active Power — Powder Pouch:** opens one separate slot. Only gunpowder fits, with a hard limit of **9**. Drag, right-click, number-key swap and shift-click use normal inventory controls. Excess powder stays in the player's inventory/cursor.
+- **Tertiary Active Power — Powder Pouch:** opens a separate powder-pouch screen with three compartments. The **Load** chamber holds up to **9** gunpowder and is the ammunition used by the flintlock. The **Reserve 4x2** grid has eight gunpowder slots (up to **72** total), and the **Generator** output holds up to **5** gunpowder. The generator adds one powder every **30 seconds** while below its five-powder cap. Drag, right-click, number-key swap and shift-click use normal inventory controls; generator powder is output-only and can be moved into the chamber or reserve. Excess powder stays in the player's inventory/cursor.
 - **Secondary Active Power — Flintlock Kick:** fires a small black ball and consumes **all** powder in the pouch. No powder means no shot, recoil or cooldown. The shot works without holding a weapon.
 - More powder gives more recoil in the direction opposite your aim. Shoot downward to propel yourself upward. The Origin grants **85% fall-damage resistance**, so only 15% of normal fall damage remains.
 - Damage is secondary: the powder component is **2 + 1 per gunpowder**, from **3 damage at 1** to **11 damage at 9** before armor. The shot then adds **20% of the player's current `irons_spellbooks:spell_power` attribute** and **30% of current `generic.attack_damage`**. Two damage points equal one heart.
@@ -79,7 +79,7 @@ Defaults:
 | `attackSpeed` | 2.5 |
 | `goldenHonshuItem` | `dungeons_and_combat:golden_honshu` |
 
-The nine-item capacity is fixed. Damage, recoil and crewmate stats are calculated on the server. Crew resources are an Origins resource, so they sync to the client and render with the standard Origins/Apoli resource-bar sheet. The flintlock cooldown and combat state persist through relogs and respawns.
+The nine-item firing-chamber capacity, eight-slot reserve, and five-item generator cap are fixed. Damage, recoil and crewmate stats are calculated on the server. Crew resources are an Origins resource, so they sync to the client and render with the standard Origins/Apoli resource-bar sheet. The flintlock cooldown and combat state persist through relogs and respawns.
 
 ## Building and development
 
@@ -90,4 +90,3 @@ To build locally with Java 17 and Gradle 8.8 installed: `gradle build`. The inst
 Operator-only diagnostic commands: `/elijah pouch`, `/elijah fire`, `/elijah dirty_tactics`, `/elijah crew`, `/elijah unload`. The hidden `/elijah sea_on` and `/elijah sea_off` commands are managed by the Wisdom of the Sea lifecycle callbacks. Origins executes these internally through its power actions, so ordinary players do not need operator permissions to use their Origin. As in the other command-based Origins, Apoli's `executeCommand` permission level must remain at its default of 2 or higher.
 
 Compile success verifies the Forge API integration, not in-game behavior in the complete modpack. The first gameplay check should cover the slot limit, firing at 1 and 9 powder, recoil, effects, and survival respawn, Dirty Tactics on a melee hit, and passive stats after switching Origin.
-
