@@ -1,7 +1,8 @@
 {
   "model": "epicfight:entity/biped",
   "armature": "epicfight:entity/biped",
-  "renderer": "minecraft:zombie",
+  "renderer": "epicfight:custom",
+  "humanoid": true,
   "isHumanoid": true,
   "faction": "neutral",
   "attributes": {
@@ -28,15 +29,6 @@
         "walk": "epicfight:biped/living/walk_longsword",
         "chase": "epicfight:biped/living/run_longsword"
       }
-    },
-    {
-      "weapon_categories": ["fist"],
-      "style": "common",
-      "livingmotions": {
-        "idle": "epicfight:biped/living/idle",
-        "walk": "epicfight:biped/living/walk",
-        "chase": "epicfight:biped/living/walk"
-      }
     }
   ],
   "stun_animations": {
@@ -47,7 +39,7 @@
   },
   "combat_behavior": [
     {
-      "weapon_categories": ["sword", "tachi", "longsword"],
+      "weapon_categories": ["sword", "tachi", "longsword", "fist"],
       "style": "one_hand",
       "behavior_series": [
         {
@@ -59,51 +51,16 @@
             {
               "conditions": [
                 {"predicate": "within_eye_height"},
-                {"predicate": "within_distance", "min": 0.0, "max": 2.0}
+                {"predicate": "within_distance", "min": 0.0, "max": 1.0}
               ],
               "animation": "epicfight:biped/combat/mob_onehand1"
             },
             {
               "conditions": [
                 {"predicate": "within_eye_height"},
-                {"predicate": "within_distance", "min": 0.0, "max": 2.0}
+                {"predicate": "within_distance", "min": 0.0, "max": 1.0}
               ],
               "animation": "epicfight:biped/combat/mob_onehand2"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "weapon_categories": ["fist"],
-      "style": "common",
-      "behavior_series": [
-        {
-          "weight": 100.0,
-          "cooldown": 8,
-          "canBeInterrupted": true,
-          "looping": true,
-          "behaviors": [
-            {
-              "conditions": [
-                {"predicate": "within_eye_height"},
-                {"predicate": "within_distance", "min": 0.0, "max": 1.8}
-              ],
-              "animation": "epicfight:zombie/combat/attack1"
-            },
-            {
-              "conditions": [
-                {"predicate": "within_eye_height"},
-                {"predicate": "within_distance", "min": 0.0, "max": 1.8}
-              ],
-              "animation": "epicfight:zombie/combat/attack2"
-            },
-            {
-              "conditions": [
-                {"predicate": "within_eye_height"},
-                {"predicate": "within_distance", "min": 0.0, "max": 1.8}
-              ],
-              "animation": "epicfight:zombie/combat/attack3"
             }
           ]
         }
@@ -111,3 +68,4 @@
     }
   ]
 }
+
