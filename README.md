@@ -27,7 +27,7 @@ There is no additional datapack ZIP or resource pack to install for this version
 
 Passives activate automatically and have no keybind.
 
-- **Tertiary Active Power — Powder Pouch:** opens a separate powder-pouch screen with three compartments. The **Load** chamber holds up to **9** gunpowder and is the ammunition used by the flintlock. The **Reserve 4x2** grid has eight gunpowder slots (up to **72** total), and the **Generator** output holds up to **5** gunpowder. The generator adds one powder every **30 seconds** while below its five-powder cap. Drag, right-click, number-key swap and shift-click use normal inventory controls; generator powder is output-only and can be moved into the chamber or reserve. Excess powder stays in the player's inventory/cursor.
+- **Tertiary Active Power — Powder Pouch:** opens a separate powder-pouch screen with three compartments. The **Load** chamber holds up to **9** gunpowder and is the ammunition used by the flintlock. The **Reserve 2x2** grid has four gunpowder slots holding up to **64 each** (**256** total), and the **Generator** output holds up to **5** gunpowder. The generator adds one powder every **30 seconds** while below its five-powder cap. Drag, right-click, number-key swap and shift-click use normal inventory controls; generator powder is output-only and can be moved into the chamber or reserve. Excess powder stays in the player's inventory/cursor.
 - **Secondary Active Power — Flintlock Kick:** fires a small black ball and consumes **all** powder in the pouch. No powder means no shot, recoil or cooldown. The shot works without holding a weapon.
 - More powder gives more recoil in the direction opposite your aim. Shoot downward to propel yourself upward. The Origin grants **85% fall-damage resistance**, so only 15% of normal fall damage remains.
 - Damage is secondary: the powder component is **2 + 1 per gunpowder**, from **3 damage at 1** to **11 damage at 9** before armor. The shot then adds **20% of the player's current `irons_spellbooks:spell_power` attribute** and **30% of current `generic.attack_damage`**. Two damage points equal one heart.
@@ -79,7 +79,7 @@ Defaults:
 | `attackSpeed` | 2.5 |
 | `goldenHonshuItem` | `dungeons_and_combat:golden_honshu` |
 
-The nine-item firing-chamber capacity, eight-slot reserve, and five-item generator cap are fixed. Damage, recoil and crewmate stats are calculated on the server. Crew resources are an Origins resource, so they sync to the client and render with the standard Origins/Apoli resource-bar sheet. The flintlock cooldown and combat state persist through relogs and respawns.
+The nine-item firing-chamber capacity, four-slot reserve with 64 per slot, and five-item generator cap are fixed. Damage, recoil and crewmate stats are calculated on the server. Crew resources are an Origins resource, so they sync to the client and render with the standard Origins/Apoli resource-bar sheet. The flintlock cooldown and combat state persist through relogs and respawns.
 
 ## Building and development
 
