@@ -27,6 +27,14 @@ public final class PowderPouch extends ItemStackHandler {
     public int xpBonusRemainder;
     public UUID lastCombatTarget;
     public long lastCombatTargetTick;
+    public long bloodBuffUntil;
+    public long bloodCooldownUntil;
+    public long bloodHuntUntil;
+    public UUID bloodLockedTarget;
+    public long bloodFlightUntil;
+    public boolean bloodFlightWasMayFly;
+    public long bloodOverdriveUntil;
+    public long bloodLastDegenerationTick;
 
     public PowderPouch() { super(1); }
 
@@ -56,6 +64,14 @@ public final class PowderPouch extends ItemStackHandler {
         tag.putInt("XpBonusRemainder", xpBonusRemainder);
         if (lastCombatTarget != null) tag.putUUID("LastCombatTarget", lastCombatTarget);
         tag.putLong("LastCombatTargetTick", lastCombatTargetTick);
+        tag.putLong("BloodBuffUntil", bloodBuffUntil);
+        tag.putLong("BloodCooldownUntil", bloodCooldownUntil);
+        tag.putLong("BloodHuntUntil", bloodHuntUntil);
+        if (bloodLockedTarget != null) tag.putUUID("BloodLockedTarget", bloodLockedTarget);
+        tag.putLong("BloodFlightUntil", bloodFlightUntil);
+        tag.putBoolean("BloodFlightWasMayFly", bloodFlightWasMayFly);
+        tag.putLong("BloodOverdriveUntil", bloodOverdriveUntil);
+        tag.putLong("BloodLastDegenerationTick", bloodLastDegenerationTick);
         return tag;
     }
 
@@ -68,6 +84,14 @@ public final class PowderPouch extends ItemStackHandler {
         xpBonusRemainder = Math.floorMod(tag.getInt("XpBonusRemainder"), 10);
         lastCombatTarget = tag.hasUUID("LastCombatTarget") ? tag.getUUID("LastCombatTarget") : null;
         lastCombatTargetTick = tag.getLong("LastCombatTargetTick");
+        bloodBuffUntil = tag.getLong("BloodBuffUntil");
+        bloodCooldownUntil = tag.getLong("BloodCooldownUntil");
+        bloodHuntUntil = tag.getLong("BloodHuntUntil");
+        bloodLockedTarget = tag.hasUUID("BloodLockedTarget") ? tag.getUUID("BloodLockedTarget") : null;
+        bloodFlightUntil = tag.getLong("BloodFlightUntil");
+        bloodFlightWasMayFly = tag.getBoolean("BloodFlightWasMayFly");
+        bloodOverdriveUntil = tag.getLong("BloodOverdriveUntil");
+        bloodLastDegenerationTick = tag.getLong("BloodLastDegenerationTick");
         // Enforce the one-slot layout even for malformed/old save data.
         super.setStackInSlot(0, ItemStack.EMPTY);
         ListTag items = tag.getList("Items", Tag.TAG_COMPOUND);
