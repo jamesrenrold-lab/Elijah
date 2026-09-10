@@ -46,7 +46,7 @@ public final class PirateAbilities {
 
     /** Records the latest mob involved in the pirate's combat, for crew targeting. */
     public static void rememberCombatTarget(ServerPlayer player, LivingEntity target) {
-        if (target == null || target == player || !(target instanceof net.minecraft.world.entity.Mob)) return;
+        if (target == null || target == player || target instanceof ServerPlayer) return;
         player.getCapability(PowderPouch.CAPABILITY).ifPresent(state -> {
             state.lastCombatTarget = target.getUUID();
             state.lastCombatTargetTick = player.serverLevel().getGameTime();
@@ -119,3 +119,4 @@ public final class PirateAbilities {
 
     private PirateAbilities() {}
 }
+
