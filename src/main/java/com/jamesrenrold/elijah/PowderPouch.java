@@ -36,6 +36,7 @@ public final class PowderPouch extends ItemStackHandler {
     public long bloodOverdriveUntil;
     public long bloodLastDegenerationTick;
     public long bloodLastEnemyHitTick;
+    public long bloodAllowLifestealUntil;
 
     public PowderPouch() { super(1); }
 
