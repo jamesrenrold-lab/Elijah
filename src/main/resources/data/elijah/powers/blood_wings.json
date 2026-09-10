@@ -1,0 +1,17 @@
+{
+  "type": "origins:active_self",
+  "name": "Blood Wings",
+  "description": "Septenary ability, available only during Blood Rush: enter Elytra-style fall flying without equipping an Elytra for 20 seconds and gain Dolphin's Grace III. Red particles stream from you while gliding.",
+  "entity_action": {
+    "type": "origins:execute_command",
+    "command": "elijah blood_wings"
+  },
+  "cooldown": 5,
+  "hud_render": {
+    "should_render": false
+  },
+  "key": {
+    "key": "key.origins.septenary_active",
+    "continuous": false
+  }
+}
