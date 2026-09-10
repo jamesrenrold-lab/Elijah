@@ -1,0 +1,17 @@
+{
+  "type": "origins:active_self",
+  "name": "Blood Hunt",
+  "description": "Senary ability, available only during Blood Rush: lock the camera onto the nearest mob for 25 seconds, prevent natural regeneration and all interactions except weapon swings, and gain 20% additional lifesteal. The screen is tinted red.",
+  "entity_action": {
+    "type": "origins:execute_command",
+    "command": "elijah blood_hunt"
+  },
+  "cooldown": 5,
+  "hud_render": {
+    "should_render": false
+  },
+  "key": {
+    "key": "key.origins.senary_active",
+    "continuous": false
+  }
+}
