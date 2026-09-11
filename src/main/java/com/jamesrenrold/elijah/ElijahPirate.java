@@ -121,6 +121,12 @@ public final class ElijahPirate {
     }
 
     private void dropPowder(LivingDropsEvent event) {
+        // Crewmates are temporary summons and must never produce equipment,
+        // mob loot, or other drops when they die or are discarded.
+        if (event.getEntity() instanceof UndeadCrewmate) {
+            event.setCanceled(true);
+            return;
+        }
         if (!(event.getEntity() instanceof ServerPlayer player)
                 || player.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) return;
         player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch -> {
@@ -302,4 +308,3 @@ public final class ElijahPirate {
         return 1;
     }
 }
-
