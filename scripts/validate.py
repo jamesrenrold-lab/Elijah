@@ -15,7 +15,7 @@ for power in origin['powers']:
     assert f'data/{namespace}/powers/{path}.json' in parsed, f'Missing power: {power}'
 for path, data in parsed.items():
     if '/powers/' in path and data['type'] == 'origins:active_self':
-        assert data['entity_action']['type'] in ('origins:execute_command', 'origins:if_else')
+        assert data['entity_action']['type'] in ('origins:execute_command', 'origins:if_else', 'origins:and')
 assert 'elijah:pirate' in parsed['data/origins/origin_layers/origin.json']['origins']
 assert 'elijah:flintlock' in parsed['data/minecraft/tags/damage_type/is_projectile.json']['values']
 assert parsed['data/elijah/damage_type/flintlock.json']['message_id'] == 'elijah.flintlock'
