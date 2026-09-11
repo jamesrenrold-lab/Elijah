@@ -1,0 +1,27 @@
+{
+  "type": "origins:action_over_time",
+  "name": "Blood Overflow",
+  "description": "Automatically triggers Blood Rush overflow at full charge.",
+  "hidden": true,
+  "interval": 1,
+  "condition": {
+    "type": "origins:resource",
+    "resource": "elijah:blood_resource",
+    "comparison": ">=",
+    "compare_to": 100
+  },
+  "entity_action": {
+    "type": "origins:and",
+    "actions": [
+      {
+        "type": "origins:change_resource",
+        "resource": "elijah:blood_resource",
+        "change": -100
+      },
+      {
+        "type": "origins:execute_command",
+        "command": "elijah blood_overdrive"
+      }
+    ]
+  }
+}
