@@ -3,6 +3,7 @@ package com.jamesrenrold.elijah;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.items.SlotItemHandler;
@@ -10,6 +11,7 @@ import net.minecraftforge.items.SlotItemHandler;
 public final class PowderMenu extends AbstractContainerMenu {
     private final PowderPouch pouch;
     private final Player owner;
+    private final DataSlot generatorCountdown = DataSlot.standalone();
 
     public PowderMenu(int id, Inventory inventory) {
         this(id, inventory, new PowderPouch());
@@ -19,6 +21,7 @@ public final class PowderMenu extends AbstractContainerMenu {
         super(ElijahPirate.POWDER_MENU.get(), id);
         this.pouch = pouch;
         this.owner = inventory.player;
+        addDataSlot(generatorCountdown);
         // Reserve: four gunpowder slots arranged as a 2x2 grid.
         for (int row = 0; row < 2; row++) {
             for (int column = 0; column < 2; column++) {
@@ -74,6 +77,18 @@ public final class PowderMenu extends AbstractContainerMenu {
 
     public int generatorCount() { return pouch.getStackInSlot(PowderPouch.GENERATOR_SLOT).getCount(); }
 
+    public int generatorSeconds() { return generatorCountdown.get(); }
+
+    @Override
+    public void broadcastChanges() {
+        if (!owner.level().isClientSide) {
+            long now = owner.level().getGameTime();
+            long remaining = pouch.nextGeneratorTick <= now ? 0L : pouch.nextGeneratorTick - now;
+            generatorCountdown.set((int) Math.min(999L, (remaining + 19L) / 20L));
+        }
+        super.broadcastChanges();
+    }
+
     @Override
     public boolean stillValid(Player player) {
         return player == owner && player.isAlive() && !player.isSpectator();
@@ -89,14 +104,10 @@ public final class PowderMenu extends AbstractContainerMenu {
         if (index < PowderPouch.TOTAL_SLOTS) {
             if (!moveItemStackTo(stack, PowderPouch.TOTAL_SLOTS, slots.size(), true)) return ItemStack.EMPTY;
         } else if (pouch.isItemValid(PowderPouch.CHAMBER_SLOT, stack)) {
-            // Shift-clicking powder fills the chamber first, then the reserve grid.
-            ItemStack remainder = pouch.insertItem(PowderPouch.CHAMBER_SLOT, stack, false);
-            for (int reserve = PowderPouch.RESERVE_START;
-                 !remainder.isEmpty() && reserve < PowderPouch.GENERATOR_SLOT; reserve++) {
-                remainder = pouch.insertItem(reserve, remainder, false);
-            }
-            if (remainder.getCount() == stack.getCount()) return ItemStack.EMPTY;
-            stack.setCount(remainder.getCount());
+            // Let the menu's SlotItemHandler routing fill the 9-powder load slot,
+            // then the 64-per-slot reserve. This preserves partial stacks instead
+            // of deleting them when a shift-clicked stack is smaller than nine.
+            if (!moveItemStackTo(stack, 0, PowderPouch.TOTAL_SLOTS, true)) return ItemStack.EMPTY;
         } else if (index < 37) {
             if (!moveItemStackTo(stack, 37, slots.size(), false)) return ItemStack.EMPTY;
         } else if (!moveItemStackTo(stack, PowderPouch.TOTAL_SLOTS, 37, false)) {
