@@ -1,0 +1,29 @@
+{
+  "type": "origins:action_over_time",
+  "name": "Blood Charge Decay",
+  "description": "Blood charge drains by one point every 4 seconds while inactive.",
+  "hidden": true,
+  "interval": 80,
+  "condition": {
+    "type": "origins:and",
+    "conditions": [
+      {
+        "type": "origins:resource",
+        "resource": "elijah:blood_active_window",
+        "comparison": "<",
+        "compare_to": 1
+      },
+      {
+        "type": "origins:resource",
+        "resource": "elijah:blood_resource",
+        "comparison": ">",
+        "compare_to": 0
+      }
+    ]
+  },
+  "entity_action": {
+    "type": "origins:change_resource",
+    "resource": "elijah:blood_resource",
+    "change": -1
+  }
+}
