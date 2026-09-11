@@ -97,17 +97,27 @@ public final class PowderPouch extends ItemStackHandler {
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)) return;
-        player.getCapability(CAPABILITY).ifPresent(pouch -> pouch.tickGenerator(player.serverLevel().getGameTime()));
+        player.getCapability(CAPABILITY).ifPresent(pouch -> {
+            if (pouch.tickGenerator(player.serverLevel().getGameTime())
+                    && player.containerMenu instanceof PowderMenu menu) {
+                // The generator is a capability slot rather than a vanilla
+                // inventory slot; explicitly broadcast it so the client sees
+                // new powder without clicking the output slot.
+                menu.broadcastChanges();
+            }
+        });
     }
 
-    private void tickGenerator(long now) {
+    private boolean tickGenerator(long now) {
         if (nextGeneratorTick <= 0L) {
             nextGeneratorTick = now + GENERATOR_INTERVAL_TICKS;
-            return;
+            return false;
         }
-        if (now < nextGeneratorTick) return;
+        if (now < nextGeneratorTick) return false;
+        int before = getStackInSlot(GENERATOR_SLOT).getCount();
         generateOnePowder();
         nextGeneratorTick = now + GENERATOR_INTERVAL_TICKS;
+        return getStackInSlot(GENERATOR_SLOT).getCount() != before;
     }
 
     public void clearPowder() {
