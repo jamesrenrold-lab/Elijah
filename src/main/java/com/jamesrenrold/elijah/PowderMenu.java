@@ -12,6 +12,7 @@ public final class PowderMenu extends AbstractContainerMenu {
     private final PowderPouch pouch;
     private final Player owner;
     private final DataSlot generatorCountdown = DataSlot.standalone();
+    private final DataSlot generatorCountSync = DataSlot.standalone();
 
     public PowderMenu(int id, Inventory inventory) {
         this(id, inventory, new PowderPouch());
@@ -22,6 +23,7 @@ public final class PowderMenu extends AbstractContainerMenu {
         this.pouch = pouch;
         this.owner = inventory.player;
         addDataSlot(generatorCountdown);
+        addDataSlot(generatorCountSync);
         // Reserve: four gunpowder slots arranged as a 2x2 grid.
         for (int row = 0; row < 2; row++) {
             for (int column = 0; column < 2; column++) {
@@ -46,8 +48,8 @@ public final class PowderMenu extends AbstractContainerMenu {
             @Override
             public int getMaxStackSize(ItemStack stack) { return PowderPouch.GENERATOR_LIMIT; }
         });
-        // Ready-to-fire chamber, moved to the old generator position.
-        addSlot(new SlotItemHandler(pouch, PowderPouch.CHAMBER_SLOT, 122, 54) {
+        // Ready-to-fire chamber, moved farther right.
+        addSlot(new SlotItemHandler(pouch, PowderPouch.CHAMBER_SLOT, 160, 54) {
             @Override
             public int getMaxStackSize() { return PowderPouch.CHAMBER_LIMIT; }
 
@@ -75,7 +77,11 @@ public final class PowderMenu extends AbstractContainerMenu {
         return count;
     }
 
-    public int generatorCount() { return pouch.getStackInSlot(PowderPouch.GENERATOR_SLOT).getCount(); }
+    public int generatorCount() { return generatorCountSync.get(); }
+
+    public boolean generatorClientSlotEmpty() {
+        return pouch.getStackInSlot(PowderPouch.GENERATOR_SLOT).isEmpty();
+    }
 
     public int generatorSeconds() { return generatorCountdown.get(); }
 
@@ -85,6 +91,7 @@ public final class PowderMenu extends AbstractContainerMenu {
             long now = owner.level().getGameTime();
             long remaining = pouch.nextGeneratorTick <= now ? 0L : pouch.nextGeneratorTick - now;
             generatorCountdown.set((int) Math.min(999L, (remaining + 19L) / 20L));
+            generatorCountSync.set(pouch.getStackInSlot(PowderPouch.GENERATOR_SLOT).getCount());
         }
         super.broadcastChanges();
     }
