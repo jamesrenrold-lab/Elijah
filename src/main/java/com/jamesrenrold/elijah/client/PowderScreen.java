@@ -1,7 +1,6 @@
 package com.jamesrenrold.elijah.client;
 
 import com.jamesrenrold.elijah.PowderMenu;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
@@ -89,8 +88,7 @@ public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
         // generator never looks empty until it is clicked.
         if (menu.generatorCount() > 0 && menu.generatorClientSlotEmpty()) {
             ItemStack powder = new ItemStack(Items.GUNPOWDER, menu.generatorCount());
-            Minecraft.getInstance().getItemRenderer().renderAndDecorateItem(
-                    powder, leftPos + 80, topPos + 54);
+            g.renderItem(powder, leftPos + 80, topPos + 54);
         }
         renderTooltip(g, mouseX, mouseY);
     }
