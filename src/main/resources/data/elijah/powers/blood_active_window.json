@@ -1,0 +1,12 @@
+{
+  "type": "origins:resource",
+  "name": "Blood Rush Active Window",
+  "description": "Internal ten-second Blood Rush activity timer.",
+  "hidden": true,
+  "min": 0,
+  "max": 10,
+  "start_value": 0,
+  "hud_render": {
+    "should_render": false
+  }
+}
