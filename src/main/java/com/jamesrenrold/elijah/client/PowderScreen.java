@@ -1,10 +1,13 @@
 package com.jamesrenrold.elijah.client;
 
 import com.jamesrenrold.elijah.PowderMenu;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
     public PowderScreen(PowderMenu menu, Inventory inventory, Component title) {
@@ -81,6 +84,14 @@ public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
         super.render(g, mouseX, mouseY, partialTick);
+        // Capability-only output can arrive before the vanilla slot snapshot.
+        // Draw a client-side fallback icon from the synchronized count so the
+        // generator never looks empty until it is clicked.
+        if (menu.generatorCount() > 0 && menu.generatorClientSlotEmpty()) {
+            ItemStack powder = new ItemStack(Items.GUNPOWDER, menu.generatorCount());
+            Minecraft.getInstance().getItemRenderer().renderAndDecorateItem(
+                    powder, leftPos + 80, topPos + 54);
+        }
         renderTooltip(g, mouseX, mouseY);
     }
 }
