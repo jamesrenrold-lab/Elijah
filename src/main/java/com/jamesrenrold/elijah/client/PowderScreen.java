@@ -31,13 +31,9 @@ public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
                 slot(g, x + 20 + column * 18, y + 45 + row * 18, true);
             }
         }
-        // Generator moved left; load chamber moved to the old generator position.
+        // Generator moved left; load chamber moved farther right.
         slot(g, x + 80, y + 54, true);
-        slot(g, x + 122, y + 54, true);
-        for (int i = 0; i < 9; i++) {
-            int color = i < menu.powderCount() ? 0xFFDEC07E : 0xFF3A4548;
-            g.fill(x + 100 + i * 7, y + 42, x + 105 + i * 7, y + 46, color);
-        }
+        slot(g, x + 160, y + 54, true);
         drawCrossedFlintlocks(g, x + 101, y + 20);
     }
 
@@ -49,9 +45,13 @@ public final class PowderScreen extends AbstractContainerScreen<PowderMenu> {
     @Override
     protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
         g.drawCenteredString(font, title, imageWidth / 2, 9, 0xFFE6CE98);
-        g.drawString(font, "RESERVE", 18, 34, 0xFFBFC7C8, false);
-        g.drawString(font, "GENERATOR", 63, 34, 0xFFBFC7C8, false);
-        g.drawString(font, "LOAD", 139, 34, 0xFFBFC7C8, false);
+        g.drawCenteredString(font, "Reserve", 38, 84, 0xFFBFC7C8);
+        g.drawCenteredString(font, menu.reserveCount() + "/256", 38, 97, 0xFFE6CE98);
+        g.drawCenteredString(font, "Generator", 88, 34, 0xFFBFC7C8);
+        g.drawCenteredString(font, menu.generatorSeconds() <= 0 ? "Ready" : menu.generatorSeconds() + "s", 88, 74, 0xFFE6CE98);
+        g.drawCenteredString(font, menu.generatorCount() + "/5", 88, 87, 0xFFE6CE98);
+        g.drawCenteredString(font, "Load", 168, 34, 0xFFBFC7C8);
+        g.drawCenteredString(font, menu.powderCount() + "/9", 168, 74, 0xFFE6CE98);
     }
 
     /** Small pixel-art crossed flintlocks for the upper-middle of the pouch. */
