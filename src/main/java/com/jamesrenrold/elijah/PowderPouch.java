@@ -52,6 +52,7 @@ public final class PowderPouch extends ItemStackHandler {
     public long bloodFlightUntil;
     public boolean bloodFlightWasMayFly;
     public long bloodOverdriveUntil;
+    public long bloodExhaustedUntil;
     public long bloodLastDegenerationTick;
     public long bloodLastEnemyHitTick;
     public long bloodAllowLifestealUntil;
@@ -145,6 +146,7 @@ public final class PowderPouch extends ItemStackHandler {
         tag.putLong("BloodFlightUntil", bloodFlightUntil);
         tag.putBoolean("BloodFlightWasMayFly", bloodFlightWasMayFly);
         tag.putLong("BloodOverdriveUntil", bloodOverdriveUntil);
+        tag.putLong("BloodExhaustedUntil", bloodExhaustedUntil);
         tag.putLong("BloodLastDegenerationTick", bloodLastDegenerationTick);
         tag.putLong("BloodLastEnemyHitTick", bloodLastEnemyHitTick);
         tag.putLong("NextGeneratorTick", nextGeneratorTick);
@@ -168,6 +170,7 @@ public final class PowderPouch extends ItemStackHandler {
         bloodFlightUntil = tag.getLong("BloodFlightUntil");
         bloodFlightWasMayFly = tag.getBoolean("BloodFlightWasMayFly");
         bloodOverdriveUntil = tag.getLong("BloodOverdriveUntil");
+        bloodExhaustedUntil = tag.getLong("BloodExhaustedUntil");
         bloodLastDegenerationTick = tag.getLong("BloodLastDegenerationTick");
         bloodLastEnemyHitTick = tag.getLong("BloodLastEnemyHitTick");
         nextGeneratorTick = tag.getLong("NextGeneratorTick");
