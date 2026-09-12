@@ -73,7 +73,8 @@ public final class DomainAbilities {
 
     public static int activate(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        if (!player.isAlive() || player.isSpectator() || SESSIONS.containsKey(player.getUUID())) return 0;
+        if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)
+                || SESSIONS.containsKey(player.getUUID())) return 0;
 
         PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
         if (pouch == null) return 0;
@@ -187,7 +188,9 @@ public final class DomainAbilities {
             ServerPlayer owner = server.getPlayerList().getPlayer(session.ownerId);
             if (owner == null || !owner.isAlive() || owner.level() != session.domain) {
                 SESSIONS.remove(session.ownerId);
-                endSession(session, server, false);
+                // The target must never be stranded in the private dimension
+                // just because the caster died, disconnected, or was moved.
+                endSession(session, server, true);
                 continue;
             }
             long now = session.domain.getGameTime();
@@ -493,11 +496,14 @@ public final class DomainAbilities {
         } else if (state.hasProperty(BlockStateProperties.FACING)) {
             state = state.setValue(BlockStateProperties.FACING, facing);
         }
-        level.setBlock(new BlockPos(x, y, z), state, 3);
+        level.setBlock(new BlockPos(x, y, z), state, 2);
     }
 
     private static void set(ServerLevel level, int x, int y, int z, net.minecraft.world.level.block.Block block) {
-        level.setBlock(new BlockPos(x, y, z), block.defaultBlockState(), 3);
+        // Client update without neighbor updates: this keeps the two-deep
+        // source-water section stable and avoids tens of thousands of fluid
+        // and gravity updates while the arena is reconstructed.
+        level.setBlock(new BlockPos(x, y, z), block.defaultBlockState(), 2);
     }
 
     private static void message(ServerPlayer player, String text) {
