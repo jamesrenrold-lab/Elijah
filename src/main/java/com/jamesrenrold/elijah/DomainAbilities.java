@@ -43,10 +43,12 @@ import org.joml.Vector3f;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -73,6 +75,7 @@ public final class DomainAbilities {
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
+    private static final Set<UUID> PENDING_ACTIVATIONS = new HashSet<>();
     private static final BlockPos ARENA_MARKER = new BlockPos(0, 61, 0);
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
     private static boolean arenaReady;
@@ -82,8 +85,21 @@ public final class DomainAbilities {
     public static int activate(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
         if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
+        if (player.getServer() == null) return 0;
+
+        // Origins invokes the entity action before ActiveCooldownPower records
+        // the use. Teleporting dimensions inside that callback lets Connector
+        // replace the power instance before it is committed, which made the
+        // replacement unusable until death. Defer the transfer one server tick
+        // so the originating power always completes first.
+        PENDING_ACTIVATIONS.add(player.getUUID());
+        return 1;
+    }
+
+    private static void activateNow(ServerPlayer player) {
+        if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return;
         MinecraftServer server = player.getServer();
-        if (server == null) return 0;
+        if (server == null) return;
 
         // Domain availability is owned entirely here. Origins only debounces
         // the key for one tick; the visible five-second cooldown below is the
@@ -94,33 +110,33 @@ public final class DomainAbilities {
             int secondsLeft = Math.max(1,
                     (int) Math.ceil((active.endAt - server.overworld().getGameTime()) / 20.0D));
             message(player, "Drowned Domain is already active: " + secondsLeft + "s remaining.");
-            return 0;
+            return;
         }
         long serverTime = server.overworld().getGameTime();
         long cooldownUntil = COOLDOWNS.getOrDefault(player.getUUID(), 0L);
         if (cooldownUntil > serverTime) {
             int secondsLeft = Math.max(1, (int) Math.ceil((cooldownUntil - serverTime) / 20.0D));
             message(player, "Drowned Domain cooldown: " + secondsLeft + "s");
-            return 0;
+            return;
         }
         COOLDOWNS.remove(player.getUUID());
 
         PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
-        if (pouch == null) return 0;
+        if (pouch == null) return;
         LivingEntity target = findTarget(player);
         if (target == null) {
             message(player, "Drowned Domain: look directly at a nearby hostile target.");
-            return 0;
+            return;
         }
 
         ServerLevel domain = server.getLevel(DOMAIN_DIMENSION);
         if (domain == null) {
             message(player, "The Drowned Domain dimension is unavailable; reload the world once.");
-            return 0;
+            return;
         }
         if (!SESSIONS.isEmpty()) {
             message(player, "Another Drowned Domain is already active.");
-            return 0;
+            return;
         }
 
         buildArena(domain);
@@ -134,14 +150,14 @@ public final class DomainAbilities {
         float targetYaw = target.getYRot();
         float targetPitch = target.getXRot();
         boolean targetWasPersistent = target instanceof Mob mob && mob.isPersistenceRequired();
-        // The target starts on the wide back of the sandy crescent while the
+        // The target starts on the raised circular sand ring while the
         // caster begins inside the lagoon, where the pirate's swim advantage
         // immediately matters.
         LivingEntity movedTarget = moveEntity(target, domain, BEACH_SPAWN_X, BEACH_SPAWN_Y, 0.0D,
                 targetYaw, targetPitch, true);
         if (movedTarget == null) {
             message(player, "The target could not be pulled into the domain.");
-            return 0;
+            return;
         }
 
         guardLifecycle(player, 60L);
@@ -154,7 +170,7 @@ public final class DomainAbilities {
                         targetYaw, targetPitch, targetWasPersistent);
             }
             message(player, "The caster could not enter the domain; the target was returned.");
-            return 0;
+            return;
         }
         movedTarget.setDeltaMovement(Vec3.ZERO);
         movedTarget.hurtMarked = true;
@@ -170,7 +186,6 @@ public final class DomainAbilities {
                 SoundSource.PLAYERS, 1.2F, 0.7F);
         message(player, "The Drowned Domain opens — the tide answers your call!");
         message(player, "Drowned Domain cooldown begins when the domain closes: 5s.");
-        return 1;
     }
 
     private static void recoverFinishedSessions(MinecraftServer server) {
@@ -245,6 +260,7 @@ public final class DomainAbilities {
         SESSIONS.clear();
         COOLDOWNS.clear();
         LIFECYCLE_GUARDS.clear();
+        PENDING_ACTIVATIONS.clear();
         arenaReady = false;
         ServerLevel domain = event.getServer().getLevel(DOMAIN_DIMENSION);
         if (domain != null) buildArena(domain);
@@ -254,7 +270,22 @@ public final class DomainAbilities {
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         MinecraftServer server = event.getServer();
-        if (server == null || SESSIONS.isEmpty()) return;
+        if (server == null) return;
+        if (!PENDING_ACTIVATIONS.isEmpty()) {
+            List<UUID> pending = new ArrayList<>(PENDING_ACTIVATIONS);
+            PENDING_ACTIVATIONS.removeAll(pending);
+            for (UUID playerId : pending) {
+                ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+                if (player == null) continue;
+                try {
+                    activateNow(player);
+                } catch (Throwable error) {
+                    LOGGER.error("Deferred Drowned Domain activation failed for {}", playerId, error);
+                    message(player, "Drowned Domain failed to open; the key is ready to retry.");
+                }
+            }
+        }
+        if (SESSIONS.isEmpty()) return;
         List<Session> sessions = new ArrayList<>(SESSIONS.values());
         for (Session session : sessions) {
             try {
@@ -397,22 +428,14 @@ public final class DomainAbilities {
 
     private static void fireCannonball(Session session, ServerPlayer owner, LivingEntity target) {
         int shot = session.cannonIndex++;
-        // Deliberately scatter impacts around the target instead of putting
-        // every shell directly through its centre. A downward trace finds the
-        // real sand/lagoon floor so shots still detonate when the target swims.
-        double scatterAngle = shot * 2.399963229728653D;
-        double scatterRadius = 1.25D + (shot % 5) * 0.55D;
-        double impactX = Math.max(-36.0D, Math.min(36.0D,
-                target.getX() + Math.cos(scatterAngle) * scatterRadius));
-        double impactZ = Math.max(-36.0D, Math.min(36.0D,
-                target.getZ() + Math.sin(scatterAngle) * scatterRadius));
-        Vec3 groundTraceStart = new Vec3(impactX, Math.max(78.0D, target.getY() + 8.0D), impactZ);
-        Vec3 groundTraceEnd = new Vec3(impactX, 61.0D, impactZ);
-        HitResult groundHit = session.domain.clip(new ClipContext(groundTraceStart, groundTraceEnd,
-                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, target));
-        Vec3 aim = groundHit.getType() == HitResult.Type.MISS
-                ? new Vec3(impactX, target.getY() + 0.1D, impactZ)
-                : groundHit.getLocation().add(0.0D, 0.06D, 0.0D);
+        // Snapshot the target's exact hitbox centre now. The projectile never
+        // reads the target again: it flies a fixed line to where the target WAS
+        // when the broadside fired, giving a fast-moving target a fair dodge.
+        Vec3 targetCentre = target.getBoundingBox().getCenter();
+        Vec3 aim = new Vec3(
+                Math.max(-40.0D, Math.min(40.0D, targetCentre.x)),
+                targetCentre.y,
+                Math.max(-40.0D, Math.min(40.0D, targetCentre.z)));
 
         // Alternate between the four invisible arena walls. These launch
         // points line up with the four ships outside the barrier, making the
@@ -436,7 +459,7 @@ public final class DomainAbilities {
         float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.55D);
         float curseDamage = (curse / 10) * 1.5F;
         float damage = Math.max(1.0F, attackDamage + curseDamage);
-        FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, damage, 4.0F);
+        FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, damage, 4.5F);
         cannonball.setPos(origin.x, origin.y, origin.z);
         cannonball.setGuaranteedImpact(aim);
         cannonball.setNoGravity(true);
@@ -451,12 +474,12 @@ public final class DomainAbilities {
                 origin.x, origin.y, origin.z, 3, 0.08D, 0.08D, 0.08D, 0.02D);
         // A compact warning ring gives the target a readable tell without
         // filling the screen with explosion particles.
-        for (int point = 0; point < 6; point++) {
-            double angle = Math.PI * 2.0D * point / 6.0D;
+        for (int point = 0; point < 10; point++) {
+            double angle = Math.PI * 2.0D * point / 10.0D;
             session.domain.sendParticles(new net.minecraft.core.particles.DustParticleOptions(
                             new Vector3f(0.75F, 0.12F, 0.04F), 0.65F),
-                    aim.x + Math.cos(angle) * 1.25D, aim.y + 0.08D,
-                    aim.z + Math.sin(angle) * 1.25D, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+                    aim.x + Math.cos(angle) * 4.5D, aim.y + 0.08D,
+                    aim.z + Math.sin(angle) * 4.5D, 1, 0.0D, 0.0D, 0.0D, 0.0D);
         }
         // Loud enough to carry from the wall/ship to the entire arena.
         session.domain.playSound(null, origin.x, origin.y, origin.z, SoundEvents.FIREWORK_ROCKET_BLAST,
@@ -562,7 +585,7 @@ public final class DomainAbilities {
 
     private static void buildArena(ServerLevel level) {
         if (arenaReady) return;
-        if (level.getBlockState(ARENA_MARKER).is(Blocks.GOLD_BLOCK)) {
+        if (level.getBlockState(ARENA_MARKER).is(Blocks.DIAMOND_BLOCK)) {
             arenaReady = true;
             return;
         }
@@ -573,20 +596,21 @@ public final class DomainAbilities {
         // their transparent fluid layers are no longer rendered or simulated.
         buildOceanFoundation(level);
 
-        // Remove only the obsolete terrain inside the playable square. The old
+        // Remove only the obsolete terrain inside the playable arena. The old
         // migration swept more than two million positions; that scan was a
         // major source of server stalls and client chunk-update storms.
         clearLegacyCannons(level, 0, -76, true);
         clearLegacyCannons(level, 0, 76, true);
         clearLegacyCannons(level, -76, 0, false);
         clearLegacyCannons(level, 76, 0, false);
-        for (int x = -40; x <= 40; x++) {
-            for (int z = -40; z <= 40; z++) {
+        clearOldSquareBarriers(level);
+        for (int x = -44; x <= 44; x++) {
+            for (int z = -44; z <= 44; z++) {
                 for (int y = 65; y <= 82; y++) set(level, x, y, z, Blocks.AIR);
-                double outer = square((x + 7.0D) / 34.0D) + square(z / 40.0D);
-                double inner = square((x - 6.0D) / 30.0D) + square(z / 31.0D);
-                boolean sandyCrescent = outer <= 1.0D && inner >= 1.0D;
-                if (sandyCrescent) {
+                double radiusSquared = square(x) + square(z);
+                boolean sandyRing = radiusSquared <= square(42.0D)
+                        && radiusSquared >= square(25.0D);
+                if (sandyRing) {
                     set(level, x, 63, z, Blocks.SANDSTONE);
                     set(level, x, 64, z, Blocks.SANDSTONE);
                     set(level, x, 65, z, Blocks.SAND);
@@ -598,12 +622,16 @@ public final class DomainAbilities {
             }
         }
 
-        int[][] dunes = {{-31, -10}, {-30, 10}, {-24, -22}, {-23, 22}, {-10, -29}, {-9, 29}};
+        int[][] dunes = {
+                {-34, -10}, {-34, 10}, {-27, -25}, {-27, 25}, {-10, -34}, {-9, 34},
+                {34, -10}, {34, 10}, {27, -25}, {27, 25}, {10, -34}, {9, 34}
+        };
         for (int i = 0; i < dunes.length; i++) {
             buildSandDune(level, dunes[i][0], dunes[i][1], 4 + i % 2, 3 + (i + 1) % 2, 67, 2 + i % 3);
         }
         buildPalm(level, -29, 67, 5);
         buildLagoonStairs(level);
+        buildMirroredLagoonStairs(level);
         buildBarriers(level);
 
         // Every ship lies tangentially around the arena, presenting its long
@@ -614,7 +642,7 @@ public final class DomainAbilities {
         buildShip(level, 76, 0, false);
         buildDistantIslands(level);
         set(level, ARENA_MARKER.getX(), ARENA_MARKER.getY(), ARENA_MARKER.getZ(),
-                Blocks.GOLD_BLOCK);
+                Blocks.DIAMOND_BLOCK);
         arenaReady = true;
     }
 
@@ -690,6 +718,32 @@ public final class DomainAbilities {
         }
     }
 
+    /** Matching east-side ramp for the completed circular sand arena. */
+    private static void buildMirroredLagoonStairs(ServerLevel level) {
+        for (int z = -4; z <= 4; z++) {
+            set(level, 22, 63, z, Blocks.SANDSTONE);
+            setMirroredStair(level, 22, 64, z, true);
+
+            set(level, 23, 63, z, Blocks.SANDSTONE);
+            set(level, 23, 64, z, Blocks.SANDSTONE);
+            setMirroredStair(level, 23, 65, z, true);
+
+            set(level, 24, 63, z, Blocks.SANDSTONE);
+            set(level, 24, 64, z, Blocks.SANDSTONE);
+            set(level, 24, 65, z, Blocks.SANDSTONE);
+            setMirroredStair(level, 24, 66, z, false);
+        }
+    }
+
+    private static void setMirroredStair(ServerLevel level, int x, int y, int z, boolean waterlogged) {
+        BlockState state = Blocks.SANDSTONE_STAIRS.defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST);
+        if (state.hasProperty(BlockStateProperties.WATERLOGGED)) {
+            state = state.setValue(BlockStateProperties.WATERLOGGED, waterlogged);
+        }
+        level.setBlock(new BlockPos(x, y, z), state, 2);
+    }
+
     private static void setStair(ServerLevel level, int x, int y, int z, boolean waterlogged) {
         BlockState state = Blocks.SANDSTONE_STAIRS.defaultBlockState()
                 .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.WEST);
@@ -750,14 +804,35 @@ public final class DomainAbilities {
     }
 
     private static void buildBarriers(ServerLevel level) {
+        final double innerRadiusSquared = square(42.25D);
+        final double outerRadiusSquared = square(44.0D);
         for (int y = 63; y <= 110; y++) {
-            for (int n = -41; n <= 41; n++) {
-                set(level, -41, y, n, Blocks.BARRIER);
-                set(level, 41, y, n, Blocks.BARRIER);
-                set(level, n, y, -41, Blocks.BARRIER);
-                set(level, n, y, 41, Blocks.BARRIER);
+            for (int x = -44; x <= 44; x++) {
+                for (int z = -44; z <= 44; z++) {
+                    double radiusSquared = square(x) + square(z);
+                    if (radiusSquared >= innerRadiusSquared && radiusSquared <= outerRadiusSquared) {
+                        set(level, x, y, z, Blocks.BARRIER);
+                    }
+                }
             }
         }
+    }
+
+    /** Removes the previous square wall before placing the circular shell. */
+    private static void clearOldSquareBarriers(ServerLevel level) {
+        for (int y = 63; y <= 110; y++) {
+            for (int n = -41; n <= 41; n++) {
+                clearBarrier(level, -41, y, n);
+                clearBarrier(level, 41, y, n);
+                clearBarrier(level, n, y, -41);
+                clearBarrier(level, n, y, 41);
+            }
+        }
+    }
+
+    private static void clearBarrier(ServerLevel level, int x, int y, int z) {
+        BlockPos pos = new BlockPos(x, y, z);
+        if (level.getBlockState(pos).is(Blocks.BARRIER)) level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
     }
 
     private static void buildShip(ServerLevel level, int cx, int cz, boolean eastWest) {
