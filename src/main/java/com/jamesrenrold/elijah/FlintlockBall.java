@@ -109,6 +109,10 @@ public final class FlintlockBall extends ThrowableProjectile {
 
     @Override
     protected void onHit(HitResult hit) {
+        // Domain cannonballs are ethereal until their recorded destination:
+        // terrain, ship blocks, and the arena wall cannot intercept them.
+        // Entity collisions still detonate normally.
+        if (isCannonball() && hit.getType() == HitResult.Type.BLOCK) return;
         super.onHit(hit);
         if (level() instanceof ServerLevel server) {
             if (cannonball) detonate();
@@ -203,10 +207,9 @@ public final class FlintlockBall extends ThrowableProjectile {
                         0.02D, 0.02D, 0.02D, 0.0D);
             }
         }
-        // Domain cannonballs remain alive until they touch an entity or real
-        // block. The longer safety timeout only prevents permanently orphaned
-        // projectiles if another mod removes collision; ordinary flintlock
-        // rounds keep their original short lifetime.
+        // The longer safety timeout only prevents permanently orphaned domain
+        // shells if another mod disrupts their recorded impact; ordinary
+        // flintlock rounds keep their original short lifetime.
         if (!level().isClientSide && tickCount >= (isCannonball() ? 120 : 30)) discard();
         if (level().isClientSide && !isCannonball() && tickCount % 2 == 0) {
             level().addParticle(ParticleTypes.SMOKE, getX(), getY(), getZ(), 0, 0, 0);
