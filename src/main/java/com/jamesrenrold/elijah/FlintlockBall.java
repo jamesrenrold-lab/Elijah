@@ -81,7 +81,7 @@ public final class FlintlockBall extends ThrowableProjectile {
                 level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE)
                         .getHolderOrThrow(DAMAGE_TYPE), this, getOwner());
         // Respect shields, invulnerability and other mods cancelling damage.
-        if (target.hurt(source, shotDamage) && target instanceof LivingEntity living && !cannonball) {
+        if (!cannonball && target.hurt(source, shotDamage) && target instanceof LivingEntity living) {
             living.addEffect(new MobEffectInstance(MobEffects.DARKNESS, effectTicks, 0), getOwner());
             living.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, effectTicks, 0), getOwner());
             living.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, effectTicks, 0), getOwner());
@@ -102,10 +102,23 @@ public final class FlintlockBall extends ThrowableProjectile {
     private void detonate() {
         if (detonated || !(level() instanceof ServerLevel server)) return;
         detonated = true;
-        server.explode(getOwner(), getX(), getY(), getZ(), blastRadius,
-                Level.ExplosionInteraction.NONE);
-        server.sendParticles(ParticleTypes.EXPLOSION_EMITTER, getX(), getY(), getZ(), 1,
-                0.0D, 0.0D, 0.0D, 0.0D);
+        DamageSource source = new DamageSource(
+                level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE)
+                        .getHolderOrThrow(DAMAGE_TYPE), this, getOwner());
+        double radiusSquared = blastRadius * blastRadius;
+        for (Entity entity : server.getEntities(this, getBoundingBox().inflate(blastRadius),
+                candidate -> candidate instanceof LivingEntity living && living.isAlive() && candidate != getOwner())) {
+            double distanceSquared = entity.distanceToSqr(getX(), getY(), getZ());
+            if (distanceSquared > radiusSquared) continue;
+            double falloff = 1.0D - Math.sqrt(distanceSquared) / blastRadius;
+            float damage = (float) (shotDamage * (0.45D + 0.55D * falloff));
+            entity.hurt(source, damage);
+        }
+        server.sendParticles(new net.minecraft.core.particles.DustParticleOptions(
+                        new org.joml.Vector3f(0.12F, 0.12F, 0.12F), 0.75F),
+                getX(), getY(), getZ(), 6, 0.16D, 0.12D, 0.16D, 0.015D);
+        server.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 2,
+                0.10D, 0.10D, 0.10D, 0.01D);
     }
 
     @Override
