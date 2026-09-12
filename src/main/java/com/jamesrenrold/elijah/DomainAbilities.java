@@ -51,7 +51,9 @@ public final class DomainAbilities {
             Registries.DIMENSION, new ResourceLocation(ElijahPirate.MOD_ID, "drowned_domain"));
 
     private static final int DOMAIN_TICKS = 40 * 20;
-    private static final int DOMAIN_COOLDOWN_TICKS = 4 * 60 * 20;
+    // Five seconds while the domain is being tested; restore the intended
+    // four-minute value after gameplay verification.
+    private static final int DOMAIN_COOLDOWN_TICKS = 5 * 20;
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;
     private static final double ARENA_Y = 65.0D;
@@ -136,16 +138,16 @@ public final class DomainAbilities {
                                                       double x, double y, double z,
                                                       float yaw, float pitch) {
         if (target instanceof ServerPlayer || destination == null
-                || !(target.level() instanceof ServerLevel source) || target.isRemoved()) return null;
+                || !(target.level() instanceof ServerLevel) || target.isRemoved()) return null;
 
         UUID id = target.getUUID();
-        Vec3 originalPosition = target.position();
         float originalYaw = target.getYRot();
         float originalPitch = target.getXRot();
-        CompoundTag snapshot = target.saveWithoutId(new CompoundTag());
-        if (snapshot == null) return null;
+        CompoundTag snapshot = new CompoundTag();
+        // saveAsPassenger writes the entity's `id` field, which
+        // EntityType.loadEntityRecursive needs to reconstruct modded mobs.
+        if (!target.saveAsPassenger(snapshot)) return null;
         snapshot.putUUID("UUID", id);
-        target.discard();
 
         Entity recreated = EntityType.loadEntityRecursive(snapshot, destination, entity -> {
             entity.setUUID(id);
@@ -153,16 +155,11 @@ public final class DomainAbilities {
             entity.setDeltaMovement(Vec3.ZERO);
             return entity;
         });
-        if (recreated instanceof LivingEntity moved && destination.addFreshEntity(recreated)) return moved;
-
-        Entity restored = EntityType.loadEntityRecursive(snapshot, source, entity -> {
-            entity.setUUID(id);
-            entity.moveTo(originalPosition.x, originalPosition.y, originalPosition.z,
-                    originalYaw, originalPitch);
-            entity.setDeltaMovement(Vec3.ZERO);
-            return entity;
-        });
-        if (restored != null) source.addFreshEntity(restored);
+        if (recreated instanceof LivingEntity moved && destination.addFreshEntity(recreated)) {
+            // Only remove the source after the destination entity is live.
+            target.discard();
+            return moved;
+        }
         return null;
     }
 
