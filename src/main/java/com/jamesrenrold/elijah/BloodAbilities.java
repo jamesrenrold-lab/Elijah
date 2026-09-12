@@ -67,6 +67,8 @@ public final class BloodAbilities {
         }
         state.bloodBuffUntil = now + BLOOD_BUFF_TICKS;
         state.bloodCooldownUntil = now + BLOOD_COOLDOWN_TICKS;
+        ElijahPirate.changeOriginResource(player, "elijah:blood_resource", 20);
+        ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 10);
         ensureBloodModifiers(player);
         message(player, "Blood Rush activated — +20 blood charge");
         return 1;
@@ -78,10 +80,22 @@ public final class BloodAbilities {
         PowderPouch state = pouch(player);
         if (state == null) return 0;
         long now = player.serverLevel().getGameTime();
+        // Overflow replaces the ordinary ten-second rush. Clearing both the
+        // server timer and Origins timer prevents an extra 10% lifesteal and
+        // post-overflow charge growth from leaking into this state.
+        state.bloodBuffUntil = 0L;
         state.bloodOverdriveUntil = now + OVERDRIVE_TICKS;
         state.bloodExhaustedUntil = 0L;
         state.bloodLastDegenerationTick = now;
         state.bloodLastEnemyHitTick = now;
+        ElijahPirate.setOriginResource(player, "elijah:blood_resource", 0);
+        ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 0);
+        AttributeInstance rushLifeSteal = lifeStealAttribute(player);
+        if (rushLifeSteal != null) rushLifeSteal.removeModifier(BLOOD_LIFESTEAL_ID);
+        AttributeInstance rushSpeed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (rushSpeed != null) rushSpeed.removeModifier(BLOOD_SPEED_ID);
+        AttributeInstance rushAttackSpeed = player.getAttribute(Attributes.ATTACK_SPEED);
+        if (rushAttackSpeed != null) rushAttackSpeed.removeModifier(BLOOD_ATTACK_SPEED_ID);
         ensureOverdriveLifeSteal(player);
         player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, OVERDRIVE_TICKS, 0, false, true, true));
         player.addEffect(new MobEffectInstance(MobEffects.DARKNESS, OVERDRIVE_TICKS, 0, false, true, true));
@@ -149,6 +163,11 @@ public final class BloodAbilities {
         state.bloodLastDegenerationTick = 0L;
         state.bloodAllowLifestealUntil = 0L;
         removeBloodModifiers(player);
+        removeOwnedEffect(player, MobEffects.BLINDNESS, 0, OVERDRIVE_TICKS + 5);
+        removeOwnedEffect(player, MobEffects.DARKNESS, 0, OVERDRIVE_TICKS + 5);
+        removeOwnedEffect(player, MobEffects.DAMAGE_BOOST, 0, OVERDRIVE_TICKS + 5);
+        removeOwnedEffect(player, MobEffects.WEAKNESS, 1, OVERDRIVE_TICKS + 5);
+        removeOwnedEffect(player, MobEffects.MOVEMENT_SLOWDOWN, 0, OVERDRIVE_TICKS + 5);
     }
 
     private static boolean requireBuff(ServerPlayer player) {
@@ -208,12 +227,8 @@ public final class BloodAbilities {
     }
 
     private static void removeBloodModifiers(ServerPlayer player) {
-        AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
-        AttributeInstance attackSpeed = player.getAttribute(Attributes.ATTACK_SPEED);
-        if (speed != null) speed.removeModifier(BLOOD_SPEED_ID);
-        if (attackSpeed != null) attackSpeed.removeModifier(BLOOD_ATTACK_SPEED_ID);
+        removeRushModifiers(player);
         AttributeInstance lifeSteal = lifeStealAttribute(player);
-        if (lifeSteal != null) lifeSteal.removeModifier(BLOOD_LIFESTEAL_ID);
         if (lifeSteal != null) lifeSteal.removeModifier(HUNT_LIFESTEAL_ID);
         if (lifeSteal != null) lifeSteal.removeModifier(OVERDRIVE_LIFESTEAL_ID);
         AttributeInstance exhaustedSpeed = player.getAttribute(Attributes.MOVEMENT_SPEED);
@@ -222,6 +237,15 @@ public final class BloodAbilities {
         if (exhaustedSpeed != null) exhaustedSpeed.removeModifier(EXHAUSTED_SPEED_ID);
         if (exhaustedAttackSpeed != null) exhaustedAttackSpeed.removeModifier(EXHAUSTED_ATTACK_SPEED_ID);
         if (exhaustedAttackDamage != null) exhaustedAttackDamage.removeModifier(EXHAUSTED_ATTACK_DAMAGE_ID);
+    }
+
+    private static void removeRushModifiers(ServerPlayer player) {
+        AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+        AttributeInstance attackSpeed = player.getAttribute(Attributes.ATTACK_SPEED);
+        if (speed != null) speed.removeModifier(BLOOD_SPEED_ID);
+        if (attackSpeed != null) attackSpeed.removeModifier(BLOOD_ATTACK_SPEED_ID);
+        AttributeInstance lifeSteal = lifeStealAttribute(player);
+        if (lifeSteal != null) lifeSteal.removeModifier(BLOOD_LIFESTEAL_ID);
     }
 
     private static void ensureExhaustionModifiers(ServerPlayer player) {
@@ -240,11 +264,11 @@ public final class BloodAbilities {
         if (state == null) return;
         long now = player.serverLevel().getGameTime();
 
-        if (state.bloodBuffUntil > now) {
+        if (state.bloodBuffUntil > now && state.bloodOverdriveUntil <= now) {
             ensureBloodModifiers(player);
             if (player.tickCount % 2 == 0) spawnEyeParticle(player);
         } else {
-            removeBloodModifiers(player);
+            removeRushModifiers(player);
         }
 
         if (state.bloodHuntUntil > now) ensureHuntLifeSteal(player);
@@ -333,7 +357,18 @@ public final class BloodAbilities {
     private static void endFlight(ServerPlayer player, PowderPouch state) {
         state.bloodFlightUntil = 0L;
         if (player.isFallFlying()) player.stopFallFlying();
+        removeOwnedEffect(player, MobEffects.DOLPHINS_GRACE, 2, FLIGHT_TICKS + 5);
         state.bloodFlightWasMayFly = false;
+    }
+
+    private static void removeOwnedEffect(ServerPlayer player,
+                                          net.minecraft.world.effect.MobEffect effect,
+                                          int amplifier, int maximumDuration) {
+        MobEffectInstance instance = player.getEffect(effect);
+        if (instance != null && instance.getAmplifier() == amplifier
+                && instance.getDuration() <= maximumDuration) {
+            player.removeEffect(effect);
+        }
     }
 
     @SubscribeEvent
