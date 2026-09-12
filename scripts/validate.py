@@ -57,6 +57,10 @@ assert set(keys) == {
 assert parsed['data/elijah/powers/blood_rush.json']['entity_action'] == {
     'type': 'origins:execute_command', 'command': 'elijah blood_rush'
 }
+assert parsed['data/elijah/powers/blood_rush.json']['name'] == 'Cursed Form'
+assert parsed['data/elijah/powers/blood_rush.json']['cooldown'] == 1
+assert parsed['data/elijah/powers/blood_active_window.json']['max'] == 1
+assert parsed['data/elijah/powers/blood_charge_gain.json']['entity_action']['type'] == 'origins:if_else'
 assert parsed['data/elijah/powers/blood_overflow.json']['entity_action'] == {
     'type': 'origins:execute_command', 'command': 'elijah blood_overdrive'
 }
@@ -86,9 +90,13 @@ assert 'BEACH_SPAWN_X = -34.0D' in domain_source, 'Target must spawn deep on the
 assert 'shouldSuppressLifecycleUnload' in domain_source, 'Connector dimension-change guard is missing'
 assert 'restoreTarget(session, server)' in domain_source, 'Guaranteed target restoration is missing'
 assert 'buildLagoonStairs(level)' in domain_source, 'Lagoon access ramp is missing'
+assert 'buildMirroredLagoonStairs(level)' in domain_source, 'Circular arena needs its mirrored ramp'
 assert 'targetMissingTicks <= 20' in domain_source, 'Transient target lookup tolerance is missing'
 assert 'ownerMismatchTicks <= 40' in domain_source, 'Dimension transition tolerance is missing'
 assert 'recoverFinishedSessions(server)' in domain_source, 'Finished sessions can block later casts'
+assert 'PENDING_ACTIVATIONS.add(player.getUUID())' in domain_source, \
+    'Domain activation must finish its Origins callback before teleporting'
+assert 'activateNow(player)' in domain_source, 'Deferred domain activation is not processed'
 assert 'Drowned Domain closed (" + reason' in domain_source, 'Early-close diagnostics are missing'
 assert 'DomainAbilities.shouldSuppressLifecycleUnload(player)' in command_source, \
     'Origin-loss callback is not guarded during Connector dimension transitions'
@@ -110,10 +118,21 @@ assert 'buildDistantIslands(level)' in domain_source, 'Distant dune islands are 
 assert 'buildBillowedSail' in domain_source, 'Volumetric sails are missing'
 assert 'cannonball.setNoGravity(true)' in domain_source, 'Reliable straight cannon trajectory regressed'
 assert 'cannonball.setGuaranteedImpact(aim)' in domain_source, 'Cannon impact guarantee is missing'
+assert 'target.getBoundingBox().getCenter()' in domain_source, 'Cannon aim must snapshot the target hitbox'
+assert 'damage, 4.5F' in domain_source, 'Cannon blast radius must be 4.5 blocks'
+assert 'scatterRadius' not in domain_source, 'Cannonballs must not scatter or home after firing'
+assert 'Blocks.DIAMOND_BLOCK' in domain_source, 'Circular arena migration marker is missing'
+assert 'boolean sandyRing' in domain_source, 'Complete circular sand arena is missing'
+assert 'innerRadiusSquared' in domain_source, 'Circular barrier shell is missing'
 projectile_source = (root / 'src/main/java/com/jamesrenrold/elijah/FlintlockBall.java').read_text()
 assert 'Server-driven tracer particles' in projectile_source, 'Cannonball tracer visibility regressed'
 assert 'closest.distanceToSqr(impact) <= 0.64D' in projectile_source, 'Cannon crossing check is missing'
 assert 'int groundPoints = 8' in projectile_source and 'int shellPoints = 6' in projectile_source, \
     'Low-packet blast outline regressed'
 assert '.updateInterval(2)' in command_source, 'Projectile network synchronization is not throttled'
+blood_source = (root / 'src/main/java/com/jamesrenrold/elijah/BloodAbilities.java').read_text()
+assert 'state.cursedFormActive = true' in blood_source
+assert 'state.cursedFormActive = false' in blood_source
+assert 'BLOOD_COOLDOWN_TICKS = 20 * 20' in blood_source
+assert 'server.overworld().getGameTime()' in blood_source, 'Blood timers need a cross-dimension clock'
 print('Validated all power commands and the eight distinct active keybinds.')
