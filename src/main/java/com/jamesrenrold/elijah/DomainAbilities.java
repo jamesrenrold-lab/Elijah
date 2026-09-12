@@ -67,6 +67,7 @@ public final class DomainAbilities {
     private static final int COOLDOWN_TICKS = 5 * 20;
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;
+    private static final double WATER_SPAWN_X = 8.0D;
     private static final double WATER_SPAWN_Y = 63.2D;
     private static final double BEACH_SPAWN_X = -34.0D;
     private static final double BEACH_SPAWN_Y = 67.0D;
@@ -141,6 +142,7 @@ public final class DomainAbilities {
 
         buildArena(domain);
         clearDomainProjectiles(domain);
+        clearUninvitedMobs(domain, null);
         ResourceKey<Level> playerOrigin = player.level().dimension();
         Vec3 playerPosition = player.position();
         float playerYaw = player.getYRot();
@@ -150,10 +152,9 @@ public final class DomainAbilities {
         float targetYaw = target.getYRot();
         float targetPitch = target.getXRot();
         boolean targetWasPersistent = target instanceof Mob mob && mob.isPersistenceRequired();
-        // The target starts on the raised circular sand ring while the
-        // caster begins inside the lagoon, where the pirate's swim advantage
-        // immediately matters.
-        LivingEntity movedTarget = moveEntity(target, domain, BEACH_SPAWN_X, BEACH_SPAWN_Y, 0.0D,
+        // Flip the original arrangement: the target begins in the lagoon and
+        // the caster enters on the raised circular sand ring.
+        LivingEntity movedTarget = moveEntity(target, domain, WATER_SPAWN_X, WATER_SPAWN_Y, 0.0D,
                 targetYaw, targetPitch, true);
         if (movedTarget == null) {
             message(player, "The target could not be pulled into the domain.");
@@ -161,7 +162,7 @@ public final class DomainAbilities {
         }
 
         guardLifecycle(player, 60L);
-        player.teleportTo(domain, 8.0D, WATER_SPAWN_Y, 0.0D, playerYaw, playerPitch);
+        player.teleportTo(domain, BEACH_SPAWN_X, BEACH_SPAWN_Y, 0.0D, playerYaw, playerPitch);
         if (player.level() != domain) {
             ServerLevel targetReturnLevel = server.getLevel(targetOrigin);
             if (targetReturnLevel != null) {
@@ -321,7 +322,10 @@ public final class DomainAbilities {
             long age = now - session.startedAt;
             // Refresh potion effects once per second instead of sending effect
             // packets every server tick. Attribute modifiers are already stable.
-            if (age % 20L == 0L) applyDomainBuffs(owner);
+            if (age % 20L == 0L) {
+                applyDomainBuffs(owner);
+                clearUninvitedMobs(session.domain, session.target);
+            }
             if (!session.target.isAlive()
                     && session.target.getRemovalReason() == Entity.RemovalReason.KILLED) {
                 session.targetDefeated = true;
@@ -580,6 +584,19 @@ public final class DomainAbilities {
         for (FlintlockBall projectile : domain.getEntitiesOfClass(FlintlockBall.class, arena,
                 FlintlockBall::isCannonball)) {
             projectile.discard();
+        }
+    }
+
+    /**
+     * The Void biome disables ordinary spawn tables; this second guard also
+     * removes special-spawner arrivals such as patrols without touching the
+     * transferred opponent or the caster's summoned crew.
+     */
+    private static void clearUninvitedMobs(ServerLevel domain, LivingEntity allowedTarget) {
+        AABB arena = new AABB(-180.0D, 0.0D, -180.0D, 180.0D, 140.0D, 180.0D);
+        for (Mob mob : domain.getEntitiesOfClass(Mob.class, arena,
+                candidate -> candidate != allowedTarget && !(candidate instanceof UndeadCrewmate))) {
+            mob.discard();
         }
     }
 
