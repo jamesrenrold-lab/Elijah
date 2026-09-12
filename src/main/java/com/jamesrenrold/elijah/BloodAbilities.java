@@ -38,11 +38,15 @@ public final class BloodAbilities {
     private static final int HUNT_TICKS = 15 * 20;
     private static final int FLIGHT_TICKS = 20 * 20;
     private static final int OVERDRIVE_TICKS = 25 * 20;
+    private static final int EXHAUSTED_TICKS = 30 * 20;
     private static final UUID BLOOD_SPEED_ID = UUID.fromString("75c9a1d0-8840-4a6b-b3d9-8fa4c3f88a11");
     private static final UUID BLOOD_ATTACK_SPEED_ID = UUID.fromString("b3a7c750-c8c5-4a9a-8c67-5ce2ef6cb4f9");
     private static final UUID BLOOD_LIFESTEAL_ID = UUID.fromString("f7ad2d3e-3e63-4da4-9f77-8fc6c9eb4e35");
     private static final UUID HUNT_LIFESTEAL_ID = UUID.fromString("9e8b1f7e-2f5f-4f84-a4e9-1b9b2a6d4c61");
     private static final UUID OVERDRIVE_LIFESTEAL_ID = UUID.fromString("d7d2fb45-b19a-4f90-8fdb-8ce8b7a8c1c0");
+    private static final UUID EXHAUSTED_SPEED_ID = UUID.fromString("f6a8cf7f-9193-4c4b-b8ed-12b0e2b2c8a7");
+    private static final UUID EXHAUSTED_ATTACK_SPEED_ID = UUID.fromString("8b865b66-a5e1-4ff5-8e63-5df1486b12d9");
+    private static final UUID EXHAUSTED_ATTACK_DAMAGE_ID = UUID.fromString("2c8bba32-fc53-46ab-9bda-ec9d9264dc6d");
     private static final DustParticleOptions RED_EYE =
             new DustParticleOptions(new Vector3f(0.95F, 0.02F, 0.02F), 0.65F);
 
@@ -52,6 +56,10 @@ public final class BloodAbilities {
         PowderPouch state = pouch(player);
         if (state == null) return 0;
         long now = player.serverLevel().getGameTime();
+        if (state.bloodOverdriveUntil > now || state.bloodExhaustedUntil > now) {
+            message(player, "Blood Rush is locked while your body recovers.");
+            return 0;
+        }
         if (now < state.bloodCooldownUntil) {
             long seconds = (state.bloodCooldownUntil - now + 19L) / 20L;
             message(player, "Blood Rush: " + seconds + "s remaining");
@@ -71,12 +79,15 @@ public final class BloodAbilities {
         if (state == null) return 0;
         long now = player.serverLevel().getGameTime();
         state.bloodOverdriveUntil = now + OVERDRIVE_TICKS;
+        state.bloodExhaustedUntil = 0L;
         state.bloodLastDegenerationTick = now;
         state.bloodLastEnemyHitTick = now;
         ensureOverdriveLifeSteal(player);
         player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, OVERDRIVE_TICKS, 0, false, true, true));
         player.addEffect(new MobEffectInstance(MobEffects.DARKNESS, OVERDRIVE_TICKS, 0, false, true, true));
         player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, OVERDRIVE_TICKS, 0, false, true, true));
+        player.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, OVERDRIVE_TICKS, 1, false, true, true));
+        player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, OVERDRIVE_TICKS, 0, false, true, true));
         message(player, "Blood Rush overflow — the hunger takes hold!");
         return 1;
     }
@@ -133,6 +144,7 @@ public final class BloodAbilities {
         state.bloodBuffUntil = 0L;
         state.bloodCooldownUntil = 0L;
         state.bloodOverdriveUntil = 0L;
+        state.bloodExhaustedUntil = 0L;
         state.bloodLastEnemyHitTick = 0L;
         state.bloodLastDegenerationTick = 0L;
         state.bloodAllowLifestealUntil = 0L;
@@ -142,7 +154,12 @@ public final class BloodAbilities {
     private static boolean requireBuff(ServerPlayer player) {
         if (!player.isAlive() || player.isSpectator() || isHuntActive(player)) return false;
         PowderPouch state = pouch(player);
-        if (state == null || state.bloodBuffUntil <= player.serverLevel().getGameTime()) {
+        long now = player.serverLevel().getGameTime();
+        if (state != null && (state.bloodOverdriveUntil > now || state.bloodExhaustedUntil > now)) {
+            message(player, "That ability is locked while the blood overfill runs its course.");
+            return false;
+        }
+        if (state == null || state.bloodBuffUntil <= now) {
             message(player, "That ability is only available during Blood Rush.");
             return false;
         }
@@ -199,6 +216,21 @@ public final class BloodAbilities {
         if (lifeSteal != null) lifeSteal.removeModifier(BLOOD_LIFESTEAL_ID);
         if (lifeSteal != null) lifeSteal.removeModifier(HUNT_LIFESTEAL_ID);
         if (lifeSteal != null) lifeSteal.removeModifier(OVERDRIVE_LIFESTEAL_ID);
+        AttributeInstance exhaustedSpeed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+        AttributeInstance exhaustedAttackSpeed = player.getAttribute(Attributes.ATTACK_SPEED);
+        AttributeInstance exhaustedAttackDamage = player.getAttribute(Attributes.ATTACK_DAMAGE);
+        if (exhaustedSpeed != null) exhaustedSpeed.removeModifier(EXHAUSTED_SPEED_ID);
+        if (exhaustedAttackSpeed != null) exhaustedAttackSpeed.removeModifier(EXHAUSTED_ATTACK_SPEED_ID);
+        if (exhaustedAttackDamage != null) exhaustedAttackDamage.removeModifier(EXHAUSTED_ATTACK_DAMAGE_ID);
+    }
+
+    private static void ensureExhaustionModifiers(ServerPlayer player) {
+        addModifier(player.getAttribute(Attributes.MOVEMENT_SPEED), EXHAUSTED_SPEED_ID,
+                "Exsanguinated movement penalty", -0.25D);
+        addModifier(player.getAttribute(Attributes.ATTACK_SPEED), EXHAUSTED_ATTACK_SPEED_ID,
+                "Exsanguinated attack speed penalty", -0.30D);
+        addModifier(player.getAttribute(Attributes.ATTACK_DAMAGE), EXHAUSTED_ATTACK_DAMAGE_ID,
+                "Exsanguinated attack damage penalty", -0.20D);
     }
 
     @SubscribeEvent
@@ -225,6 +257,16 @@ public final class BloodAbilities {
         else {
             AttributeInstance lifeSteal = lifeStealAttribute(player);
             if (lifeSteal != null) lifeSteal.removeModifier(OVERDRIVE_LIFESTEAL_ID);
+        }
+
+        if (state.bloodExhaustedUntil > now) ensureExhaustionModifiers(player);
+        else {
+            AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+            AttributeInstance attackSpeed = player.getAttribute(Attributes.ATTACK_SPEED);
+            AttributeInstance attackDamage = player.getAttribute(Attributes.ATTACK_DAMAGE);
+            if (speed != null) speed.removeModifier(EXHAUSTED_SPEED_ID);
+            if (attackSpeed != null) attackSpeed.removeModifier(EXHAUSTED_ATTACK_SPEED_ID);
+            if (attackDamage != null) attackDamage.removeModifier(EXHAUSTED_ATTACK_DAMAGE_ID);
         }
 
         if (state.bloodHuntUntil <= now && state.bloodHuntUntil != 0L) endHunt(player, state);
@@ -254,6 +296,7 @@ public final class BloodAbilities {
         }
         if (state.bloodOverdriveUntil != 0L && state.bloodOverdriveUntil <= now) {
             state.bloodOverdriveUntil = 0L;
+            state.bloodExhaustedUntil = now + EXHAUSTED_TICKS;
         }
     }
 
@@ -310,9 +353,11 @@ public final class BloodAbilities {
 
     @SubscribeEvent
     public static void onNaturalHeal(LivingHealEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player) || !isHuntActive(player)) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
         PowderPouch state = pouch(player);
         long now = player.serverLevel().getGameTime();
+        if (state == null || (state.bloodHuntUntil <= now && state.bloodOverdriveUntil <= now
+                && state.bloodExhaustedUntil <= now)) return;
         if (state != null && state.bloodAllowLifestealUntil >= now) {
             state.bloodAllowLifestealUntil = 0L;
             return;
