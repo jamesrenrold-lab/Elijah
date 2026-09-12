@@ -3,9 +3,13 @@ package com.jamesrenrold.elijah;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -256,21 +260,22 @@ public final class DomainAbilities {
     }
 
     private static void fireCannonball(Session session, ServerPlayer owner, LivingEntity target) {
-        double angle = (session.cannonIndex++ * Math.PI * 0.5D) + (session.cannonIndex % 2) * 0.22D;
+        int shot = session.cannonIndex++;
+        double angle = shot * 2.399963229728653D;
+        double radius = 4.0D + (shot % 7); // 4–10 blocks from the target
         Vec3 aim = target.position().add(0.0D, target.getBbHeight() * 0.55D, 0.0D);
-        Vec3 origin = aim.add(Math.cos(angle) * 4.6D, 0.7D, Math.sin(angle) * 4.6D);
+        Vec3 origin = aim.add(Math.cos(angle) * radius, 12.0D + (shot % 4),
+                Math.sin(angle) * radius);
         Vec3 direction = aim.subtract(origin).normalize();
 
-        FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, 4.0F, 2.5F);
+        FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, 4.0F, 4.0F);
         cannonball.setPos(origin.x, origin.y, origin.z);
         cannonball.shoot(direction.x, direction.y, direction.z, 2.8F, 0.0F);
         session.domain.addFreshEntity(cannonball);
-        session.domain.sendParticles(new net.minecraft.core.particles.DustParticleOptions(CANNON_DUST, 1.2F),
-                origin.x, origin.y, origin.z, 8, 0.12D, 0.12D, 0.12D, 0.04D);
         session.domain.sendParticles(net.minecraft.core.particles.ParticleTypes.SMOKE,
-                origin.x, origin.y, origin.z, 10, 0.15D, 0.15D, 0.15D, 0.06D);
-        session.domain.playSound(null, origin.x, origin.y, origin.z, SoundEvents.GENERIC_EXPLODE,
-                SoundSource.HOSTILE, 0.65F, 1.45F);
+                origin.x, origin.y, origin.z, 3, 0.08D, 0.08D, 0.08D, 0.015D);
+        session.domain.playSound(null, origin.x, origin.y, origin.z, SoundEvents.CROSSBOW_SHOOT,
+                SoundSource.HOSTILE, 0.45F, 0.55F);
     }
 
     private static void applyDomainBuffs(ServerPlayer player) {
@@ -341,16 +346,17 @@ public final class DomainAbilities {
         for (int x = -32; x <= 32; x++) {
             for (int z = -32; z <= 32; z++) set(level, x, surface - 2, z, Blocks.BARRIER);
         }
-        // The flat dimension provides a water ocean up to y=63. Replace the
-        // center with a broad beach/lagoon, leaving open water on every side.
-        for (int x = -27; x <= 27; x++) {
-            for (int z = -23; z <= 23; z++) {
-                double ellipse = (x * x) / 729.0D + (z * z) / 529.0D;
-                if (ellipse > 1.0D) continue;
+        // Fill all the way to the barrier walls. Water is exactly two source
+        // blocks deep and is sealed by invisible barriers so it cannot spread.
+        for (int x = -30; x <= 30; x++) {
+            for (int z = -30; z <= 30; z++) {
                 set(level, x, surface - 1, z, Blocks.SAND);
-                if (x < 0) {
+                if (x <= 0) {
                     set(level, x, surface, z, Blocks.SAND);
                     set(level, x, surface + 1, z, Blocks.AIR);
+                } else if (x == 1) {
+                    set(level, x, surface, z, Blocks.BARRIER);
+                    set(level, x, surface + 1, z, Blocks.BARRIER);
                 } else {
                     set(level, x, surface, z, Blocks.WATER);
                     set(level, x, surface + 1, z, Blocks.WATER);
@@ -371,10 +377,10 @@ public final class DomainAbilities {
         }
         buildPalm(level, -15, surface, -1);
         buildBarriers(level);
-        buildShip(level, 0, -43, false);
-        buildShip(level, 0, 43, false);
-        buildShip(level, -43, 0, true);
-        buildShip(level, 43, 0, true);
+        buildShip(level, 0, -48, false);
+        buildShip(level, 0, 48, false);
+        buildShip(level, -48, 0, true);
+        buildShip(level, 48, 0, true);
     }
 
     private static void buildPalm(ServerLevel level, int x, int baseY, int z) {
@@ -405,45 +411,89 @@ public final class DomainAbilities {
     }
 
     private static void buildShip(ServerLevel level, int cx, int cz, boolean eastWest) {
-        // Pointed dark-oak hull with a raised deck and sterncastle.
-        for (int along = -7; along <= 7; along++) {
-            int halfWidth = Math.max(1, 3 - Math.max(0, Math.abs(along) - 5));
+        // Large multi-deck dark-oak galleon silhouette: pointed hull, raised
+        // sterncastle, three masts, yards, sails, and working CBC cannon blocks.
+        for (int along = -15; along <= 15; along++) {
+            int halfWidth = Math.max(2, 7 - Math.max(0, Math.abs(along) - 10) / 2);
             for (int across = -halfWidth; across <= halfWidth; across++) {
                 int x = eastWest ? cx + across : cx + along;
                 int z = eastWest ? cz + along : cz + across;
                 set(level, x, 64, z, Blocks.DARK_OAK_PLANKS);
                 set(level, x, 65, z, Blocks.DARK_OAK_PLANKS);
-                if (Math.abs(across) == halfWidth) set(level, x, 66, z, Blocks.DARK_OAK_FENCE);
+                set(level, x, 66, z, Blocks.DARK_OAK_PLANKS);
+                if (Math.abs(across) >= halfWidth - 1) set(level, x, 67, z, Blocks.DARK_OAK_FENCE);
             }
         }
-        int mastX = cx;
-        int mastZ = cz;
-        for (int y = 66; y <= 75; y++) set(level, mastX, y, mastZ, Blocks.DARK_OAK_LOG);
-        for (int sailY = 68; sailY <= 73; sailY++) {
-            int width = Math.max(1, 4 - Math.abs(sailY - 70));
-            for (int offset = -width; offset <= width; offset++) {
-                int x = eastWest ? mastX + offset : mastX + offset;
-                int z = eastWest ? mastZ : mastZ + offset;
-                set(level, x, sailY, z, sailY % 2 == 0 ? Blocks.BLACK_WOOL : Blocks.WHITE_WOOL);
+        int[] mastAlong = {-9, 0, 9};
+        for (int along : mastAlong) buildMast(level, cx, cz, eastWest, along);
+        // Broad raised sterncastle and a long bowsprit.
+        for (int along = 9; along <= 14; along++) {
+            for (int across = -5; across <= 5; across++) {
+                int x = eastWest ? cx + across : cx + along;
+                int z = eastWest ? cz + along : cz + across;
+                set(level, x, 68, z, Blocks.DARK_OAK_PLANKS);
+                if (along >= 11) set(level, x, 69, z, Blocks.DARK_OAK_PLANKS);
             }
         }
-        // Raised stern and a bowsprit make the silhouette read as a ship.
-        for (int along = 5; along <= 7; along++) {
+        for (int along = -16; along <= -11; along++) {
             int x = eastWest ? cx : cx + along;
             int z = eastWest ? cz + along : cz;
-            set(level, x, 67, z, Blocks.DARK_OAK_PLANKS);
             set(level, x, 68, z, Blocks.DARK_OAK_FENCE);
         }
-        int bowX = eastWest ? cx : cx - 8;
-        int bowZ = eastWest ? cz - 8 : cz;
-        set(level, bowX, 66, bowZ, Blocks.DARK_OAK_FENCE);
-        set(level, bowX, 67, bowZ, Blocks.DARK_OAK_FENCE);
-        // Four blackstone cannon muzzles face outward from the hull.
-        for (int side : new int[]{-1, 1}) {
-            int x = eastWest ? cx + side * 3 : cx - 2;
-            int z = eastWest ? cz + 2 : cz + side * 3;
-            set(level, x, 66, z, Blocks.POLISHED_BLACKSTONE);
+        for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, -7);
+        for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, 7);
+    }
+
+    private static void buildMast(ServerLevel level, int cx, int cz, boolean eastWest, int along) {
+        int mastX = eastWest ? cx + along : cx;
+        int mastZ = eastWest ? cz : cz + along;
+        for (int y = 68; y <= 86; y++) set(level, mastX, y, mastZ, Blocks.DARK_OAK_LOG);
+        for (int y = 73; y <= 80; y++) {
+            int width = Math.max(2, 7 - Math.abs(y - 76));
+            for (int offset = -width; offset <= width; offset++) {
+                int x = eastWest ? mastX : mastX + offset;
+                int z = eastWest ? mastZ + offset : mastZ;
+                set(level, x, y, z, y % 2 == 0 ? Blocks.BLACK_WOOL : Blocks.WHITE_WOOL);
+            }
         }
+        for (int offset = -8; offset <= 8; offset++) {
+            int x = eastWest ? mastX : mastX + offset;
+            int z = eastWest ? mastZ + offset : mastZ;
+            set(level, x, 76, z, Blocks.DARK_OAK_FENCE);
+        }
+    }
+
+    private static void buildCannon(ServerLevel level, int cx, int cz, boolean eastWest,
+                                    int side, int along) {
+        Direction facing = eastWest
+                ? (side < 0 ? Direction.WEST : Direction.EAST)
+                : (side < 0 ? Direction.NORTH : Direction.SOUTH);
+        int x = eastWest ? cx + side * 6 : cx + along;
+        int z = eastWest ? cz + along : cz + side * 6;
+        int dx = facing.getStepX();
+        int dz = facing.getStepZ();
+        setOptional(level, x, 68, z, "createbigcannons:cannon_carriage", facing);
+        setOptional(level, x, 69, z, "createbigcannons:fixed_cannon_mount", facing);
+        setOptional(level, x + dx, 69, z + dz, "createbigcannons:cast_iron_cannon_chamber", facing);
+        setOptional(level, x + dx * 2, 69, z + dz * 2, "createbigcannons:cast_iron_cannon_barrel", facing);
+        setOptional(level, x + dx * 3, 69, z + dz * 3, "createbigcannons:cast_iron_cannon_barrel", facing);
+        setOptional(level, x + dx * 4, 69, z + dz * 4, "createbigcannons:cast_iron_cannon_end", facing);
+    }
+
+    private static void setOptional(ServerLevel level, int x, int y, int z, String id, Direction facing) {
+        ResourceLocation key = new ResourceLocation(id);
+        net.minecraft.world.level.block.Block block = BuiltInRegistries.BLOCK.get(key);
+        if (block == Blocks.AIR || !key.equals(BuiltInRegistries.BLOCK.getKey(block))) {
+            set(level, x, y, z, Blocks.POLISHED_BLACKSTONE);
+            return;
+        }
+        BlockState state = block.defaultBlockState();
+        if (state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)) {
+            state = state.setValue(BlockStateProperties.HORIZONTAL_FACING, facing);
+        } else if (state.hasProperty(BlockStateProperties.FACING)) {
+            state = state.setValue(BlockStateProperties.FACING, facing);
+        }
+        level.setBlock(new BlockPos(x, y, z), state, 3);
     }
 
     private static void set(ServerLevel level, int x, int y, int z, net.minecraft.world.level.block.Block block) {
