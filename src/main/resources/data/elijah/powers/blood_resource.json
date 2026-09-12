@@ -1,7 +1,7 @@
 {
   "type": "origins:resource",
-  "name": "Blood Rush",
-  "description": "Blood charge from 0 to 100. Blood Rush instantly adds 20 charge, then gains 1 charge per second for 10 seconds; while inactive it drains by 1 charge every 4 seconds. Full charge triggers the 25-second overdrive state with 50% lifesteal.",
+  "name": "Curse",
+  "description": "Curse from 0 to 100. Cursed Form instantly adds 20, rises by 1 per second while toggled on, and drains by 1 every 4 seconds while off. Full Curse triggers the 25-second overfill with 50% lifesteal.",
   "min": 0,
   "max": 100,
   "start_value": 0,
