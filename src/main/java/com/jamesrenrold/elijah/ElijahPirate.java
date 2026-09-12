@@ -101,6 +101,7 @@ public final class ElijahPirate {
                         current.deserializeNBT(previous.serializeNBT());
                         if (event.isWasDeath()) {
                             current.dirtyTacticsArmed = false;
+                            current.cursedFormActive = false;
                             current.bloodBuffUntil = 0L;
                             current.bloodCooldownUntil = 0L;
                             current.bloodHuntUntil = 0L;
