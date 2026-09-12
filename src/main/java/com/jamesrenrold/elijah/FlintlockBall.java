@@ -27,6 +27,9 @@ public final class FlintlockBall extends ThrowableProjectile {
             Registries.DAMAGE_TYPE, new ResourceLocation(ElijahPirate.MOD_ID, "flintlock"));
     private float shotDamage = 3.0F;
     private int effectTicks = 20;
+    private boolean cannonball;
+    private float blastRadius;
+    private boolean detonated;
 
     public FlintlockBall(EntityType<? extends FlintlockBall> type, Level level) {
         super(type, level);
@@ -37,6 +40,15 @@ public final class FlintlockBall extends ThrowableProjectile {
         this.shotDamage = damage;
         this.effectTicks = duration;
     }
+
+    public static FlintlockBall cannonball(Level level, LivingEntity owner, float damage, float blastRadius) {
+        FlintlockBall ball = new FlintlockBall(level, owner, damage, 0);
+        ball.cannonball = true;
+        ball.blastRadius = blastRadius;
+        return ball;
+    }
+
+    public boolean isCannonball() { return cannonball; }
 
     @Override
     protected void defineSynchedData() {}
@@ -61,20 +73,31 @@ public final class FlintlockBall extends ThrowableProjectile {
                 level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE)
                         .getHolderOrThrow(DAMAGE_TYPE), this, getOwner());
         // Respect shields, invulnerability and other mods cancelling damage.
-        if (target.hurt(source, shotDamage) && target instanceof LivingEntity living) {
+        if (target.hurt(source, shotDamage) && target instanceof LivingEntity living && !cannonball) {
             living.addEffect(new MobEffectInstance(MobEffects.DARKNESS, effectTicks, 0), getOwner());
             living.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, effectTicks, 0), getOwner());
             living.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, effectTicks, 0), getOwner());
         }
+        if (cannonball) detonate();
     }
 
     @Override
     protected void onHit(HitResult hit) {
         super.onHit(hit);
         if (level() instanceof ServerLevel server) {
+            if (cannonball) detonate();
             server.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 4, 0.08, 0.08, 0.08, 0.01);
             discard();
         }
+    }
+
+    private void detonate() {
+        if (detonated || !(level() instanceof ServerLevel server)) return;
+        detonated = true;
+        server.explode(getOwner(), getX(), getY(), getZ(), blastRadius,
+                Level.ExplosionInteraction.NONE);
+        server.sendParticles(ParticleTypes.EXPLOSION_EMITTER, getX(), getY(), getZ(), 1,
+                0.0D, 0.0D, 0.0D, 0.0D);
     }
 
     @Override
@@ -91,6 +114,8 @@ public final class FlintlockBall extends ThrowableProjectile {
         super.addAdditionalSaveData(tag);
         tag.putFloat("ShotDamage", shotDamage);
         tag.putInt("EffectTicks", effectTicks);
+        tag.putBoolean("Cannonball", cannonball);
+        tag.putFloat("BlastRadius", blastRadius);
         tag.putInt("Life", tickCount);
     }
 
@@ -99,6 +124,8 @@ public final class FlintlockBall extends ThrowableProjectile {
         super.readAdditionalSaveData(tag);
         shotDamage = tag.getFloat("ShotDamage");
         effectTicks = tag.contains("EffectTicks") ? tag.getInt("EffectTicks") : 20;
+        cannonball = tag.getBoolean("Cannonball");
+        blastRadius = tag.contains("BlastRadius") ? tag.getFloat("BlastRadius") : 0.0F;
         tickCount = tag.getInt("Life");
     }
 
