@@ -6,6 +6,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -30,11 +31,10 @@ import org.joml.Vector3f;
 
 import java.util.UUID;
 
-/** Server-side state and actions for the pirate's temporary Blood Rush powers. */
+/** Server-side state and actions for the pirate's toggleable Cursed Form powers. */
 @Mod.EventBusSubscriber(modid = ElijahPirate.MOD_ID)
 public final class BloodAbilities {
-    private static final int BLOOD_BUFF_TICKS = 10 * 20;
-    private static final int BLOOD_COOLDOWN_TICKS = 15 * 20;
+    private static final int BLOOD_COOLDOWN_TICKS = 20 * 20;
     private static final int HUNT_TICKS = 15 * 20;
     private static final int FLIGHT_TICKS = 20 * 20;
     private static final int OVERDRIVE_TICKS = 25 * 20;
@@ -55,22 +55,32 @@ public final class BloodAbilities {
         if (!player.isAlive() || player.isSpectator() || isHuntActive(player)) return 0;
         PowderPouch state = pouch(player);
         if (state == null) return 0;
-        long now = player.serverLevel().getGameTime();
+        long now = serverTime(player);
+        if (state.cursedFormActive) {
+            state.cursedFormActive = false;
+            state.bloodBuffUntil = 0L;
+            state.bloodCooldownUntil = now + BLOOD_COOLDOWN_TICKS;
+            ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 0);
+            removeRushModifiers(player);
+            message(player, "Cursed Form released — cooldown: 20s");
+            return 1;
+        }
         if (state.bloodOverdriveUntil > now || state.bloodExhaustedUntil > now) {
-            message(player, "Blood Rush is locked while your body recovers.");
+            message(player, "Cursed Form is locked while your body recovers.");
             return 0;
         }
         if (now < state.bloodCooldownUntil) {
             long seconds = (state.bloodCooldownUntil - now + 19L) / 20L;
-            message(player, "Blood Rush: " + seconds + "s remaining");
+            message(player, "Cursed Form cooldown: " + seconds + "s");
             return 0;
         }
-        state.bloodBuffUntil = now + BLOOD_BUFF_TICKS;
-        state.bloodCooldownUntil = now + BLOOD_COOLDOWN_TICKS;
+        state.cursedFormActive = true;
+        state.bloodBuffUntil = 0L;
+        state.bloodCooldownUntil = 0L;
         ElijahPirate.changeOriginResource(player, "elijah:blood_resource", 20);
-        ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 10);
+        ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 1);
         ensureBloodModifiers(player);
-        message(player, "Blood Rush activated — +20 blood charge");
+        message(player, "Cursed Form active — +20 Curse");
         return 1;
     }
 
@@ -79,10 +89,11 @@ public final class BloodAbilities {
         if (!player.isAlive() || player.isSpectator()) return 0;
         PowderPouch state = pouch(player);
         if (state == null) return 0;
-        long now = player.serverLevel().getGameTime();
-        // Overflow replaces the ordinary ten-second rush. Clearing both the
-        // server timer and Origins timer prevents an extra 10% lifesteal and
+        long now = serverTime(player);
+        // Overflow replaces Cursed Form. Clearing both the Java toggle and the
+        // Origins boolean prevents an extra 10% lifesteal and
         // post-overflow charge growth from leaking into this state.
+        state.cursedFormActive = false;
         state.bloodBuffUntil = 0L;
         state.bloodOverdriveUntil = now + OVERDRIVE_TICKS;
         state.bloodExhaustedUntil = 0L;
@@ -102,7 +113,7 @@ public final class BloodAbilities {
         player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, OVERDRIVE_TICKS, 0, false, true, true));
         player.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, OVERDRIVE_TICKS, 1, false, true, true));
         player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, OVERDRIVE_TICKS, 0, false, true, true));
-        message(player, "Blood Rush overflow — the hunger takes hold!");
+        message(player, "Curse overflow — the hunger takes hold!");
         return 1;
     }
 
@@ -111,9 +122,10 @@ public final class BloodAbilities {
         if (!requireBuff(player)) return 0;
         PowderPouch state = pouch(player);
         if (state == null || isHuntActive(player)) return 0;
-        state.bloodHuntUntil = player.serverLevel().getGameTime() + HUNT_TICKS;
-        state.bloodLastDegenerationTick = player.serverLevel().getGameTime();
-        state.bloodLastEnemyHitTick = player.serverLevel().getGameTime();
+        long now = serverTime(player);
+        state.bloodHuntUntil = now + HUNT_TICKS;
+        state.bloodLastDegenerationTick = now;
+        state.bloodLastEnemyHitTick = now;
         state.bloodLockedTarget = null;
         player.closeContainer();
         message(player, "Blood Hunt active — weapon swings only; hunger grows when you stop hitting");
@@ -125,7 +137,7 @@ public final class BloodAbilities {
         if (!requireBuff(player)) return 0;
         PowderPouch state = pouch(player);
         if (state == null || isFlightActive(player)) return 0;
-        long now = player.serverLevel().getGameTime();
+        long now = serverTime(player);
         state.bloodFlightUntil = now + FLIGHT_TICKS;
         state.bloodFlightWasMayFly = false;
         // Start the vanilla fall-flying state directly. No Elytra item is
@@ -142,12 +154,12 @@ public final class BloodAbilities {
 
     public static boolean isHuntActive(ServerPlayer player) {
         PowderPouch state = pouch(player);
-        return state != null && state.bloodHuntUntil > player.serverLevel().getGameTime();
+        return state != null && state.bloodHuntUntil > serverTime(player);
     }
 
     private static boolean isFlightActive(ServerPlayer player) {
         PowderPouch state = pouch(player);
-        return state != null && state.bloodFlightUntil > player.serverLevel().getGameTime();
+        return state != null && state.bloodFlightUntil > serverTime(player);
     }
 
     public static void clearTransient(ServerPlayer player) {
@@ -155,6 +167,7 @@ public final class BloodAbilities {
         if (state == null) return;
         endHunt(player, state);
         endFlight(player, state);
+        state.cursedFormActive = false;
         state.bloodBuffUntil = 0L;
         state.bloodCooldownUntil = 0L;
         state.bloodOverdriveUntil = 0L;
@@ -173,13 +186,13 @@ public final class BloodAbilities {
     private static boolean requireBuff(ServerPlayer player) {
         if (!player.isAlive() || player.isSpectator() || isHuntActive(player)) return false;
         PowderPouch state = pouch(player);
-        long now = player.serverLevel().getGameTime();
+        long now = serverTime(player);
         if (state != null && (state.bloodOverdriveUntil > now || state.bloodExhaustedUntil > now)) {
             message(player, "That ability is locked while the blood overfill runs its course.");
             return false;
         }
-        if (state == null || state.bloodBuffUntil <= now) {
-            message(player, "That ability is only available during Blood Rush.");
+        if (state == null || !state.cursedFormActive) {
+            message(player, "That ability is only available during Cursed Form.");
             return false;
         }
         return true;
@@ -189,13 +202,19 @@ public final class BloodAbilities {
         return player.getCapability(PowderPouch.CAPABILITY).orElse(null);
     }
 
+    /** One authoritative clock keeps timers valid across domain dimension transfers. */
+    private static long serverTime(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        return server == null ? player.serverLevel().getGameTime() : server.overworld().getGameTime();
+    }
+
     private static void ensureBloodModifiers(ServerPlayer player) {
         addModifier(player.getAttribute(Attributes.MOVEMENT_SPEED), BLOOD_SPEED_ID,
-                "Blood Rush movement speed", 0.10D);
+                "Cursed Form movement speed", 0.10D);
         addModifier(player.getAttribute(Attributes.ATTACK_SPEED), BLOOD_ATTACK_SPEED_ID,
-                "Blood Rush attack speed", 0.10D);
+                "Cursed Form attack speed", 0.10D);
         addModifier(lifeStealAttribute(player), BLOOD_LIFESTEAL_ID,
-                "Blood Rush life steal", 0.10D, AttributeModifier.Operation.ADDITION);
+                "Cursed Form life steal", 0.10D, AttributeModifier.Operation.ADDITION);
     }
 
     private static void addModifier(AttributeInstance instance, UUID id, String name, double value) {
@@ -262,13 +281,22 @@ public final class BloodAbilities {
         if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)) return;
         PowderPouch state = pouch(player);
         if (state == null) return;
-        long now = player.serverLevel().getGameTime();
+        long now = serverTime(player);
 
-        if (state.bloodBuffUntil > now && state.bloodOverdriveUntil <= now) {
+        if (state.cursedFormActive && state.bloodOverdriveUntil <= now) {
             ensureBloodModifiers(player);
             if (player.tickCount % 2 == 0) spawnEyeParticle(player);
+            // Connector can reconstruct Origins powers while crossing a
+            // dimension. Reassert the small data-driven toggle periodically
+            // so Curse growth always resumes after entering the domain.
+            if (player.tickCount % 20 == 0) {
+                ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 1);
+            }
         } else {
             removeRushModifiers(player);
+            if (player.tickCount % 20 == 0) {
+                ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 0);
+            }
         }
 
         if (state.bloodHuntUntil > now) ensureHuntLifeSteal(player);
@@ -377,7 +405,7 @@ public final class BloodAbilities {
                 || event.getEntity() == player || event.getAmount() <= 0.0F) return;
         PowderPouch state = pouch(player);
         if (state == null) return;
-        long now = player.serverLevel().getGameTime();
+        long now = serverTime(player);
         if (state.bloodHuntUntil > now || state.bloodOverdriveUntil > now) {
             state.bloodLastEnemyHitTick = now;
             // AttributesLib applies life_steal in its post-damage hook. Permit
@@ -390,7 +418,7 @@ public final class BloodAbilities {
     public static void onNaturalHeal(LivingHealEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         PowderPouch state = pouch(player);
-        long now = player.serverLevel().getGameTime();
+        long now = serverTime(player);
         if (state == null || (state.bloodHuntUntil <= now && state.bloodOverdriveUntil <= now
                 && state.bloodExhaustedUntil <= now)) return;
         if (state != null && state.bloodAllowLifestealUntil >= now) {
