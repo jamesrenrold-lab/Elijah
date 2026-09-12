@@ -67,8 +67,8 @@ assert parsed['data/elijah/powers/blood_overflow.json']['entity_action'] == {
 crew_action = parsed['data/elijah/powers/undead_crew.json']['entity_action']['if_action']
 assert crew_action == {'type': 'origins:execute_command', 'command': 'elijah crew'}
 domain = parsed['data/elijah/powers/drowned_domain.json']
-assert domain.get('cooldown') == 1 and domain.get('hud_render') == {'should_render': False}, \
-    'Origins must release the domain key after one tick; Java owns the visible cooldown'
+assert domain.get('cooldown') == 0 and domain.get('hud_render') == {'should_render': False}, \
+    'Origins must never retain a cross-dimension cooldown; Java owns the visible cooldown'
 assert 'elijah:domain_cooldown' not in origin['powers']
 assert 'elijah:domain_cooldown_recharge' not in origin['powers']
 assert 'data/elijah/powers/domain_cooldown.json' not in parsed
@@ -78,7 +78,7 @@ assert 'COOLDOWN_TICKS = 5 * 20' in domain_source and 'COOLDOWNS' in domain_sour
     'Domain must use the rebuilt five-second Java cooldown'
 assert 'COOLDOWNS.put(session.ownerId, now + COOLDOWN_TICKS)' in domain_source, \
     'Cooldown must begin only when session cleanup starts'
-assert 'WATER_SPAWN_Y = 63.2D' in domain_source, 'Caster must spawn inside the two-deep lagoon'
+assert 'WATER_SPAWN_Y = 63.2D' in domain_source, 'Lagoon spawn height regressed'
 assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
 assert 'changeDimension(destination, directTeleporter)' in domain_source, \
     'Domain targets must use Forge dimension transfer'
@@ -87,6 +87,10 @@ for removed_echo_path in ('saveAsPassenger', 'loadEntityRecursive', 'target.disc
 assert '* 0.55D' in domain_source, 'Cannon damage must use 55% current attack damage'
 assert 'BEACH_SPAWN_Y = 67.0D' in domain_source, 'Raised crescent spawn height regressed'
 assert 'BEACH_SPAWN_X = -34.0D' in domain_source, 'Target must spawn deep on the beach'
+assert 'moveEntity(target, domain, WATER_SPAWN_X, WATER_SPAWN_Y' in domain_source, \
+    'Target must begin in the lagoon'
+assert 'player.teleportTo(domain, BEACH_SPAWN_X, BEACH_SPAWN_Y' in domain_source, \
+    'Caster must begin on the raised sand arena'
 assert 'shouldSuppressLifecycleUnload' in domain_source, 'Connector dimension-change guard is missing'
 assert 'restoreTarget(session, server)' in domain_source, 'Guaranteed target restoration is missing'
 assert 'buildLagoonStairs(level)' in domain_source, 'Lagoon access ramp is missing'
@@ -108,12 +112,16 @@ assert 'age % 10L == 0L' in domain_source, 'Target pathfinding refresh is not th
 assert 'buildOceanFoundation(level)' in domain_source, 'Two-layer ocean foundation migration is missing'
 assert 'clearLegacyCannons(level' in domain_source, 'Old high-cost CBC cannon layout is not removed'
 assert 'clearDomainProjectiles(session.domain)' in domain_source, 'Expired cannonballs must be purged at cleanup'
+assert 'clearUninvitedMobs(session.domain, session.target)' in domain_source, \
+    'Special-spawner mobs must be removed from active domains'
 dimension = parsed['data/elijah/dimension/drowned_domain.json']['generator']['settings']['layers']
 assert dimension == [
     {'height': 1, 'block': 'minecraft:bedrock'},
     {'height': 62, 'block': 'minecraft:sandstone'},
     {'height': 2, 'block': 'minecraft:water'},
 ], 'Domain generator must be sandstone topped by exactly two water blocks'
+assert parsed['data/elijah/dimension/drowned_domain.json']['generator']['settings']['biome'] == 'minecraft:the_void', \
+    'Domain biome must have no natural spawn table'
 assert 'buildDistantIslands(level)' in domain_source, 'Distant dune islands are missing'
 assert 'buildBillowedSail' in domain_source, 'Volumetric sails are missing'
 assert 'cannonball.setNoGravity(true)' in domain_source, 'Reliable straight cannon trajectory regressed'
@@ -127,6 +135,8 @@ assert 'innerRadiusSquared' in domain_source, 'Circular barrier shell is missing
 projectile_source = (root / 'src/main/java/com/jamesrenrold/elijah/FlintlockBall.java').read_text()
 assert 'Server-driven tracer particles' in projectile_source, 'Cannonball tracer visibility regressed'
 assert 'closest.distanceToSqr(impact) <= 0.64D' in projectile_source, 'Cannon crossing check is missing'
+assert 'isCannonball() && hit.getType() == HitResult.Type.BLOCK' in projectile_source, \
+    'Domain cannonballs must phase through blocks to their recorded target point'
 assert 'int groundPoints = 8' in projectile_source and 'int shellPoints = 6' in projectile_source, \
     'Low-packet blast outline regressed'
 assert '.updateInterval(2)' in command_source, 'Projectile network synchronization is not throttled'
@@ -135,4 +145,7 @@ assert 'state.cursedFormActive = true' in blood_source
 assert 'state.cursedFormActive = false' in blood_source
 assert 'BLOOD_COOLDOWN_TICKS = 20 * 20' in blood_source
 assert 'server.overworld().getGameTime()' in blood_source, 'Blood timers need a cross-dimension clock'
+assert 'state.bloodHuntUntil > now' in blood_source and \
+       'changeOriginResource(player, "elijah:blood_resource", 1)' in blood_source, \
+    'Blood Hunt must add the second Curse point each second'
 print('Validated all power commands and the eight distinct active keybinds.')
