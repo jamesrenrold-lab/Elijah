@@ -108,6 +108,7 @@ public final class ElijahPirate {
                             current.bloodFlightUntil = 0L;
                             current.bloodFlightWasMayFly = false;
                             current.bloodOverdriveUntil = 0L;
+                            current.bloodExhaustedUntil = 0L;
                             current.bloodLastDegenerationTick = 0L;
                             current.bloodLastEnemyHitTick = 0L;
                             current.domainCooldownUntil = 0L;
