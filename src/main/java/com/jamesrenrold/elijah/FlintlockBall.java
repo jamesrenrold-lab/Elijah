@@ -144,7 +144,7 @@ public final class FlintlockBall extends ThrowableProjectile {
         }
         // A low-packet smoke outline marks the exact four-block damage volume.
         // Earlier versions sent over 170 individual particle packets per hit.
-        int groundPoints = 16;
+        int groundPoints = 8;
         for (int point = 0; point < groundPoints; point++) {
             double angle = Math.PI * 2.0D * point / groundPoints;
             double px = getX() + Math.cos(angle) * blastRadius;
@@ -152,7 +152,7 @@ public final class FlintlockBall extends ThrowableProjectile {
             server.sendParticles(ParticleTypes.LARGE_SMOKE, px, getY() + 0.18D, pz, 1,
                     0.04D, 0.06D, 0.04D, 0.003D);
         }
-        int shellPoints = 18;
+        int shellPoints = 6;
         double goldenAngle = Math.PI * (3.0D - Math.sqrt(5.0D));
         for (int point = 0; point < shellPoints; point++) {
             double y = 1.0D - (2.0D * point + 1.0D) / shellPoints;
@@ -164,9 +164,9 @@ public final class FlintlockBall extends ThrowableProjectile {
                     getZ() + Math.sin(angle) * horizontal * blastRadius,
                     1, 0.035D, 0.035D, 0.035D, 0.002D);
         }
-        server.sendParticles(ParticleTypes.POOF, getX(), getY() + 0.25D, getZ(), 10,
+        server.sendParticles(ParticleTypes.POOF, getX(), getY() + 0.25D, getZ(), 5,
                 0.45D, 0.22D, 0.45D, 0.025D);
-        server.sendParticles(ParticleTypes.SMOKE, getX(), getY() + 0.35D, getZ(), 16,
+        server.sendParticles(ParticleTypes.SMOKE, getX(), getY() + 0.35D, getZ(), 8,
                 1.25D, 0.65D, 1.25D, 0.012D);
         server.playSound(null, getX(), getY(), getZ(), SoundEvents.GENERIC_EXPLODE,
                 SoundSource.HOSTILE, 0.45F, 0.85F);
@@ -193,12 +193,12 @@ public final class FlintlockBall extends ThrowableProjectile {
             }
         }
         if (!level().isClientSide && isCannonball() && level() instanceof ServerLevel server
-                && (tickCount & 1) == 0) {
+                && (tickCount & 3) == 0) {
             // Server-driven tracer particles make every volley visible even if
             // a client resource pack or renderer suppresses the black model.
             server.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 2,
                     0.06D, 0.06D, 0.06D, 0.01D);
-            if ((tickCount & 3) == 0) {
+            if ((tickCount & 7) == 0) {
                 server.sendParticles(ParticleTypes.FLAME, getX(), getY(), getZ(), 1,
                         0.02D, 0.02D, 0.02D, 0.0D);
             }
@@ -208,7 +208,7 @@ public final class FlintlockBall extends ThrowableProjectile {
         // projectiles if another mod removes collision; ordinary flintlock
         // rounds keep their original short lifetime.
         if (!level().isClientSide && tickCount >= (isCannonball() ? 120 : 30)) discard();
-        if (level().isClientSide && tickCount % 2 == 0) {
+        if (level().isClientSide && !isCannonball() && tickCount % 2 == 0) {
             level().addParticle(ParticleTypes.SMOKE, getX(), getY(), getZ(), 0, 0, 0);
         }
     }
