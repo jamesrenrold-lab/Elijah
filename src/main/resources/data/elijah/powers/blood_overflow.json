@@ -1,7 +1,7 @@
 {
   "type": "origins:action_over_time",
   "name": "Blood Overflow",
-  "description": "Automatically triggers Blood Rush overflow at full charge.",
+  "description": "Automatically triggers Blood Rush overflow at full charge. The 25-second overfill grants 50% lifesteal, but its health drain cannot kill you.",
   "hidden": true,
   "interval": 1,
   "condition": {
