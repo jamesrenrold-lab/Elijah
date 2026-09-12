@@ -142,6 +142,16 @@ public final class FlintlockBall extends ThrowableProjectile {
     @Override
     public void tick() {
         super.tick();
+        if (!level().isClientSide && isCannonball() && level() instanceof ServerLevel server) {
+            // Server-driven tracer particles make every volley visible even if
+            // a client resource pack or renderer suppresses the black model.
+            server.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 2,
+                    0.06D, 0.06D, 0.06D, 0.01D);
+            if ((tickCount & 1) == 0) {
+                server.sendParticles(ParticleTypes.FLAME, getX(), getY(), getZ(), 1,
+                        0.02D, 0.02D, 0.02D, 0.0D);
+            }
+        }
         // Domain cannonballs remain alive until they touch an entity or real
         // block. The longer safety timeout only prevents permanently orphaned
         // projectiles if another mod removes collision; ordinary flintlock
