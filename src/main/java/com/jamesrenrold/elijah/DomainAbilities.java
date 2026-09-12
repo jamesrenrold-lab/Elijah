@@ -1,5 +1,6 @@
 package com.jamesrenrold.elijah;
 
+import com.mojang.logging.LogUtils;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -34,10 +35,12 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.joml.Vector3f;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -54,6 +57,7 @@ import java.util.UUID;
  */
 @Mod.EventBusSubscriber(modid = ElijahPirate.MOD_ID)
 public final class DomainAbilities {
+    private static final Logger LOGGER = LogUtils.getLogger();
     public static final ResourceKey<Level> DOMAIN_DIMENSION = ResourceKey.create(
             Registries.DIMENSION, new ResourceLocation(ElijahPirate.MOD_ID, "drowned_domain"));
 
@@ -67,8 +71,10 @@ public final class DomainAbilities {
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
+    private static final BlockPos ARENA_MARKER = new BlockPos(0, 61, 0);
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
     private static boolean arenaGeometryMigrated;
+    private static boolean arenaReady;
 
     private DomainAbilities() {}
 
@@ -80,7 +86,8 @@ public final class DomainAbilities {
         pruneStaleSessions(server);
         Session active = SESSIONS.get(player.getUUID());
         if (active != null) {
-            if (active.ending || player.level() != active.domain) {
+            if (active.ending || player.level() != active.domain
+                    || active.domain.getGameTime() >= active.endAt) {
                 SESSIONS.remove(player.getUUID());
                 endSession(active, server, true, "stale session recovered");
             } else {
@@ -157,7 +164,8 @@ public final class DomainAbilities {
     private static void pruneStaleSessions(MinecraftServer server) {
         for (Session session : new ArrayList<>(SESSIONS.values())) {
             ServerPlayer owner = server.getPlayerList().getPlayer(session.ownerId);
-            if (session.ending || owner == null || !owner.isAlive() || owner.level() != session.domain) {
+            if (session.ending || owner == null || !owner.isAlive() || owner.level() != session.domain
+                    || session.domain.getGameTime() >= session.endAt) {
                 SESSIONS.remove(session.ownerId);
                 endSession(session, server, true, "stale session recovered");
             }
@@ -254,57 +262,78 @@ public final class DomainAbilities {
     }
 
     @SubscribeEvent
+    public static void onServerStarted(ServerStartedEvent event) {
+        ServerLevel domain = event.getServer().getLevel(DOMAIN_DIMENSION);
+        if (domain != null) buildArena(domain);
+    }
+
+    @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         MinecraftServer server = event.getServer();
         if (server == null || SESSIONS.isEmpty()) return;
         List<Session> sessions = new ArrayList<>(SESSIONS.values());
         for (Session session : sessions) {
+            try {
+                tickSession(server, session);
+            } catch (Throwable error) {
+                LOGGER.error("Drowned Domain session {} failed; restoring its combatants",
+                        session.ownerId, error);
+                SESSIONS.remove(session.ownerId);
+                endSession(session, server, true, "internal recovery");
+            }
+        }
+    }
+
+    private static void tickSession(MinecraftServer server, Session session) {
             ServerPlayer owner = server.getPlayerList().getPlayer(session.ownerId);
             if (owner == null || !owner.isAlive()) {
                 SESSIONS.remove(session.ownerId);
                 endSession(session, server, true, "caster unavailable");
-                continue;
+                return;
             }
             long now = session.domain.getGameTime();
             if (owner.level() != session.domain) {
                 // A dimension transfer can expose the old level for a few
                 // ticks. Tolerate that window instead of destroying a valid
                 // session before the client finishes changing dimensions.
-                if (++session.ownerMismatchTicks <= 40) continue;
+                if (++session.ownerMismatchTicks <= 40) return;
                 SESSIONS.remove(session.ownerId);
                 endSession(session, server, true, "caster left the domain");
-                continue;
+                return;
             }
             session.ownerMismatchTicks = 0;
             if (now >= session.endAt) {
                 SESSIONS.remove(session.ownerId);
                 endSession(session, server, true, "time expired");
-                continue;
+                return;
             }
-            applyDomainBuffs(owner);
+            long age = now - session.startedAt;
+            // Refresh potion effects once per second instead of sending effect
+            // packets every server tick. Attribute modifiers are already stable.
+            if (age % 20L == 0L) applyDomainBuffs(owner);
             if (!session.target.isAlive()
                     && session.target.getRemovalReason() == Entity.RemovalReason.KILLED) {
                 session.targetDefeated = true;
                 SESSIONS.remove(session.ownerId);
                 endSession(session, server, false, "target defeated");
-                continue;
+                return;
             }
             LivingEntity target = resolveTarget(session);
             if (target == null) {
-                if (++session.targetMissingTicks <= 20) continue;
+                if (++session.targetMissingTicks <= 20) return;
                 SESSIONS.remove(session.ownerId);
                 endSession(session, server, true, "target transfer was interrupted");
-                continue;
+                return;
             }
             session.targetMissingTicks = 0;
             if (!target.isAlive()) {
                 session.targetDefeated = true;
                 SESSIONS.remove(session.ownerId);
                 endSession(session, server, false, "target defeated");
-                continue;
+                return;
             }
-            forceTargetAggro(target, owner);
+            forceTargetAggro(target, owner, age % 10L == 0L);
             int secondsLeft = Math.max(1, (int) Math.ceil((session.endAt - now) / 20.0D));
             if (secondsLeft != session.lastDisplayedSecond) {
                 session.lastDisplayedSecond = secondsLeft;
@@ -315,7 +344,6 @@ public final class DomainAbilities {
                 session.lastCannonball = now;
                 fireCannonball(session, owner, target);
             }
-        }
     }
 
     private static LivingEntity resolveTarget(Session session) {
@@ -331,13 +359,19 @@ public final class DomainAbilities {
 
     /** Keeps transferred mobs loaded and hostile to the caster for the full session. */
     private static void forceTargetAggro(LivingEntity target, ServerPlayer owner) {
+        forceTargetAggro(target, owner, true);
+    }
+
+    private static void forceTargetAggro(LivingEntity target, ServerPlayer owner, boolean refreshPath) {
         if (!(target instanceof Mob mob)) return;
         mob.setPersistenceRequired();
-        mob.setTarget(owner);
-        mob.setAggressive(true);
-        mob.setLastHurtByMob(owner);
+        if (mob.getTarget() != owner) {
+            mob.setTarget(owner);
+            mob.setAggressive(true);
+            mob.setLastHurtByMob(owner);
+        }
         mob.getLookControl().setLookAt(owner, 30.0F, 30.0F);
-        if (mob.distanceToSqr(owner) > 2.25D) {
+        if (refreshPath && mob.distanceToSqr(owner) > 2.25D) {
             mob.getNavigation().moveTo(owner, 1.35D);
         }
     }
@@ -546,6 +580,11 @@ public final class DomainAbilities {
     }
 
     private static void buildArena(ServerLevel level) {
+        if (arenaReady) return;
+        if (level.getBlockState(ARENA_MARKER).is(Blocks.CHISELED_SANDSTONE)) {
+            arenaReady = true;
+            return;
+        }
         final int oceanSurface = 63;
         final int beachTop = 66;
         clearLegacyArenaGeometry(level);
@@ -590,6 +629,9 @@ public final class DomainAbilities {
         buildShip(level, -76, 0, false);
         buildShip(level, 76, 0, false);
         buildDistantIslands(level);
+        set(level, ARENA_MARKER.getX(), ARENA_MARKER.getY(), ARENA_MARKER.getZ(),
+                Blocks.CHISELED_SANDSTONE);
+        arenaReady = true;
     }
 
     /** Removes every known legacy arena/ship footprint once after a restart. */
