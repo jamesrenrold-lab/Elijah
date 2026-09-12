@@ -60,18 +60,26 @@ public final class DomainAbilities {
     private static final int DOMAIN_TICKS = 40 * 20;
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;
-    private static final double ARENA_Y = 65.0D;
+    private static final double WATER_SPAWN_Y = 65.0D;
+    private static final double BEACH_SPAWN_Y = 67.0D;
     private static final UUID DOMAIN_SPEED_ID = UUID.fromString("c01c5046-3b27-49c5-9384-95f1f1cdb5db");
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
+    private static boolean arenaGeometryMigrated;
 
     private DomainAbilities() {}
 
     public static int activate(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)
-                || SESSIONS.containsKey(player.getUUID())) return 0;
+        if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
+        Session active = SESSIONS.get(player.getUUID());
+        if (active != null) {
+            int secondsLeft = Math.max(1,
+                    (int) Math.ceil((active.endAt - active.domain.getGameTime()) / 20.0D));
+            message(player, "Drowned Domain is already active: " + secondsLeft + "s remaining.");
+            return 0;
+        }
 
         PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
         if (pouch == null) return 0;
@@ -106,14 +114,14 @@ public final class DomainAbilities {
         // The target starts on the wide back of the sandy crescent while the
         // caster begins inside the lagoon, where the pirate's swim advantage
         // immediately matters.
-        LivingEntity movedTarget = transferLivingEntity(target, domain, -28.0D, ARENA_Y, 0.0D,
+        LivingEntity movedTarget = transferLivingEntity(target, domain, -28.0D, BEACH_SPAWN_Y, 0.0D,
                 targetYaw, targetPitch);
         if (movedTarget == null) {
             message(player, "The target could not be pulled into the domain.");
             return 0;
         }
 
-        player.teleportTo(domain, 8.0D, ARENA_Y, 0.0D, playerYaw, playerPitch);
+        player.teleportTo(domain, 8.0D, WATER_SPAWN_Y, 0.0D, playerYaw, playerPitch);
         movedTarget.setDeltaMovement(Vec3.ZERO);
         movedTarget.hurtMarked = true;
 
@@ -126,6 +134,7 @@ public final class DomainAbilities {
         domain.playSound(null, player.blockPosition(), SoundEvents.AMBIENT_UNDERWATER_ENTER,
                 SoundSource.PLAYERS, 1.2F, 0.7F);
         message(player, "The Drowned Domain opens — the tide answers your call!");
+        message(player, "Domain cooldown: 5s on the visible Origins bar; no additional timer.");
         return 1;
     }
 
@@ -265,11 +274,12 @@ public final class DomainAbilities {
         double lateralBase = wall < 2 ? target.getZ() : target.getX();
         double lateral = Math.max(-28.0D, Math.min(28.0D,
                 lateralBase + ((shot % 5) - 2) * 1.5D));
+        double firingY = Math.max(68.5D, target.getEyeY() + 0.6D);
         Vec3 origin = switch (wall) {
-            case 0 -> new Vec3(-39.25D, 68.0D + (shot % 3), lateral);
-            case 1 -> new Vec3(39.25D, 68.0D + (shot % 3), lateral);
-            case 2 -> new Vec3(lateral, 68.0D + (shot % 3), -39.25D);
-            default -> new Vec3(lateral, 68.0D + (shot % 3), 39.25D);
+            case 0 -> new Vec3(-39.0D, firingY, lateral);
+            case 1 -> new Vec3(39.0D, firingY, lateral);
+            case 2 -> new Vec3(lateral, firingY, -39.0D);
+            default -> new Vec3(lateral, firingY, 39.0D);
         };
         Vec3 aim = target.position().add(0.0D,
                 Math.min(0.9D, target.getBbHeight() * 0.35D), 0.0D);
@@ -282,8 +292,12 @@ public final class DomainAbilities {
         float damage = Math.max(1.0F, attackDamage + curseDamage);
         FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, damage, 4.0F);
         cannonball.setPos(origin.x, origin.y, origin.z);
+        cannonball.setNoGravity(true);
         cannonball.shoot(direction.x, direction.y, direction.z, 4.6F, 0.0F);
-        session.domain.addFreshEntity(cannonball);
+        if (!session.domain.addFreshEntity(cannonball)) {
+            message(owner, "Drowned Domain cannon failed to launch; retrying next volley.");
+            return;
+        }
         session.domain.sendParticles(net.minecraft.core.particles.ParticleTypes.SMOKE,
                 origin.x, origin.y, origin.z, 7, 0.18D, 0.18D, 0.18D, 0.035D);
         session.domain.sendParticles(net.minecraft.core.particles.ParticleTypes.FLAME,
@@ -297,8 +311,9 @@ public final class DomainAbilities {
                     aim.x + Math.cos(angle) * 1.25D, target.getY() + 0.08D,
                     aim.z + Math.sin(angle) * 1.25D, 1, 0.0D, 0.0D, 0.0D, 0.0D);
         }
+        // Loud enough to carry from the wall/ship to the entire arena.
         session.domain.playSound(null, origin.x, origin.y, origin.z, SoundEvents.FIREWORK_ROCKET_BLAST,
-                SoundSource.HOSTILE, 0.75F, 0.55F);
+                SoundSource.HOSTILE, 4.0F, 0.55F);
     }
 
     private static void applyDomainBuffs(ServerPlayer player) {
@@ -343,7 +358,10 @@ public final class DomainAbilities {
         ServerPlayer owner = server.getPlayerList().getPlayer(session.ownerId);
         if (owner != null) {
             removeDomainBuffs(owner);
-            if (owner.isAlive()) teleportPlayerBack(owner, server, session);
+            if (owner.isAlive()) {
+                teleportPlayerBack(owner, server, session);
+                message(owner, "Drowned Domain closed — the power is ready.");
+            }
         }
         if (!returnCombatants) return;
         Entity entity = session.domain.getEntity(session.targetId);
@@ -363,69 +381,133 @@ public final class DomainAbilities {
     }
 
     private static void buildArena(ServerLevel level) {
-        final int surface = 64;
-        // A full barrier floor prevents the sand/water island from falling if
-        // the dimension generator is replaced or a block update occurs.
+        final int oceanSurface = 63;
+        final int beachTop = 66;
+        clearLegacyArenaGeometry(level);
+
+        // A full barrier foundation supports every sand block without gravity
+        // updates. The crescent itself rises two blocks above the lagoon.
         for (int x = -42; x <= 42; x++) {
-            for (int z = -42; z <= 42; z++) set(level, x, surface - 2, z, Blocks.BARRIER);
+            for (int z = -42; z <= 42; z++) set(level, x, 62, z, Blocks.BARRIER);
         }
-        // Begin with a two-source-block-deep lagoon/ocean across the whole
-        // arena, then carve a shifted pair of ellipses into a broad sandy
-        // crescent. The inner ellipse opens toward the east, matching the
-        // requested lagoon shape and leaving substantially more usable water.
         for (int x = -40; x <= 40; x++) {
             for (int z = -40; z <= 40; z++) {
-                set(level, x, surface - 1, z, Blocks.SAND);
+                set(level, x, oceanSurface, z, Blocks.SAND);
                 double outer = square((x + 4.0D) / 36.0D) + square(z / 32.0D);
                 double inner = square((x - 8.0D) / 33.0D) + square(z / 26.0D);
                 boolean sandyCrescent = outer <= 1.0D && inner >= 1.0D;
                 if (sandyCrescent) {
-                    set(level, x, surface, z, Blocks.SAND);
-                    set(level, x, surface + 1, z, Blocks.AIR);
+                    set(level, x, 64, z, Blocks.SANDSTONE);
+                    set(level, x, 65, z, Blocks.SAND);
+                    set(level, x, beachTop, z, Blocks.SAND);
+                    set(level, x, 67, z, Blocks.AIR);
                 } else {
-                    set(level, x, surface, z, Blocks.WATER);
-                    set(level, x, surface + 1, z, Blocks.WATER);
+                    set(level, x, 64, z, Blocks.WATER);
+                    set(level, x, 65, z, Blocks.WATER);
+                    set(level, x, 66, z, Blocks.AIR);
+                    set(level, x, 67, z, Blocks.AIR);
                 }
             }
         }
 
-        // Low dunes on the sandy half.
         int[][] dunes = {{-31, -10}, {-30, 10}, {-24, -22}, {-23, 22}, {-10, -29}, {-9, 29}};
-        for (int[] dune : dunes) {
-            for (int dx = -3; dx <= 3; dx++) {
-                for (int dz = -2; dz <= 2; dz++) {
-                    if (Math.abs(dx) + Math.abs(dz) > 4) continue;
-                    int height = 1 + Math.max(0, 2 - (Math.abs(dx) + Math.abs(dz)) / 2);
-                    for (int dy = 0; dy < height; dy++) set(level, dune[0] + dx, surface + 1 + dy, dune[1] + dz, Blocks.SAND);
-                }
-            }
+        for (int i = 0; i < dunes.length; i++) {
+            buildSandDune(level, dunes[i][0], dunes[i][1], 4 + i % 2, 3 + (i + 1) % 2, 67, 2 + i % 3);
         }
-        buildPalm(level, -29, surface, 5);
+        buildPalm(level, -29, 67, 5);
         buildBarriers(level);
-        // Keep the flagship-scale hulls clear of the arena wall while their
-        // broadsides remain plainly visible from the lagoon.
-        // Ships sit tangentially around the arena: their long sides, gun
-        // ports and cannon broadsides face inward instead of their bows.
+
+        // Every ship lies tangentially around the arena, presenting its long
+        // inward broadside rather than its bow to the combatants.
         buildShip(level, 0, -76, true);
         buildShip(level, 0, 76, true);
         buildShip(level, -76, 0, false);
         buildShip(level, 76, 0, false);
+        buildDistantIslands(level);
+    }
+
+    /** Removes every known legacy arena/ship footprint once after a restart. */
+    private static void clearLegacyArenaGeometry(ServerLevel level) {
+        if (arenaGeometryMigrated) return;
+        arenaGeometryMigrated = true;
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        for (int x = -115; x <= 115; x++) {
+            for (int z = -115; z <= 115; z++) {
+                boolean arena = Math.abs(x) <= 42 && Math.abs(z) <= 42;
+                boolean fleetLane = (Math.abs(x) >= 43 && Math.abs(x) <= 115 && Math.abs(z) <= 42)
+                        || (Math.abs(z) >= 43 && Math.abs(z) <= 115 && Math.abs(x) <= 42);
+                if (!arena && !fleetLane) continue;
+                for (int y = 64; y <= 105; y++) {
+                    pos.set(x, y, z);
+                    if (!level.getBlockState(pos).isAir()) level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
+                }
+                if (fleetLane) {
+                    set(level, x, 62, z, Blocks.WATER);
+                    set(level, x, 63, z, Blocks.WATER);
+                }
+            }
+        }
+    }
+
+    private static void buildSandDune(ServerLevel level, int cx, int cz, int radiusX,
+                                      int radiusZ, int baseY, int height) {
+        for (int layer = 0; layer < height; layer++) {
+            int rx = Math.max(1, radiusX - layer);
+            int rz = Math.max(1, radiusZ - layer);
+            for (int dx = -rx; dx <= rx; dx++) {
+                for (int dz = -rz; dz <= rz; dz++) {
+                    if (square(dx / (double) rx) + square(dz / (double) rz) <= 1.0D) {
+                        set(level, cx + dx, baseY + layer, cz + dz, Blocks.SAND);
+                    }
+                }
+            }
+        }
     }
 
     private static void buildPalm(ServerLevel level, int x, int baseY, int z) {
-        for (int y = 0; y < 8; y++) set(level, x + (y > 4 ? 1 : 0), baseY + y, z, Blocks.JUNGLE_LOG);
-        int topX = x + 1;
-        int topY = baseY + 8;
-        for (int dx = -3; dx <= 3; dx++) {
-            for (int dz = -3; dz <= 3; dz++) {
-                if (Math.abs(dx) + Math.abs(dz) <= 4) set(level, topX + dx, topY, z + dz, Blocks.JUNGLE_LEAVES);
+        // Curved, leaning trunk instead of a vertical pole.
+        int[] bendX = {0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3};
+        int[] bendZ = {0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2};
+        for (int y = 0; y < bendX.length; y++) {
+            set(level, x + bendX[y], baseY + y, z + bendZ[y], Blocks.JUNGLE_LOG);
+        }
+        int topX = x + 3;
+        int topY = baseY + 10;
+        int topZ = z + 2;
+        set(level, topX, topY + 1, topZ, Blocks.JUNGLE_LEAVES);
+
+        // Eight long fronds droop at their tips, producing a recognizable
+        // palm silhouette rather than a round deciduous canopy.
+        int[][] directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1},
+                {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+        for (int[] direction : directions) {
+            for (int step = 0; step <= 6; step++) {
+                int frondY = topY + (step <= 2 ? 1 : 0) - (step >= 5 ? step - 4 : 0);
+                int fx = topX + direction[0] * step;
+                int fz = topZ + direction[1] * step;
+                set(level, fx, frondY, fz, Blocks.JUNGLE_LEAVES);
+                if (step >= 2 && step <= 4) {
+                    set(level, fx + direction[1], frondY, fz + direction[0], Blocks.JUNGLE_LEAVES);
+                }
             }
         }
-        set(level, topX, topY + 1, z, Blocks.JUNGLE_LEAVES);
-        set(level, topX - 3, topY - 1, z, Blocks.JUNGLE_LEAVES);
-        set(level, topX + 3, topY - 1, z, Blocks.JUNGLE_LEAVES);
-        set(level, topX, topY - 1, z - 3, Blocks.JUNGLE_LEAVES);
-        set(level, topX, topY - 1, z + 3, Blocks.JUNGLE_LEAVES);
+        set(level, topX + 1, topY - 1, topZ, Blocks.BROWN_WOOL);
+        set(level, topX - 1, topY - 1, topZ, Blocks.BROWN_WOOL);
+        set(level, topX, topY - 1, topZ + 1, Blocks.BROWN_WOOL);
+    }
+
+    private static void buildDistantIslands(ServerLevel level) {
+        int[][] islands = {
+                {0, -136, 12, 7, 5}, {65, -124, 9, 6, 4}, {120, -78, 11, 7, 5},
+                {136, 0, 13, 8, 5}, {122, 72, 9, 6, 4}, {60, 126, 11, 7, 5},
+                {0, 138, 13, 7, 5}, {-66, 124, 10, 6, 4}, {-121, 76, 12, 7, 5},
+                {-137, 0, 11, 8, 5}, {-120, -76, 10, 6, 4}, {-62, -126, 12, 7, 5}
+        };
+        for (int[] island : islands) {
+            buildSandDune(level, island[0], island[1], island[2], island[3], 64, island[4]);
+            set(level, island[0], 64 + island[4], island[1], Blocks.SANDSTONE);
+            set(level, island[0] + 1, 64 + island[4], island[1], Blocks.SANDSTONE);
+        }
     }
 
     private static double square(double value) {
@@ -433,7 +515,7 @@ public final class DomainAbilities {
     }
 
     private static void buildBarriers(ServerLevel level) {
-        for (int y = 64; y <= 76; y++) {
+        for (int y = 64; y <= 110; y++) {
             for (int n = -41; n <= 41; n++) {
                 set(level, -41, y, n, Blocks.BARRIER);
                 set(level, 41, y, n, Blocks.BARRIER);
@@ -444,124 +526,157 @@ public final class DomainAbilities {
     }
 
     private static void buildShip(ServerLevel level, int cx, int cz, boolean eastWest) {
-        // Flagship-scale galleon: a 55-block tapered hull, layered gun deck,
-        // raised forecastle and sterncastle, three tall masts, broad sails,
-        // rigging, cabin windows, gilded prow and ten working CBC broadsides.
-        for (int along = -27; along <= 27; along++) {
-            int taper = Math.max(0, Math.abs(along) - 16);
-            int halfWidth = Math.max(2, 11 - (taper + 1) / 2);
-            for (int across = -halfWidth; across <= halfWidth; across++) {
-                int x = eastWest ? cx + along : cx + across;
-                int z = eastWest ? cz + across : cz + along;
-                // Deep keel and curved lower hull.
-                if (Math.abs(across) <= Math.max(1, halfWidth - 5)) {
-                    set(level, x, 62, z, Blocks.DARK_OAK_LOG);
+        // A genuinely deep 3D hull: each vertical layer widens toward the
+        // waterline, then supports an enclosed gun deck and full main deck.
+        for (int along = -28; along <= 28; along++) {
+            int taper = Math.max(0, Math.abs(along) - 17);
+            int halfWidth = Math.max(3, 12 - (taper + 1) / 2);
+            int[] insetByLayer = {7, 5, 3, 1, 0, 0, 0};
+            for (int layer = 0; layer < insetByLayer.length; layer++) {
+                int y = 62 + layer;
+                int layerWidth = Math.max(1, halfWidth - insetByLayer[layer]);
+                for (int across = -layerWidth; across <= layerWidth; across++) {
+                    net.minecraft.world.level.block.Block block;
+                    if (layer == 6) block = Blocks.SPRUCE_PLANKS;
+                    else if (Math.abs(across) == layerWidth && (along & 3) == 0) block = Blocks.DARK_OAK_LOG;
+                    else if (layer == 4 && Math.abs(across) == layerWidth) block = Blocks.STRIPPED_DARK_OAK_LOG;
+                    else block = Blocks.DARK_OAK_PLANKS;
+                    placeShipBlock(level, cx, cz, eastWest, along, across, y, block);
                 }
-                if (Math.abs(across) <= Math.max(1, halfWidth - 2)) {
-                    set(level, x, 63, z, Blocks.DARK_OAK_PLANKS);
+            }
+            placeShipBlock(level, cx, cz, eastWest, along, -halfWidth, 69, Blocks.DARK_OAK_FENCE);
+            placeShipBlock(level, cx, cz, eastWest, along, halfWidth, 69, Blocks.DARK_OAK_FENCE);
+        }
+
+        int[] cannonAlong = {-23, -18, -13, -8, -3, 3, 8, 13, 18, 23};
+        for (int along : cannonAlong) {
+            for (int side : new int[]{-1, 1}) {
+                placeShipBlock(level, cx, cz, eastWest, along, side * 12, 66, Blocks.POLISHED_BLACKSTONE);
+                buildCannon(level, cx, cz, eastWest, side, along);
+            }
+        }
+
+        // Two-storey sterncastle with side and rear cabin windows.
+        for (int along = 15; along <= 27; along++) {
+            int width = Math.max(5, 11 - Math.max(0, along - 21));
+            for (int across = -width; across <= width; across++) {
+                placeShipBlock(level, cx, cz, eastWest, along, across, 69, Blocks.SPRUCE_PLANKS);
+                for (int y = 70; y <= 74; y++) {
+                    if (Math.abs(across) >= width - 1 || along >= 25) {
+                        boolean window = y == 72 && ((Math.abs(across) + along) % 4 == 0);
+                        placeShipBlock(level, cx, cz, eastWest, along, across, y,
+                                window ? Blocks.YELLOW_STAINED_GLASS : Blocks.DARK_OAK_PLANKS);
+                    }
                 }
-                // Solid gun-deck floor with high dark outer ribs.
-                set(level, x, 64, z, Blocks.DARK_OAK_PLANKS);
-                if (Math.abs(across) >= halfWidth - 1) {
-                    set(level, x, 65, z, Blocks.DARK_OAK_LOG);
-                    set(level, x, 66, z, Blocks.DARK_OAK_PLANKS);
-                }
-                set(level, x, 67, z, Blocks.SPRUCE_PLANKS);
-                if (Math.abs(across) == halfWidth) {
-                    set(level, x, 68, z, Blocks.DARK_OAK_FENCE);
+                placeShipBlock(level, cx, cz, eastWest, along, across, 75, Blocks.SPRUCE_PLANKS);
+                if (Math.abs(across) == width) {
+                    placeShipBlock(level, cx, cz, eastWest, along, across, 76, Blocks.DARK_OAK_FENCE);
                 }
             }
         }
 
-        // Bright gun ports make both broadside rows readable at arena range.
-        for (int along : new int[]{-20, -10, 0, 10, 20}) {
-            for (int side : new int[]{-1, 1}) {
-                int x = eastWest ? cx + along : cx + side * 11;
-                int z = eastWest ? cz + side * 11 : cz + along;
-                set(level, x, 66, z, Blocks.POLISHED_BLACKSTONE);
+        // Raised forecastle and decorated gold-tipped figurehead/bowsprit.
+        for (int along = -27; along <= -17; along++) {
+            int width = Math.max(4, 10 - Math.max(0, -along - 20));
+            for (int across = -width; across <= width; across++) {
+                placeShipBlock(level, cx, cz, eastWest, along, across, 69, Blocks.SPRUCE_PLANKS);
+                if (Math.abs(across) == width) {
+                    placeShipBlock(level, cx, cz, eastWest, along, across, 70, Blocks.DARK_OAK_FENCE);
+                }
             }
+        }
+        for (int along = -37; along <= -24; along++) {
+            placeShipBlock(level, cx, cz, eastWest, along, 0, 72,
+                    along <= -35 ? Blocks.GOLD_BLOCK : Blocks.DARK_OAK_FENCE);
         }
 
         int[] mastAlong = {-17, 0, 16};
         for (int along : mastAlong) buildMast(level, cx, cz, eastWest, along);
-
-        // High sterncastle with a two-storey captain's cabin and gold-lit
-        // windows. Positive `along` is the stern for every orientation.
-        for (int along = 15; along <= 26; along++) {
-            int width = Math.max(4, 10 - Math.max(0, along - 21));
-            for (int across = -width; across <= width; across++) {
-                int x = eastWest ? cx + along : cx + across;
-                int z = eastWest ? cz + across : cz + along;
-                set(level, x, 68, z, Blocks.DARK_OAK_PLANKS);
-                if (Math.abs(across) >= width - 1 || along >= 24) {
-                    set(level, x, 69, z, Blocks.DARK_OAK_PLANKS);
-                    set(level, x, 70, z, (along == 25 && Math.abs(across) % 3 == 0)
-                            ? Blocks.YELLOW_STAINED_GLASS : Blocks.DARK_OAK_PLANKS);
-                    set(level, x, 71, z, Blocks.DARK_OAK_PLANKS);
-                }
-                set(level, x, 72, z, Blocks.SPRUCE_PLANKS);
-                if (Math.abs(across) == width) set(level, x, 73, z, Blocks.DARK_OAK_FENCE);
-            }
-        }
-
-        // Raised forecastle and an ornate, extended bowsprit.
-        for (int along = -25; along <= -16; along++) {
-            int width = Math.max(3, 9 - Math.max(0, -along - 19));
-            for (int across = -width; across <= width; across++) {
-                int x = eastWest ? cx + along : cx + across;
-                int z = eastWest ? cz + across : cz + along;
-                set(level, x, 68, z, Blocks.SPRUCE_PLANKS);
-                if (Math.abs(across) == width) set(level, x, 69, z, Blocks.DARK_OAK_FENCE);
-            }
-        }
-        for (int along = -34; along <= -23; along++) {
-            int x = eastWest ? cx + along : cx;
-            int z = eastWest ? cz : cz + along;
-            set(level, x, 70, z, along == -34 ? Blocks.GOLD_BLOCK : Blocks.DARK_OAK_FENCE);
-        }
-
-        // Longitudinal rigging between all three mastheads.
-        for (int along = -17; along <= 16; along++) {
-            int x = eastWest ? cx + along : cx;
-            int z = eastWest ? cz : cz + along;
-            set(level, x, 94, z, Blocks.DARK_OAK_FENCE);
-        }
-
-        for (int along : new int[]{-20, -10, 0, 10, 20}) {
-            for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, along);
-        }
+        buildRigging(level, cx, cz, eastWest, mastAlong);
     }
 
     private static void buildMast(ServerLevel level, int cx, int cz, boolean eastWest, int along) {
-        int mastX = eastWest ? cx + along : cx;
-        int mastZ = eastWest ? cz : cz + along;
-        for (int y = 68; y <= 98; y++) set(level, mastX, y, mastZ, Blocks.DARK_OAK_LOG);
-        // Tall striped sails curve inward toward the top and bottom.
-        for (int y = 76; y <= 92; y++) {
-            int width = Math.max(3, 12 - Math.abs(y - 84));
-            for (int offset = -width; offset <= width; offset++) {
-                int x = eastWest ? mastX : mastX + offset;
-                int z = eastWest ? mastZ + offset : mastZ;
-                net.minecraft.world.level.block.Block sail = (y == 83 || y == 84)
-                        ? Blocks.RED_WOOL : ((y & 1) == 0 ? Blocks.WHITE_WOOL : Blocks.LIGHT_GRAY_WOOL);
-                set(level, x, y, z, sail);
+        for (int y = 69; y <= 103; y++) {
+            placeShipBlock(level, cx, cz, eastWest, along, 0, y, Blocks.DARK_OAK_LOG);
+        }
+        buildBillowedSail(level, cx, cz, eastWest, along, 77, 87, 12);
+        buildBillowedSail(level, cx, cz, eastWest, along, 90, 98, 9);
+        buildYard(level, cx, cz, eastWest, along, 77, 13);
+        buildYard(level, cx, cz, eastWest, along, 87, 12);
+        buildYard(level, cx, cz, eastWest, along, 90, 10);
+        buildYard(level, cx, cz, eastWest, along, 98, 9);
+
+        for (int across = -2; across <= 2; across++) {
+            for (int depth = -1; depth <= 1; depth++) {
+                int longitudinal = along + depth;
+                placeShipBlock(level, cx, cz, eastWest, longitudinal, across, 100, Blocks.DARK_OAK_SLAB);
             }
         }
-        for (int yardY : new int[]{76, 84, 92}) {
-            int yardWidth = yardY == 84 ? 13 : 10;
-            for (int offset = -yardWidth; offset <= yardWidth; offset++) {
-                int x = eastWest ? mastX : mastX + offset;
-                int z = eastWest ? mastZ + offset : mastZ;
-                set(level, x, yardY, z, Blocks.DARK_OAK_FENCE);
+        placeShipBlock(level, cx, cz, eastWest, along, 0, 104, Blocks.RED_WOOL);
+        placeShipBlock(level, cx, cz, eastWest, along + 1, 0, 104, Blocks.RED_WOOL);
+        placeShipBlock(level, cx, cz, eastWest, along + 2, 0, 104, Blocks.WHITE_WOOL);
+    }
+
+    private static void buildBillowedSail(ServerLevel level, int cx, int cz, boolean eastWest,
+                                          int mastAlong, int minY, int maxY, int maxWidth) {
+        double midpoint = (minY + maxY) / 2.0D;
+        double halfHeight = (maxY - minY) / 2.0D;
+        for (int y = minY; y <= maxY; y++) {
+            double vertical = 1.0D - Math.abs(y - midpoint) / (halfHeight + 1.0D);
+            int width = Math.max(3, maxWidth - (int) Math.round((1.0D - vertical) * 4.0D));
+            for (int across = -width; across <= width; across++) {
+                double edge = 1.0D - Math.abs(across) / (double) (width + 1);
+                int billow = Math.max(0, (int) Math.round(3.0D * vertical * edge));
+                net.minecraft.world.level.block.Block sail = Math.abs(y - midpoint) <= 1.0D
+                        ? Blocks.RED_WOOL : (((y + across) & 1) == 0
+                        ? Blocks.WHITE_WOOL : Blocks.LIGHT_GRAY_WOOL);
+                for (int depth = 0; depth <= billow; depth++) {
+                    placeShipBlock(level, cx, cz, eastWest, mastAlong + depth, across, y, sail);
+                }
             }
         }
-        // Crow's nest and a red pennant.
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) set(level, mastX + dx, 94, mastZ + dz, Blocks.DARK_OAK_SLAB);
+    }
+
+    private static void buildYard(ServerLevel level, int cx, int cz, boolean eastWest,
+                                  int along, int y, int width) {
+        for (int across = -width; across <= width; across++) {
+            placeShipBlock(level, cx, cz, eastWest, along, across, y, Blocks.DARK_OAK_FENCE);
         }
-        set(level, mastX, 99, mastZ, Blocks.RED_WOOL);
-        if (eastWest) set(level, mastX + 1, 99, mastZ, Blocks.RED_WOOL);
-        else set(level, mastX, 99, mastZ + 1, Blocks.RED_WOOL);
+    }
+
+    private static void buildRigging(ServerLevel level, int cx, int cz, boolean eastWest, int[] masts) {
+        for (int along = masts[0]; along <= masts[masts.length - 1]; along++) {
+            placeShipBlock(level, cx, cz, eastWest, along, 0, 101, Blocks.CHAIN);
+        }
+        for (int mast : masts) {
+            for (int side : new int[]{-1, 1}) {
+                for (int step = 1; step <= 11; step++) {
+                    int y = 100 - step * 2;
+                    placeShipBlock(level, cx, cz, eastWest, mast, side * step, y, Blocks.CHAIN);
+                }
+            }
+        }
+        buildLongRigging(level, cx, cz, eastWest, masts[0], -30);
+        buildLongRigging(level, cx, cz, eastWest, masts[2], 28);
+    }
+
+    private static void buildLongRigging(ServerLevel level, int cx, int cz, boolean eastWest,
+                                         int startAlong, int endAlong) {
+        int distance = Math.abs(endAlong - startAlong);
+        for (int step = 0; step <= distance; step++) {
+            double progress = step / (double) Math.max(1, distance);
+            int along = (int) Math.round(startAlong + (endAlong - startAlong) * progress);
+            int y = (int) Math.round(101 - 30 * progress);
+            placeShipBlock(level, cx, cz, eastWest, along, 0, y, Blocks.CHAIN);
+        }
+    }
+
+    private static void placeShipBlock(ServerLevel level, int cx, int cz, boolean eastWest,
+                                       int along, int across, int y,
+                                       net.minecraft.world.level.block.Block block) {
+        int x = eastWest ? cx + along : cx + across;
+        int z = eastWest ? cz + across : cz + along;
+        set(level, x, y, z, block);
     }
 
     private static void buildCannon(ServerLevel level, int cx, int cz, boolean eastWest,
@@ -569,12 +684,12 @@ public final class DomainAbilities {
         Direction facing = eastWest
                 ? (side < 0 ? Direction.NORTH : Direction.SOUTH)
                 : (side < 0 ? Direction.WEST : Direction.EAST);
-        int x = eastWest ? cx + along : cx + side * 10;
-        int z = eastWest ? cz + side * 10 : cz + along;
+        int x = eastWest ? cx + along : cx + side * 11;
+        int z = eastWest ? cz + side * 11 : cz + along;
         int dx = facing.getStepX();
         int dz = facing.getStepZ();
-        // The carriage is inside the lower gun deck and the horizontal barrel
-        // exits through the dark gun port below the main deck at Y=67.
+        // Enclosed lower gun deck: the chamber sits inside the hull and the
+        // barrel exits sideways through the Y=66 port below the main deck.
         setOptional(level, x, 65, z, "createbigcannons:cannon_carriage", facing);
         setOptional(level, x, 66, z, "createbigcannons:fixed_cannon_mount", facing);
         setOptional(level, x + dx, 66, z + dz, "createbigcannons:cast_iron_cannon_chamber", facing);
