@@ -277,7 +277,7 @@ public final class DomainAbilities {
 
         int curse = Math.max(0, Math.min(100,
                 ElijahPirate.getOriginResource(owner, "elijah:blood_resource")));
-        float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.30D);
+        float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.55D);
         float curseDamage = (curse / 10) * 1.5F;
         float damage = Math.max(1.0F, attackDamage + curseDamage);
         FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, damage, 4.0F);
