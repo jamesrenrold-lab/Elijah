@@ -23,9 +23,11 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -38,6 +40,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -78,7 +81,7 @@ public final class DomainAbilities {
 
         LivingEntity target = findTarget(player);
         if (target == null) {
-            message(player, "Drowned Domain needs a nearby hostile target.");
+            message(player, "Drowned Domain: look directly at a nearby hostile target.");
             return 0;
         }
 
@@ -196,6 +199,11 @@ public final class DomainAbilities {
                 endSession(session, server, true);
                 continue;
             }
+            int secondsLeft = Math.max(1, (int) Math.ceil((session.endAt - now) / 20.0D));
+            if (secondsLeft != session.lastDisplayedSecond) {
+                session.lastDisplayedSecond = secondsLeft;
+                message(owner, "Drowned Domain: " + secondsLeft + "s remaining");
+            }
             if (now >= session.startedAt + CANNON_DELAY_TICKS
                     && now - session.lastCannonball >= CANNON_INTERVAL_TICKS) {
                 session.lastCannonball = now;
@@ -205,6 +213,33 @@ public final class DomainAbilities {
     }
 
     private static LivingEntity findTarget(ServerPlayer player) {
+        Vec3 eye = player.getEyePosition();
+        Vec3 direction = player.getLookAngle().normalize();
+        Vec3 maximum = eye.add(direction.scale(40.0D));
+        HitResult blockHit = player.level().clip(new ClipContext(eye, maximum,
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
+        double sightRange = blockHit.getType() == HitResult.Type.MISS
+                ? 40.0D : eye.distanceTo(blockHit.getLocation());
+        Vec3 visibleEnd = eye.add(direction.scale(sightRange));
+        AABB area = player.getBoundingBox().expandTowards(direction.scale(40.0D)).inflate(2.0D);
+        LivingEntity best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (Mob mob : player.serverLevel().getEntitiesOfClass(Mob.class, area,
+                candidate -> candidate.isAlive() && !(candidate instanceof UndeadCrewmate)
+                        && !candidate.isAlliedTo(player))) {
+            Optional<Vec3> hit = mob.getBoundingBox().inflate(0.25D).clip(eye, visibleEnd);
+            if (hit.isPresent()) {
+                double distance = eye.distanceToSqr(hit.get());
+                if (distance < bestDistance) {
+                    best = mob;
+                    bestDistance = distance;
+                }
+            }
+        }
+        return best;
+    }
+
+    private static LivingEntity findTargetFallback(ServerPlayer player) {
         AABB area = player.getBoundingBox().inflate(40.0D);
         LivingEntity best = null;
         double bestDistance = Double.MAX_VALUE;
@@ -226,18 +261,10 @@ public final class DomainAbilities {
         Vec3 origin = aim.add(Math.cos(angle) * 4.6D, 0.7D, Math.sin(angle) * 4.6D);
         Vec3 direction = aim.subtract(origin).normalize();
 
-        // A zero-damage visible shot is paired with the direct damage below.
-        // This keeps the sure-hit behavior reliable even when a target moves
-        // during the very short five-block flight path.
-        FlintlockBall visual = new FlintlockBall(session.domain, owner, 0.0F, 0);
-        visual.setPos(origin.x, origin.y, origin.z);
-        visual.shoot(direction.x, direction.y, direction.z, 2.8F, 0.0F);
-        session.domain.addFreshEntity(visual);
-
-        if (target.hurt(session.domain.damageSources().magic(), 4.0F)) {
-            session.domain.sendParticles(net.minecraft.core.particles.ParticleTypes.EXPLOSION,
-                    aim.x, aim.y, aim.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
-        }
+        FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, 4.0F, 2.5F);
+        cannonball.setPos(origin.x, origin.y, origin.z);
+        cannonball.shoot(direction.x, direction.y, direction.z, 2.8F, 0.0F);
+        session.domain.addFreshEntity(cannonball);
         session.domain.sendParticles(new net.minecraft.core.particles.DustParticleOptions(CANNON_DUST, 1.2F),
                 origin.x, origin.y, origin.z, 8, 0.12D, 0.12D, 0.12D, 0.04D);
         session.domain.sendParticles(net.minecraft.core.particles.ParticleTypes.SMOKE,
@@ -309,6 +336,11 @@ public final class DomainAbilities {
 
     private static void buildArena(ServerLevel level) {
         final int surface = 64;
+        // A full barrier floor prevents the sand/water island from falling if
+        // the dimension generator is replaced or a block update occurs.
+        for (int x = -32; x <= 32; x++) {
+            for (int z = -32; z <= 32; z++) set(level, x, surface - 2, z, Blocks.BARRIER);
+        }
         // The flat dimension provides a water ocean up to y=63. Replace the
         // center with a broad beach/lagoon, leaving open water on every side.
         for (int x = -27; x <= 27; x++) {
@@ -373,29 +405,45 @@ public final class DomainAbilities {
     }
 
     private static void buildShip(ServerLevel level, int cx, int cz, boolean eastWest) {
+        // Pointed dark-oak hull with a raised deck and sterncastle.
         for (int along = -7; along <= 7; along++) {
-            for (int across = -3; across <= 3; across++) {
-                if (Math.abs(across) == 3 && Math.abs(along) < 5) continue;
+            int halfWidth = Math.max(1, 3 - Math.max(0, Math.abs(along) - 5));
+            for (int across = -halfWidth; across <= halfWidth; across++) {
                 int x = eastWest ? cx + across : cx + along;
                 int z = eastWest ? cz + along : cz + across;
                 set(level, x, 64, z, Blocks.DARK_OAK_PLANKS);
                 set(level, x, 65, z, Blocks.DARK_OAK_PLANKS);
+                if (Math.abs(across) == halfWidth) set(level, x, 66, z, Blocks.DARK_OAK_FENCE);
             }
         }
-        int mastX = eastWest ? cx : cx;
-        int mastZ = eastWest ? cz : cz;
+        int mastX = cx;
+        int mastZ = cz;
         for (int y = 66; y <= 75; y++) set(level, mastX, y, mastZ, Blocks.DARK_OAK_LOG);
-        for (int sailY = 69; sailY <= 73; sailY++) {
-            for (int width = -3; width <= 3; width++) {
-                if (Math.abs(width) <= sailY - 69) {
-                    int x = eastWest ? mastX + width : mastX + width;
-                    int z = eastWest ? mastZ : mastZ + width;
-                    set(level, x, sailY, z, Blocks.BLACK_WOOL);
-                }
+        for (int sailY = 68; sailY <= 73; sailY++) {
+            int width = Math.max(1, 4 - Math.abs(sailY - 70));
+            for (int offset = -width; offset <= width; offset++) {
+                int x = eastWest ? mastX + offset : mastX + offset;
+                int z = eastWest ? mastZ : mastZ + offset;
+                set(level, x, sailY, z, sailY % 2 == 0 ? Blocks.BLACK_WOOL : Blocks.WHITE_WOOL);
             }
         }
-        set(level, eastWest ? mastX + 3 : mastX, 66, eastWest ? mastZ : mastZ + 3, Blocks.DARK_OAK_FENCE);
-        set(level, eastWest ? mastX - 3 : mastX, 66, eastWest ? mastZ : mastZ - 3, Blocks.DARK_OAK_FENCE);
+        // Raised stern and a bowsprit make the silhouette read as a ship.
+        for (int along = 5; along <= 7; along++) {
+            int x = eastWest ? cx : cx + along;
+            int z = eastWest ? cz + along : cz;
+            set(level, x, 67, z, Blocks.DARK_OAK_PLANKS);
+            set(level, x, 68, z, Blocks.DARK_OAK_FENCE);
+        }
+        int bowX = eastWest ? cx : cx - 8;
+        int bowZ = eastWest ? cz - 8 : cz;
+        set(level, bowX, 66, bowZ, Blocks.DARK_OAK_FENCE);
+        set(level, bowX, 67, bowZ, Blocks.DARK_OAK_FENCE);
+        // Four blackstone cannon muzzles face outward from the hull.
+        for (int side : new int[]{-1, 1}) {
+            int x = eastWest ? cx + side * 3 : cx - 2;
+            int z = eastWest ? cz + 2 : cz + side * 3;
+            set(level, x, 66, z, Blocks.POLISHED_BLACKSTONE);
+        }
     }
 
     private static void set(ServerLevel level, int x, int y, int z, net.minecraft.world.level.block.Block block) {
@@ -422,6 +470,7 @@ public final class DomainAbilities {
         private final long endAt;
         private long lastCannonball;
         private int cannonIndex;
+        private int lastDisplayedSecond = -1;
 
         private Session(UUID ownerId, UUID targetId, ServerLevel domain,
                         ResourceKey<Level> playerOrigin, Vec3 playerPosition, float playerYaw, float playerPitch,
