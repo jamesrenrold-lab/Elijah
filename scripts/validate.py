@@ -51,4 +51,15 @@ assert set(keys) == {
     'key.origins.quinary_active', 'key.origins.senary_active',
     'key.origins.septenary_active', 'key.origins.octonary_active'
 }
+# Resource mutations that depend on Java-side acceptance must live behind the
+# guarded server commands. Otherwise an Origins `and` action can spend/grant a
+# resource even when the Java command rejects the ability.
+assert parsed['data/elijah/powers/blood_rush.json']['entity_action'] == {
+    'type': 'origins:execute_command', 'command': 'elijah blood_rush'
+}
+assert parsed['data/elijah/powers/blood_overflow.json']['entity_action'] == {
+    'type': 'origins:execute_command', 'command': 'elijah blood_overdrive'
+}
+crew_action = parsed['data/elijah/powers/undead_crew.json']['entity_action']['if_action']
+assert crew_action == {'type': 'origins:execute_command', 'command': 'elijah crew'}
 print('Validated all power commands and the eight distinct active keybinds.')
