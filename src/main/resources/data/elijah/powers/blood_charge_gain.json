@@ -1,7 +1,7 @@
 {
   "type": "origins:action_over_time",
   "name": "Blood Charge Growth",
-  "description": "Blood Rush charge rises by one point each second while its active window is running.",
+  "description": "Curse rises by one point each second while Cursed Form is toggled on.",
   "hidden": true,
   "interval": 20,
   "condition": {
@@ -11,27 +11,17 @@
     "compare_to": 0
   },
   "entity_action": {
-    "type": "origins:and",
-    "actions": [
-      {
-        "type": "origins:change_resource",
-        "resource": "elijah:blood_active_window",
-        "change": -1
-      },
-      {
-        "type": "origins:if_else",
-        "condition": {
-          "type": "origins:resource",
-          "resource": "elijah:blood_resource",
-          "comparison": "<",
-          "compare_to": 100
-        },
-        "if_action": {
-          "type": "origins:change_resource",
-          "resource": "elijah:blood_resource",
-          "change": 1
-        }
-      }
-    ]
+    "type": "origins:if_else",
+    "condition": {
+      "type": "origins:resource",
+      "resource": "elijah:blood_resource",
+      "comparison": "<",
+      "compare_to": 100
+    },
+    "if_action": {
+      "type": "origins:change_resource",
+      "resource": "elijah:blood_resource",
+      "change": 1
+    }
   }
 }
