@@ -11,17 +11,7 @@
     "compare_to": 100
   },
   "entity_action": {
-    "type": "origins:and",
-    "actions": [
-      {
-        "type": "origins:change_resource",
-        "resource": "elijah:blood_resource",
-        "change": -100
-      },
-      {
-        "type": "origins:execute_command",
-        "command": "elijah blood_overdrive"
-      }
-    ]
+    "type": "origins:execute_command",
+    "command": "elijah blood_overdrive"
   }
 }
