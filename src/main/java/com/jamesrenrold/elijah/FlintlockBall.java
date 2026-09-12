@@ -130,11 +130,35 @@ public final class FlintlockBall extends ThrowableProjectile {
                 }
             }
         }
-        server.sendParticles(new net.minecraft.core.particles.DustParticleOptions(
-                        new org.joml.Vector3f(0.12F, 0.12F, 0.12F), 0.75F),
-                getX(), getY(), getZ(), 6, 0.16D, 0.12D, 0.16D, 0.015D);
-        server.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 2,
-                0.10D, 0.10D, 0.10D, 0.01D);
+        // A quick smoke footprint marks the exact four-block damage volume.
+        // The ground rings show its radius and a sparse spherical shell shows
+        // its height without recreating vanilla's vision-obscuring explosion.
+        for (int ring = 1; ring <= 4; ring++) {
+            double radius = blastRadius * ring / 4.0D;
+            int points = ring * 10;
+            for (int point = 0; point < points; point++) {
+                double angle = Math.PI * 2.0D * point / points;
+                double px = getX() + Math.cos(angle) * radius;
+                double pz = getZ() + Math.sin(angle) * radius;
+                server.sendParticles(ring == 4 ? ParticleTypes.LARGE_SMOKE : ParticleTypes.SMOKE,
+                        px, getY() + 0.18D, pz, 1,
+                        0.05D, 0.08D, 0.05D, 0.005D);
+            }
+        }
+        int shellPoints = 72;
+        double goldenAngle = Math.PI * (3.0D - Math.sqrt(5.0D));
+        for (int point = 0; point < shellPoints; point++) {
+            double y = 1.0D - (2.0D * point + 1.0D) / shellPoints;
+            double horizontal = Math.sqrt(Math.max(0.0D, 1.0D - y * y));
+            double angle = goldenAngle * point;
+            server.sendParticles(ParticleTypes.LARGE_SMOKE,
+                    getX() + Math.cos(angle) * horizontal * blastRadius,
+                    getY() + y * blastRadius,
+                    getZ() + Math.sin(angle) * horizontal * blastRadius,
+                    1, 0.035D, 0.035D, 0.035D, 0.002D);
+        }
+        server.sendParticles(ParticleTypes.POOF, getX(), getY() + 0.25D, getZ(), 10,
+                0.45D, 0.22D, 0.45D, 0.025D);
         server.playSound(null, getX(), getY(), getZ(), SoundEvents.GENERIC_EXPLODE,
                 SoundSource.HOSTILE, 0.45F, 0.85F);
     }
