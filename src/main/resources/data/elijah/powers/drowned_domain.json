@@ -1,16 +1,10 @@
 {
   "type": "origins:active_self",
   "name": "Drowned Domain",
-  "description": "Pull a nearby hostile mob into a separate island dimension for 40 seconds. You begin inside a large two-block-deep lagoon while the target starts on a raised sandy crescent, forcing it to chase your superior swimming or endure the barrage. After five seconds, fast visible cannonballs fire inward from the four ship-facing walls every half-second. Their damage is 55% of your current attack damage, plus 1.5 per completed 10% Curse. You gain 50% movement speed, powerful swimming, Regeneration II and 50% lifesteal while inside.",
+  "description": "Pull the hostile mob you are directly looking at into a separate island dimension for 40 seconds. It remains persistent and permanently aggressive toward you for the entire domain. You begin inside a large two-block-deep lagoon while the target starts on a raised sandy crescent. After five seconds, fast cannonballs scatter around it every half-second; their four-block blast volume is outlined by smoke. Damage is 55% of your current attack damage, plus 1.5 per completed 10% Curse. You gain 50% movement speed, powerful swimming, Regeneration II and 50% lifesteal while inside.",
   "entity_action": {
     "type": "origins:execute_command",
     "command": "elijah domain"
-  },
-  "cooldown": 100,
-  "hud_render": {
-    "should_render": true,
-    "sprite_location": "origins:textures/gui/resource_bar.png",
-    "bar_index": 8
   },
   "key": {
     "key": "key.origins.octonary_active",
