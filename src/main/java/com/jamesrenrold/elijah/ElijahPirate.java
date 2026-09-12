@@ -111,7 +111,6 @@ public final class ElijahPirate {
                             current.bloodExhaustedUntil = 0L;
                             current.bloodLastDegenerationTick = 0L;
                             current.bloodLastEnemyHitTick = 0L;
-                            current.domainCooldownUntil = 0L;
                         }
                         if (event.isWasDeath() && !old.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
                             current.clearPowder();
@@ -292,6 +291,12 @@ public final class ElijahPirate {
         return player.getServer().getCommands().performPrefixedCommand(
                 player.createCommandSourceStack().withPermission(2).withSuppressedOutput(),
                 "resource set @s " + resource + " " + value);
+    }
+
+    static int getOriginResource(ServerPlayer player, String resource) {
+        return player.getServer().getCommands().performPrefixedCommand(
+                player.createCommandSourceStack().withPermission(2).withSuppressedOutput(),
+                "resource get @s " + resource);
     }
 
     private static double clampVelocity(double value) { return Math.max(-3.8, Math.min(3.8, value)); }
