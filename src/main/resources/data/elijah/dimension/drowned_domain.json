@@ -17,7 +17,7 @@
           "block": "minecraft:water"
         }
       ],
-      "biome": "minecraft:ocean",
+      "biome": "minecraft:the_void",
       "lakes": false,
       "features": false,
       "structure_overrides": []
