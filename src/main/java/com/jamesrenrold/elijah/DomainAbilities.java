@@ -402,10 +402,14 @@ public final class DomainAbilities {
         }
         buildPalm(level, -29, surface, 5);
         buildBarriers(level);
-        buildShip(level, 0, -64, false);
-        buildShip(level, 0, 64, false);
-        buildShip(level, -64, 0, true);
-        buildShip(level, 64, 0, true);
+        // Keep the flagship-scale hulls clear of the arena wall while their
+        // broadsides remain plainly visible from the lagoon.
+        // Ships sit tangentially around the arena: their long sides, gun
+        // ports and cannon broadsides face inward instead of their bows.
+        buildShip(level, 0, -76, true);
+        buildShip(level, 0, 76, true);
+        buildShip(level, -76, 0, false);
+        buildShip(level, 76, 0, false);
     }
 
     private static void buildPalm(ServerLevel level, int x, int baseY, int z) {
@@ -440,74 +444,143 @@ public final class DomainAbilities {
     }
 
     private static void buildShip(ServerLevel level, int cx, int cz, boolean eastWest) {
-        // Large multi-deck dark-oak galleon silhouette: pointed hull, raised
-        // sterncastle, three masts, yards, sails, and working CBC cannon blocks.
-        for (int along = -19; along <= 19; along++) {
-            int halfWidth = Math.max(2, 9 - Math.max(0, Math.abs(along) - 12) / 2);
+        // Flagship-scale galleon: a 55-block tapered hull, layered gun deck,
+        // raised forecastle and sterncastle, three tall masts, broad sails,
+        // rigging, cabin windows, gilded prow and ten working CBC broadsides.
+        for (int along = -27; along <= 27; along++) {
+            int taper = Math.max(0, Math.abs(along) - 16);
+            int halfWidth = Math.max(2, 11 - (taper + 1) / 2);
             for (int across = -halfWidth; across <= halfWidth; across++) {
                 int x = eastWest ? cx + along : cx + across;
                 int z = eastWest ? cz + across : cz + along;
+                // Deep keel and curved lower hull.
+                if (Math.abs(across) <= Math.max(1, halfWidth - 5)) {
+                    set(level, x, 62, z, Blocks.DARK_OAK_LOG);
+                }
+                if (Math.abs(across) <= Math.max(1, halfWidth - 2)) {
+                    set(level, x, 63, z, Blocks.DARK_OAK_PLANKS);
+                }
+                // Solid gun-deck floor with high dark outer ribs.
                 set(level, x, 64, z, Blocks.DARK_OAK_PLANKS);
-                set(level, x, 65, z, Blocks.DARK_OAK_PLANKS);
-                set(level, x, 66, z, Blocks.DARK_OAK_PLANKS);
-                if (Math.abs(across) >= halfWidth - 1) set(level, x, 67, z, Blocks.DARK_OAK_FENCE);
+                if (Math.abs(across) >= halfWidth - 1) {
+                    set(level, x, 65, z, Blocks.DARK_OAK_LOG);
+                    set(level, x, 66, z, Blocks.DARK_OAK_PLANKS);
+                }
+                set(level, x, 67, z, Blocks.SPRUCE_PLANKS);
+                if (Math.abs(across) == halfWidth) {
+                    set(level, x, 68, z, Blocks.DARK_OAK_FENCE);
+                }
             }
         }
-        int[] mastAlong = {-12, 0, 12};
+
+        // Bright gun ports make both broadside rows readable at arena range.
+        for (int along : new int[]{-20, -10, 0, 10, 20}) {
+            for (int side : new int[]{-1, 1}) {
+                int x = eastWest ? cx + along : cx + side * 11;
+                int z = eastWest ? cz + side * 11 : cz + along;
+                set(level, x, 66, z, Blocks.POLISHED_BLACKSTONE);
+            }
+        }
+
+        int[] mastAlong = {-17, 0, 16};
         for (int along : mastAlong) buildMast(level, cx, cz, eastWest, along);
-        // Broad raised sterncastle and a long bowsprit.
-        for (int along = 12; along <= 18; along++) {
-            for (int across = -7; across <= 7; across++) {
+
+        // High sterncastle with a two-storey captain's cabin and gold-lit
+        // windows. Positive `along` is the stern for every orientation.
+        for (int along = 15; along <= 26; along++) {
+            int width = Math.max(4, 10 - Math.max(0, along - 21));
+            for (int across = -width; across <= width; across++) {
                 int x = eastWest ? cx + along : cx + across;
                 int z = eastWest ? cz + across : cz + along;
                 set(level, x, 68, z, Blocks.DARK_OAK_PLANKS);
-                if (along >= 15) set(level, x, 69, z, Blocks.DARK_OAK_PLANKS);
+                if (Math.abs(across) >= width - 1 || along >= 24) {
+                    set(level, x, 69, z, Blocks.DARK_OAK_PLANKS);
+                    set(level, x, 70, z, (along == 25 && Math.abs(across) % 3 == 0)
+                            ? Blocks.YELLOW_STAINED_GLASS : Blocks.DARK_OAK_PLANKS);
+                    set(level, x, 71, z, Blocks.DARK_OAK_PLANKS);
+                }
+                set(level, x, 72, z, Blocks.SPRUCE_PLANKS);
+                if (Math.abs(across) == width) set(level, x, 73, z, Blocks.DARK_OAK_FENCE);
             }
         }
-        for (int along = -21; along <= -14; along++) {
+
+        // Raised forecastle and an ornate, extended bowsprit.
+        for (int along = -25; along <= -16; along++) {
+            int width = Math.max(3, 9 - Math.max(0, -along - 19));
+            for (int across = -width; across <= width; across++) {
+                int x = eastWest ? cx + along : cx + across;
+                int z = eastWest ? cz + across : cz + along;
+                set(level, x, 68, z, Blocks.SPRUCE_PLANKS);
+                if (Math.abs(across) == width) set(level, x, 69, z, Blocks.DARK_OAK_FENCE);
+            }
+        }
+        for (int along = -34; along <= -23; along++) {
             int x = eastWest ? cx + along : cx;
             int z = eastWest ? cz : cz + along;
-            set(level, x, 68, z, Blocks.DARK_OAK_FENCE);
+            set(level, x, 70, z, along == -34 ? Blocks.GOLD_BLOCK : Blocks.DARK_OAK_FENCE);
         }
-        for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, -11);
-        for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, 0);
-        for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, 11);
+
+        // Longitudinal rigging between all three mastheads.
+        for (int along = -17; along <= 16; along++) {
+            int x = eastWest ? cx + along : cx;
+            int z = eastWest ? cz : cz + along;
+            set(level, x, 94, z, Blocks.DARK_OAK_FENCE);
+        }
+
+        for (int along : new int[]{-20, -10, 0, 10, 20}) {
+            for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, along);
+        }
     }
 
     private static void buildMast(ServerLevel level, int cx, int cz, boolean eastWest, int along) {
         int mastX = eastWest ? cx + along : cx;
         int mastZ = eastWest ? cz : cz + along;
-        for (int y = 68; y <= 90; y++) set(level, mastX, y, mastZ, Blocks.DARK_OAK_LOG);
-        for (int y = 74; y <= 84; y++) {
-            int width = Math.max(2, 9 - Math.abs(y - 79));
+        for (int y = 68; y <= 98; y++) set(level, mastX, y, mastZ, Blocks.DARK_OAK_LOG);
+        // Tall striped sails curve inward toward the top and bottom.
+        for (int y = 76; y <= 92; y++) {
+            int width = Math.max(3, 12 - Math.abs(y - 84));
             for (int offset = -width; offset <= width; offset++) {
                 int x = eastWest ? mastX : mastX + offset;
                 int z = eastWest ? mastZ + offset : mastZ;
-                set(level, x, y, z, y % 2 == 0 ? Blocks.BLACK_WOOL : Blocks.WHITE_WOOL);
+                net.minecraft.world.level.block.Block sail = (y == 83 || y == 84)
+                        ? Blocks.RED_WOOL : ((y & 1) == 0 ? Blocks.WHITE_WOOL : Blocks.LIGHT_GRAY_WOOL);
+                set(level, x, y, z, sail);
             }
         }
-        for (int offset = -10; offset <= 10; offset++) {
-            int x = eastWest ? mastX : mastX + offset;
-            int z = eastWest ? mastZ + offset : mastZ;
-            set(level, x, 79, z, Blocks.DARK_OAK_FENCE);
+        for (int yardY : new int[]{76, 84, 92}) {
+            int yardWidth = yardY == 84 ? 13 : 10;
+            for (int offset = -yardWidth; offset <= yardWidth; offset++) {
+                int x = eastWest ? mastX : mastX + offset;
+                int z = eastWest ? mastZ + offset : mastZ;
+                set(level, x, yardY, z, Blocks.DARK_OAK_FENCE);
+            }
         }
+        // Crow's nest and a red pennant.
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) set(level, mastX + dx, 94, mastZ + dz, Blocks.DARK_OAK_SLAB);
+        }
+        set(level, mastX, 99, mastZ, Blocks.RED_WOOL);
+        if (eastWest) set(level, mastX + 1, 99, mastZ, Blocks.RED_WOOL);
+        else set(level, mastX, 99, mastZ + 1, Blocks.RED_WOOL);
     }
 
     private static void buildCannon(ServerLevel level, int cx, int cz, boolean eastWest,
                                     int side, int along) {
         Direction facing = eastWest
-                ? (side < 0 ? Direction.WEST : Direction.EAST)
-                : (side < 0 ? Direction.NORTH : Direction.SOUTH);
-        int x = eastWest ? cx + side * 8 : cx + along;
-        int z = eastWest ? cz + along : cz + side * 8;
+                ? (side < 0 ? Direction.NORTH : Direction.SOUTH)
+                : (side < 0 ? Direction.WEST : Direction.EAST);
+        int x = eastWest ? cx + along : cx + side * 10;
+        int z = eastWest ? cz + side * 10 : cz + along;
         int dx = facing.getStepX();
         int dz = facing.getStepZ();
-        setOptional(level, x, 68, z, "createbigcannons:cannon_carriage", facing);
-        setOptional(level, x, 69, z, "createbigcannons:fixed_cannon_mount", facing);
-        setOptional(level, x + dx, 69, z + dz, "createbigcannons:cast_iron_cannon_chamber", facing);
-        setOptional(level, x + dx * 2, 69, z + dz * 2, "createbigcannons:cast_iron_cannon_barrel", facing);
-        setOptional(level, x + dx * 3, 69, z + dz * 3, "createbigcannons:cast_iron_cannon_barrel", facing);
-        setOptional(level, x + dx * 4, 69, z + dz * 4, "createbigcannons:cast_iron_cannon_end", facing);
+        // The carriage is inside the lower gun deck and the horizontal barrel
+        // exits through the dark gun port below the main deck at Y=67.
+        setOptional(level, x, 65, z, "createbigcannons:cannon_carriage", facing);
+        setOptional(level, x, 66, z, "createbigcannons:fixed_cannon_mount", facing);
+        setOptional(level, x + dx, 66, z + dz, "createbigcannons:cast_iron_cannon_chamber", facing);
+        setOptional(level, x + dx * 2, 66, z + dz * 2, "createbigcannons:cast_iron_cannon_barrel", facing);
+        setOptional(level, x + dx * 3, 66, z + dz * 3, "createbigcannons:cast_iron_cannon_barrel", facing);
+        setOptional(level, x + dx * 4, 66, z + dz * 4, "createbigcannons:cast_iron_cannon_end", facing);
     }
 
     private static void setOptional(ServerLevel level, int x, int y, int z, String id, Direction facing) {
