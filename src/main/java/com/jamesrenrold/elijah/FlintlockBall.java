@@ -142,7 +142,7 @@ public final class FlintlockBall extends ThrowableProjectile {
                 }
             }
         }
-        // A low-packet smoke outline marks the exact four-block damage volume.
+        // A low-packet smoke outline marks the exact configured damage volume.
         // Earlier versions sent over 170 individual particle packets per hit.
         int groundPoints = 8;
         for (int point = 0; point < groundPoints; point++) {
