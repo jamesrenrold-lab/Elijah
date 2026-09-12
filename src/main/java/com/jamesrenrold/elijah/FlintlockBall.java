@@ -142,7 +142,11 @@ public final class FlintlockBall extends ThrowableProjectile {
     @Override
     public void tick() {
         super.tick();
-        if (!level().isClientSide && tickCount >= 30) discard();
+        // Domain cannonballs remain alive until they touch an entity or real
+        // block. The longer safety timeout only prevents permanently orphaned
+        // projectiles if another mod removes collision; ordinary flintlock
+        // rounds keep their original short lifetime.
+        if (!level().isClientSide && tickCount >= (isCannonball() ? 120 : 30)) discard();
         if (level().isClientSide && tickCount % 2 == 0) {
             level().addParticle(ParticleTypes.SMOKE, getX(), getY(), getZ(), 0, 0, 0);
         }
