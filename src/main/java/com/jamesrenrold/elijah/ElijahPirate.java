@@ -311,6 +311,10 @@ public final class ElijahPirate {
 
     private int unload(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
+        // Connector can briefly remove/re-add Origins powers while a player is
+        // changing dimensions. Do not interpret that transition callback as a
+        // genuine Origin change or it immediately tears down the domain.
+        if (DomainAbilities.shouldSuppressLifecycleUnload(player)) return 0;
         DomainAbilities.clearTransient(player);
         BloodAbilities.clearTransient(player);
         if (player.containerMenu instanceof PowderMenu) player.closeContainer();
