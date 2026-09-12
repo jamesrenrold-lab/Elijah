@@ -62,4 +62,7 @@ assert parsed['data/elijah/powers/blood_overflow.json']['entity_action'] == {
 }
 crew_action = parsed['data/elijah/powers/undead_crew.json']['entity_action']['if_action']
 assert crew_action == {'type': 'origins:execute_command', 'command': 'elijah crew'}
+domain = parsed['data/elijah/powers/drowned_domain.json']
+assert domain['cooldown'] == 100, 'Domain cooldown must be the visible five-second Origins cooldown'
+assert domain['hud_render']['should_render'] is True
 print('Validated all power commands and the eight distinct active keybinds.')
