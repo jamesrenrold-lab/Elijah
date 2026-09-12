@@ -58,9 +58,6 @@ public final class DomainAbilities {
             Registries.DIMENSION, new ResourceLocation(ElijahPirate.MOD_ID, "drowned_domain"));
 
     private static final int DOMAIN_TICKS = 40 * 20;
-    // Five seconds while the domain is being tested; restore the intended
-    // four-minute value after gameplay verification.
-    private static final int DOMAIN_COOLDOWN_TICKS = 5 * 20;
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;
     private static final double ARENA_Y = 65.0D;
@@ -78,12 +75,6 @@ public final class DomainAbilities {
 
         PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
         if (pouch == null) return 0;
-        long now = player.serverLevel().getGameTime();
-        if (now < pouch.domainCooldownUntil) {
-            message(player, "Drowned Domain: " + ((pouch.domainCooldownUntil - now + 19L) / 20L) + "s remaining");
-            return 0;
-        }
-
         LivingEntity target = findTarget(player);
         if (target == null) {
             message(player, "Drowned Domain: look directly at a nearby hostile target.");
@@ -128,7 +119,6 @@ public final class DomainAbilities {
                 targetOrigin, targetPosition, targetYaw, targetPitch,
                 domain.getGameTime() + DOMAIN_TICKS);
         SESSIONS.put(player.getUUID(), session);
-        pouch.domainCooldownUntil = now + DOMAIN_COOLDOWN_TICKS;
         applyDomainBuffs(player);
         domain.playSound(null, player.blockPosition(), SoundEvents.AMBIENT_UNDERWATER_ENTER,
                 SoundSource.PLAYERS, 1.2F, 0.7F);
@@ -264,21 +254,48 @@ public final class DomainAbilities {
 
     private static void fireCannonball(Session session, ServerPlayer owner, LivingEntity target) {
         int shot = session.cannonIndex++;
-        double angle = shot * 2.399963229728653D;
-        double radius = 4.0D + (shot % 7); // 4–10 blocks from the target
-        Vec3 aim = target.position().add(0.0D, target.getBbHeight() * 0.55D, 0.0D);
-        Vec3 origin = aim.add(Math.cos(angle) * radius, 12.0D + (shot % 4),
-                Math.sin(angle) * radius);
+        // Alternate between the four invisible arena walls. These launch
+        // points line up with the four ships outside the barrier, making the
+        // barrage read as broadside fire rather than projectiles appearing in
+        // the sky. Spawn just inside the barrier so it cannot intercept them.
+        int wall = shot & 3;
+        double lateralBase = wall < 2 ? target.getZ() : target.getX();
+        double lateral = Math.max(-28.0D, Math.min(28.0D,
+                lateralBase + ((shot % 5) - 2) * 1.5D));
+        Vec3 origin = switch (wall) {
+            case 0 -> new Vec3(-39.25D, 68.0D + (shot % 3), lateral);
+            case 1 -> new Vec3(39.25D, 68.0D + (shot % 3), lateral);
+            case 2 -> new Vec3(lateral, 68.0D + (shot % 3), -39.25D);
+            default -> new Vec3(lateral, 68.0D + (shot % 3), 39.25D);
+        };
+        Vec3 aim = target.position().add(0.0D,
+                Math.min(0.9D, target.getBbHeight() * 0.35D), 0.0D);
         Vec3 direction = aim.subtract(origin).normalize();
 
-        FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, 4.0F, 4.0F);
+        int curse = Math.max(0, Math.min(100,
+                ElijahPirate.getOriginResource(owner, "elijah:blood_resource")));
+        float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.30D);
+        float curseDamage = (curse / 10) * 1.5F;
+        float damage = Math.max(1.0F, attackDamage + curseDamage);
+        FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, damage, 4.0F);
         cannonball.setPos(origin.x, origin.y, origin.z);
-        cannonball.shoot(direction.x, direction.y, direction.z, 2.8F, 0.0F);
+        cannonball.shoot(direction.x, direction.y, direction.z, 4.6F, 0.0F);
         session.domain.addFreshEntity(cannonball);
         session.domain.sendParticles(net.minecraft.core.particles.ParticleTypes.SMOKE,
-                origin.x, origin.y, origin.z, 3, 0.08D, 0.08D, 0.08D, 0.015D);
-        session.domain.playSound(null, origin.x, origin.y, origin.z, SoundEvents.CROSSBOW_SHOOT,
-                SoundSource.HOSTILE, 0.45F, 0.55F);
+                origin.x, origin.y, origin.z, 7, 0.18D, 0.18D, 0.18D, 0.035D);
+        session.domain.sendParticles(net.minecraft.core.particles.ParticleTypes.FLAME,
+                origin.x, origin.y, origin.z, 3, 0.08D, 0.08D, 0.08D, 0.02D);
+        // A compact warning ring gives the target a readable tell without
+        // filling the screen with explosion particles.
+        for (int point = 0; point < 12; point++) {
+            double angle = Math.PI * 2.0D * point / 12.0D;
+            session.domain.sendParticles(new net.minecraft.core.particles.DustParticleOptions(
+                            new Vector3f(0.75F, 0.12F, 0.04F), 0.65F),
+                    aim.x + Math.cos(angle) * 1.25D, target.getY() + 0.08D,
+                    aim.z + Math.sin(angle) * 1.25D, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+        }
+        session.domain.playSound(null, origin.x, origin.y, origin.z, SoundEvents.FIREWORK_ROCKET_BLAST,
+                SoundSource.HOSTILE, 0.75F, 0.55F);
     }
 
     private static void applyDomainBuffs(ServerPlayer player) {
@@ -346,18 +363,20 @@ public final class DomainAbilities {
         final int surface = 64;
         // A full barrier floor prevents the sand/water island from falling if
         // the dimension generator is replaced or a block update occurs.
-        for (int x = -32; x <= 32; x++) {
-            for (int z = -32; z <= 32; z++) set(level, x, surface - 2, z, Blocks.BARRIER);
+        for (int x = -42; x <= 42; x++) {
+            for (int z = -42; z <= 42; z++) set(level, x, surface - 2, z, Blocks.BARRIER);
         }
         // Fill all the way to the barrier walls. Water is exactly two source
         // blocks deep and is sealed by invisible barriers so it cannot spread.
-        for (int x = -30; x <= 30; x++) {
-            for (int z = -30; z <= 30; z++) {
+        for (int x = -40; x <= 40; x++) {
+            for (int z = -40; z <= 40; z++) {
                 set(level, x, surface - 1, z, Blocks.SAND);
-                if (x <= 0) {
+                // Slightly more than half of the expanded arena is water,
+                // while keeping the requested two-source-block depth.
+                if (x <= -7) {
                     set(level, x, surface, z, Blocks.SAND);
                     set(level, x, surface + 1, z, Blocks.AIR);
-                } else if (x == 1) {
+                } else if (x == -6) {
                     set(level, x, surface, z, Blocks.BARRIER);
                     set(level, x, surface + 1, z, Blocks.BARRIER);
                 } else {
@@ -368,7 +387,7 @@ public final class DomainAbilities {
         }
 
         // Low dunes on the sandy half.
-        int[][] dunes = {{-19, -12}, {-11, -14}, {-3, -9}, {-20, 7}, {-9, 13}, {-2, 6}};
+        int[][] dunes = {{-29, -19}, {-20, -14}, {-11, -24}, {-31, 7}, {-20, 19}, {-10, 8}};
         for (int[] dune : dunes) {
             for (int dx = -3; dx <= 3; dx++) {
                 for (int dz = -2; dz <= 2; dz++) {
@@ -378,12 +397,12 @@ public final class DomainAbilities {
                 }
             }
         }
-        buildPalm(level, -15, surface, -1);
+        buildPalm(level, -23, surface, -1);
         buildBarriers(level);
-        buildShip(level, 0, -48, false);
-        buildShip(level, 0, 48, false);
-        buildShip(level, -48, 0, true);
-        buildShip(level, 48, 0, true);
+        buildShip(level, 0, -64, false);
+        buildShip(level, 0, 64, false);
+        buildShip(level, -64, 0, true);
+        buildShip(level, 64, 0, true);
     }
 
     private static void buildPalm(ServerLevel level, int x, int baseY, int z) {
@@ -404,11 +423,11 @@ public final class DomainAbilities {
 
     private static void buildBarriers(ServerLevel level) {
         for (int y = 64; y <= 76; y++) {
-            for (int n = -31; n <= 31; n++) {
-                set(level, -31, y, n, Blocks.BARRIER);
-                set(level, 31, y, n, Blocks.BARRIER);
-                set(level, n, y, -31, Blocks.BARRIER);
-                set(level, n, y, 31, Blocks.BARRIER);
+            for (int n = -41; n <= 41; n++) {
+                set(level, -41, y, n, Blocks.BARRIER);
+                set(level, 41, y, n, Blocks.BARRIER);
+                set(level, n, y, -41, Blocks.BARRIER);
+                set(level, n, y, 41, Blocks.BARRIER);
             }
         }
     }
@@ -416,8 +435,8 @@ public final class DomainAbilities {
     private static void buildShip(ServerLevel level, int cx, int cz, boolean eastWest) {
         // Large multi-deck dark-oak galleon silhouette: pointed hull, raised
         // sterncastle, three masts, yards, sails, and working CBC cannon blocks.
-        for (int along = -15; along <= 15; along++) {
-            int halfWidth = Math.max(2, 7 - Math.max(0, Math.abs(along) - 10) / 2);
+        for (int along = -19; along <= 19; along++) {
+            int halfWidth = Math.max(2, 9 - Math.max(0, Math.abs(along) - 12) / 2);
             for (int across = -halfWidth; across <= halfWidth; across++) {
                 int x = eastWest ? cx + along : cx + across;
                 int z = eastWest ? cz + across : cz + along;
@@ -427,42 +446,43 @@ public final class DomainAbilities {
                 if (Math.abs(across) >= halfWidth - 1) set(level, x, 67, z, Blocks.DARK_OAK_FENCE);
             }
         }
-        int[] mastAlong = {-9, 0, 9};
+        int[] mastAlong = {-12, 0, 12};
         for (int along : mastAlong) buildMast(level, cx, cz, eastWest, along);
         // Broad raised sterncastle and a long bowsprit.
-        for (int along = 9; along <= 14; along++) {
-            for (int across = -5; across <= 5; across++) {
+        for (int along = 12; along <= 18; along++) {
+            for (int across = -7; across <= 7; across++) {
                 int x = eastWest ? cx + along : cx + across;
                 int z = eastWest ? cz + across : cz + along;
                 set(level, x, 68, z, Blocks.DARK_OAK_PLANKS);
-                if (along >= 11) set(level, x, 69, z, Blocks.DARK_OAK_PLANKS);
+                if (along >= 15) set(level, x, 69, z, Blocks.DARK_OAK_PLANKS);
             }
         }
-        for (int along = -16; along <= -11; along++) {
+        for (int along = -21; along <= -14; along++) {
             int x = eastWest ? cx + along : cx;
             int z = eastWest ? cz : cz + along;
             set(level, x, 68, z, Blocks.DARK_OAK_FENCE);
         }
-        for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, -7);
-        for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, 7);
+        for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, -11);
+        for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, 0);
+        for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, 11);
     }
 
     private static void buildMast(ServerLevel level, int cx, int cz, boolean eastWest, int along) {
         int mastX = eastWest ? cx + along : cx;
         int mastZ = eastWest ? cz : cz + along;
-        for (int y = 68; y <= 86; y++) set(level, mastX, y, mastZ, Blocks.DARK_OAK_LOG);
-        for (int y = 73; y <= 80; y++) {
-            int width = Math.max(2, 7 - Math.abs(y - 76));
+        for (int y = 68; y <= 90; y++) set(level, mastX, y, mastZ, Blocks.DARK_OAK_LOG);
+        for (int y = 74; y <= 84; y++) {
+            int width = Math.max(2, 9 - Math.abs(y - 79));
             for (int offset = -width; offset <= width; offset++) {
                 int x = eastWest ? mastX : mastX + offset;
                 int z = eastWest ? mastZ + offset : mastZ;
                 set(level, x, y, z, y % 2 == 0 ? Blocks.BLACK_WOOL : Blocks.WHITE_WOOL);
             }
         }
-        for (int offset = -8; offset <= 8; offset++) {
+        for (int offset = -10; offset <= 10; offset++) {
             int x = eastWest ? mastX : mastX + offset;
             int z = eastWest ? mastZ + offset : mastZ;
-            set(level, x, 76, z, Blocks.DARK_OAK_FENCE);
+            set(level, x, 79, z, Blocks.DARK_OAK_FENCE);
         }
     }
 
@@ -471,8 +491,8 @@ public final class DomainAbilities {
         Direction facing = eastWest
                 ? (side < 0 ? Direction.WEST : Direction.EAST)
                 : (side < 0 ? Direction.NORTH : Direction.SOUTH);
-        int x = eastWest ? cx + side * 6 : cx + along;
-        int z = eastWest ? cz + along : cz + side * 6;
+        int x = eastWest ? cx + side * 8 : cx + along;
+        int z = eastWest ? cz + along : cz + side * 8;
         int dx = facing.getStepX();
         int dz = facing.getStepZ();
         setOptional(level, x, 68, z, "createbigcannons:cannon_carriage", facing);
