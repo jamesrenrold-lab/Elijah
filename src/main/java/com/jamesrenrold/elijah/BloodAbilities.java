@@ -291,6 +291,12 @@ public final class BloodAbilities {
             // so Curse growth always resumes after entering the domain.
             if (player.tickCount % 20 == 0) {
                 ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 1);
+                // The ordinary Origins timer grants +1 Curse each second.
+                // Blood Hunt contributes one additional point on the same
+                // cadence, doubling growth to +2 per second while hunting.
+                if (state.bloodHuntUntil > now) {
+                    ElijahPirate.changeOriginResource(player, "elijah:blood_resource", 1);
+                }
             }
         } else {
             removeRushModifiers(player);
