@@ -256,7 +256,7 @@ public final class UndeadCrewmate extends Zombie {
     }
 
     @Override
-    protected int getExperienceReward() {
+    public int getExperienceReward() {
         return 0;
     }
 
