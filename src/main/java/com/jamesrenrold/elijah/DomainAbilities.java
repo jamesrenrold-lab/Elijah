@@ -81,6 +81,12 @@ public final class DomainAbilities {
             return 0;
         }
 
+        int cooldown = ElijahPirate.getOriginResource(player, "elijah:domain_cooldown");
+        if (cooldown > 0) {
+            message(player, String.format("Drowned Domain cooldown: %.1fs remaining.", cooldown / 20.0D));
+            return 0;
+        }
+
         PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
         if (pouch == null) return 0;
         LivingEntity target = findTarget(player);
@@ -110,12 +116,13 @@ public final class DomainAbilities {
         Vec3 targetPosition = target.position();
         float targetYaw = target.getYRot();
         float targetPitch = target.getXRot();
+        boolean targetWasPersistent = target instanceof Mob mob && mob.isPersistenceRequired();
 
         // The target starts on the wide back of the sandy crescent while the
         // caster begins inside the lagoon, where the pirate's swim advantage
         // immediately matters.
         LivingEntity movedTarget = transferLivingEntity(target, domain, -28.0D, BEACH_SPAWN_Y, 0.0D,
-                targetYaw, targetPitch);
+                targetYaw, targetPitch, true);
         if (movedTarget == null) {
             message(player, "The target could not be pulled into the domain.");
             return 0;
@@ -124,17 +131,21 @@ public final class DomainAbilities {
         player.teleportTo(domain, 8.0D, WATER_SPAWN_Y, 0.0D, playerYaw, playerPitch);
         movedTarget.setDeltaMovement(Vec3.ZERO);
         movedTarget.hurtMarked = true;
+        forceTargetAggro(movedTarget, player);
 
         Session session = new Session(player.getUUID(), movedTarget.getUUID(), domain,
                 playerOrigin, playerPosition, playerYaw, playerPitch,
                 targetOrigin, targetPosition, targetYaw, targetPitch,
-                domain.getGameTime() + DOMAIN_TICKS);
+                targetWasPersistent, domain.getGameTime() + DOMAIN_TICKS);
         SESSIONS.put(player.getUUID(), session);
+        // Start the visible cooldown only after the dimension, target transfer,
+        // and session creation have all succeeded. A rejected cast never burns it.
+        ElijahPirate.setOriginResource(player, "elijah:domain_cooldown", 100);
         applyDomainBuffs(player);
         domain.playSound(null, player.blockPosition(), SoundEvents.AMBIENT_UNDERWATER_ENTER,
                 SoundSource.PLAYERS, 1.2F, 0.7F);
         message(player, "The Drowned Domain opens — the tide answers your call!");
-        message(player, "Domain cooldown: 5s on the visible Origins bar; no additional timer.");
+        message(player, "Domain cooldown: 5s on the visible Origins bar.");
         return 1;
     }
 
@@ -146,7 +157,8 @@ public final class DomainAbilities {
      */
     private static LivingEntity transferLivingEntity(LivingEntity target, ServerLevel destination,
                                                       double x, double y, double z,
-                                                      float yaw, float pitch) {
+                                                      float yaw, float pitch,
+                                                      boolean persistenceRequired) {
         if (target instanceof ServerPlayer || destination == null
                 || !(target.level() instanceof ServerLevel) || target.isRemoved()) return null;
 
@@ -158,6 +170,7 @@ public final class DomainAbilities {
         // EntityType.loadEntityRecursive needs to reconstruct modded mobs.
         if (!target.saveAsPassenger(snapshot)) return null;
         snapshot.putUUID("UUID", id);
+        if (target instanceof Mob) snapshot.putBoolean("PersistenceRequired", persistenceRequired);
 
         Entity recreated = EntityType.loadEntityRecursive(snapshot, destination, entity -> {
             entity.setUUID(id);
@@ -208,6 +221,7 @@ public final class DomainAbilities {
                 endSession(session, server, true);
                 continue;
             }
+            forceTargetAggro(target, owner);
             int secondsLeft = Math.max(1, (int) Math.ceil((session.endAt - now) / 20.0D));
             if (secondsLeft != session.lastDisplayedSecond) {
                 session.lastDisplayedSecond = secondsLeft;
@@ -218,6 +232,19 @@ public final class DomainAbilities {
                 session.lastCannonball = now;
                 fireCannonball(session, owner, target);
             }
+        }
+    }
+
+    /** Keeps transferred mobs loaded and hostile to the caster for the full session. */
+    private static void forceTargetAggro(LivingEntity target, ServerPlayer owner) {
+        if (!(target instanceof Mob mob)) return;
+        mob.setPersistenceRequired();
+        mob.setTarget(owner);
+        mob.setAggressive(true);
+        mob.setLastHurtByMob(owner);
+        mob.getLookControl().setLookAt(owner, 30.0F, 30.0F);
+        if (mob.distanceToSqr(owner) > 2.25D) {
+            mob.getNavigation().moveTo(owner, 1.35D);
         }
     }
 
@@ -266,23 +293,38 @@ public final class DomainAbilities {
 
     private static void fireCannonball(Session session, ServerPlayer owner, LivingEntity target) {
         int shot = session.cannonIndex++;
+        // Deliberately scatter impacts around the target instead of putting
+        // every shell directly through its centre. A downward trace finds the
+        // real sand/lagoon floor so shots still detonate when the target swims.
+        double scatterAngle = shot * 2.399963229728653D;
+        double scatterRadius = 1.25D + (shot % 5) * 0.55D;
+        double impactX = Math.max(-36.0D, Math.min(36.0D,
+                target.getX() + Math.cos(scatterAngle) * scatterRadius));
+        double impactZ = Math.max(-36.0D, Math.min(36.0D,
+                target.getZ() + Math.sin(scatterAngle) * scatterRadius));
+        Vec3 groundTraceStart = new Vec3(impactX, Math.max(78.0D, target.getY() + 8.0D), impactZ);
+        Vec3 groundTraceEnd = new Vec3(impactX, 61.0D, impactZ);
+        HitResult groundHit = session.domain.clip(new ClipContext(groundTraceStart, groundTraceEnd,
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, target));
+        Vec3 aim = groundHit.getType() == HitResult.Type.MISS
+                ? new Vec3(impactX, target.getY() + 0.1D, impactZ)
+                : groundHit.getLocation().add(0.0D, 0.06D, 0.0D);
+
         // Alternate between the four invisible arena walls. These launch
         // points line up with the four ships outside the barrier, making the
         // barrage read as broadside fire rather than projectiles appearing in
         // the sky. Spawn just inside the barrier so it cannot intercept them.
         int wall = shot & 3;
-        double lateralBase = wall < 2 ? target.getZ() : target.getX();
+        double lateralBase = wall < 2 ? aim.z : aim.x;
         double lateral = Math.max(-28.0D, Math.min(28.0D,
                 lateralBase + ((shot % 5) - 2) * 1.5D));
-        double firingY = Math.max(68.5D, target.getEyeY() + 0.6D);
+        double firingY = Math.max(70.0D, aim.y + 3.5D);
         Vec3 origin = switch (wall) {
             case 0 -> new Vec3(-39.0D, firingY, lateral);
             case 1 -> new Vec3(39.0D, firingY, lateral);
             case 2 -> new Vec3(lateral, firingY, -39.0D);
             default -> new Vec3(lateral, firingY, 39.0D);
         };
-        Vec3 aim = target.position().add(0.0D,
-                Math.min(0.9D, target.getBbHeight() * 0.35D), 0.0D);
         Vec3 direction = aim.subtract(origin).normalize();
 
         int curse = Math.max(0, Math.min(100,
@@ -308,7 +350,7 @@ public final class DomainAbilities {
             double angle = Math.PI * 2.0D * point / 12.0D;
             session.domain.sendParticles(new net.minecraft.core.particles.DustParticleOptions(
                             new Vector3f(0.75F, 0.12F, 0.04F), 0.65F),
-                    aim.x + Math.cos(angle) * 1.25D, target.getY() + 0.08D,
+                    aim.x + Math.cos(angle) * 1.25D, aim.y + 0.08D,
                     aim.z + Math.sin(angle) * 1.25D, 1, 0.0D, 0.0D, 0.0D, 0.0D);
         }
         // Loud enough to carry from the wall/ship to the entire arena.
@@ -369,7 +411,8 @@ public final class DomainAbilities {
             ServerLevel origin = server.getLevel(session.targetOrigin);
             if (origin != null) {
                 transferLivingEntity(target, origin, session.targetPosition.x, session.targetPosition.y,
-                        session.targetPosition.z, session.targetYaw, session.targetPitch);
+                        session.targetPosition.z, session.targetYaw, session.targetPitch,
+                        session.targetWasPersistent);
             }
         }
     }
@@ -737,6 +780,7 @@ public final class DomainAbilities {
         private final Vec3 targetPosition;
         private final float targetYaw;
         private final float targetPitch;
+        private final boolean targetWasPersistent;
         private final long startedAt;
         private final long endAt;
         private long lastCannonball;
@@ -746,7 +790,7 @@ public final class DomainAbilities {
         private Session(UUID ownerId, UUID targetId, ServerLevel domain,
                         ResourceKey<Level> playerOrigin, Vec3 playerPosition, float playerYaw, float playerPitch,
                         ResourceKey<Level> targetOrigin, Vec3 targetPosition, float targetYaw, float targetPitch,
-                        long endAt) {
+                        boolean targetWasPersistent, long endAt) {
             this.ownerId = ownerId;
             this.targetId = targetId;
             this.domain = domain;
@@ -758,6 +802,7 @@ public final class DomainAbilities {
             this.targetPosition = targetPosition;
             this.targetYaw = targetYaw;
             this.targetPitch = targetPitch;
+            this.targetWasPersistent = targetWasPersistent;
             this.startedAt = domain.getGameTime();
             this.endAt = endAt;
             this.lastCannonball = this.startedAt;
