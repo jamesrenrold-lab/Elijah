@@ -39,6 +39,10 @@ public final class FlintlockBall extends ThrowableProjectile {
     private boolean cannonball;
     private float blastRadius;
     private boolean detonated;
+    private boolean hasGuaranteedImpact;
+    private double impactX;
+    private double impactY;
+    private double impactZ;
 
     public FlintlockBall(EntityType<? extends FlintlockBall> type, Level level) {
         super(type, level);
@@ -59,6 +63,14 @@ public final class FlintlockBall extends ThrowableProjectile {
     }
 
     public boolean isCannonball() { return cannonball || entityData.get(CANNONBALL_DATA); }
+
+    /** Detonates a domain shell at its traced block impact even if another mod disrupts collision. */
+    public void setGuaranteedImpact(Vec3 impact) {
+        hasGuaranteedImpact = true;
+        impactX = impact.x;
+        impactY = impact.y;
+        impactZ = impact.z;
+    }
 
     @Override
     protected void defineSynchedData() {
@@ -165,7 +177,24 @@ public final class FlintlockBall extends ThrowableProjectile {
 
     @Override
     public void tick() {
+        Vec3 previousPosition = position();
         super.tick();
+        if (!level().isClientSide && !isRemoved() && isCannonball() && hasGuaranteedImpact) {
+            Vec3 impact = new Vec3(impactX, impactY, impactZ);
+            Vec3 travelled = position().subtract(previousPosition);
+            double travelledSquared = travelled.lengthSqr();
+            if (travelledSquared > 1.0E-6D) {
+                double progress = Math.max(0.0D, Math.min(1.0D,
+                        impact.subtract(previousPosition).dot(travelled) / travelledSquared));
+                Vec3 closest = previousPosition.add(travelled.scale(progress));
+                if (closest.distanceToSqr(impact) <= 0.64D) {
+                    setPos(impact.x, impact.y, impact.z);
+                    detonate();
+                    discard();
+                    return;
+                }
+            }
+        }
         if (!level().isClientSide && isCannonball() && level() instanceof ServerLevel server) {
             // Server-driven tracer particles make every volley visible even if
             // a client resource pack or renderer suppresses the black model.
@@ -193,6 +222,12 @@ public final class FlintlockBall extends ThrowableProjectile {
         tag.putInt("EffectTicks", effectTicks);
         tag.putBoolean("Cannonball", cannonball);
         tag.putFloat("BlastRadius", blastRadius);
+        tag.putBoolean("HasGuaranteedImpact", hasGuaranteedImpact);
+        if (hasGuaranteedImpact) {
+            tag.putDouble("ImpactX", impactX);
+            tag.putDouble("ImpactY", impactY);
+            tag.putDouble("ImpactZ", impactZ);
+        }
         tag.putInt("Life", tickCount);
     }
 
@@ -203,6 +238,10 @@ public final class FlintlockBall extends ThrowableProjectile {
         effectTicks = tag.contains("EffectTicks") ? tag.getInt("EffectTicks") : 20;
         cannonball = tag.getBoolean("Cannonball");
         blastRadius = tag.contains("BlastRadius") ? tag.getFloat("BlastRadius") : 0.0F;
+        hasGuaranteedImpact = tag.getBoolean("HasGuaranteedImpact");
+        impactX = tag.getDouble("ImpactX");
+        impactY = tag.getDouble("ImpactY");
+        impactZ = tag.getDouble("ImpactZ");
         entityData.set(CANNONBALL_DATA, cannonball);
         tickCount = tag.getInt("Life");
     }
