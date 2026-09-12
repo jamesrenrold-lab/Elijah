@@ -1,7 +1,7 @@
 {
   "type": "origins:active_self",
   "name": "Drowned Domain",
-  "description": "Pull the hostile mob you are directly looking at into a separate island dimension for 40 seconds. It remains persistent and permanently aggressive toward you for the entire domain. You begin inside a two-block-deep lagoon while the target starts on the raised sandy crescent. After five seconds, fast cannonballs scatter around it every half-second; their four-block blast volume is outlined by smoke. Damage is 55% of your current attack damage, plus 1.5 per completed 10% Curse. You gain 50% movement speed, powerful swimming, Regeneration II and 50% lifesteal while inside. The cooldown is 5 seconds after the domain closes.",
+  "description": "Pull the hostile mob you are directly looking at into a separate island dimension for 40 seconds. It remains persistent and permanently aggressive toward you for the entire domain. You begin inside a two-block-deep lagoon while the target starts on the raised circular sand arena. After five seconds, fast cannonballs snapshot the target's exact position every half-second and fly to that fixed point without homing; their 4.5-block blast radius is outlined before impact. Damage is 55% of your current attack damage, plus 1.5 per completed 10% Curse. You gain 50% movement speed, powerful swimming, Regeneration II and 50% lifesteal while inside. The cooldown is 5 seconds after the domain closes.",
   "cooldown": 1,
   "hud_render": {
     "should_render": false
