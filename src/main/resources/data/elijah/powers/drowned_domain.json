@@ -1,0 +1,19 @@
+{
+  "type": "origins:active_self",
+  "name": "Drowned Domain",
+  "description": "Pull a nearby hostile mob into a separate island dimension for 40 seconds. The island is half sand and half water, surrounded by open ocean and four pirate ships. After five seconds, cannonballs strike the target every half-second. You gain 50% movement speed, powerful swimming, Regeneration II and 50% lifesteal while inside.",
+  "entity_action": {
+    "type": "origins:execute_command",
+    "command": "elijah domain"
+  },
+  "cooldown": 4800,
+  "hud_render": {
+    "should_render": true,
+    "sprite_location": "origins:textures/gui/resource_bar.png",
+    "bar_index": 8
+  },
+  "key": {
+    "key": "key.origins.octonary_active",
+    "continuous": false
+  }
+}
