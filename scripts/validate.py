@@ -63,28 +63,32 @@ assert parsed['data/elijah/powers/blood_overflow.json']['entity_action'] == {
 crew_action = parsed['data/elijah/powers/undead_crew.json']['entity_action']['if_action']
 assert crew_action == {'type': 'origins:execute_command', 'command': 'elijah crew'}
 domain = parsed['data/elijah/powers/drowned_domain.json']
-assert 'cooldown' not in domain and 'hud_render' not in domain, \
-    'Testing domain must not have an Origins cooldown'
+assert domain.get('cooldown') == 1 and domain.get('hud_render') == {'should_render': False}, \
+    'Origins must release the domain key after one tick; Java owns the visible cooldown'
 assert 'elijah:domain_cooldown' not in origin['powers']
 assert 'elijah:domain_cooldown_recharge' not in origin['powers']
 assert 'data/elijah/powers/domain_cooldown.json' not in parsed
 assert 'data/elijah/powers/domain_cooldown_recharge.json' not in parsed
 domain_source = (root / 'src/main/java/com/jamesrenrold/elijah/DomainAbilities.java').read_text()
-assert 'domain_cooldown' not in domain_source, 'Testing domain must not have a Java cooldown'
+assert 'COOLDOWN_TICKS = 5 * 20' in domain_source and 'COOLDOWNS' in domain_source, \
+    'Domain must use the rebuilt five-second Java cooldown'
+assert 'COOLDOWNS.put(session.ownerId, now + COOLDOWN_TICKS)' in domain_source, \
+    'Cooldown must begin only when session cleanup starts'
+assert 'WATER_SPAWN_Y = 63.2D' in domain_source, 'Caster must spawn inside the two-deep lagoon'
 assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
-assert 'target.discard();' in domain_source
-assert domain_source.index('target.discard();') < domain_source.index('destination.addFreshEntity(recreated)'), \
-    'Echo transfer order regressed: source must be removed before destination UUID registration'
+assert 'changeDimension(destination, directTeleporter)' in domain_source, \
+    'Domain targets must use Forge dimension transfer'
+for removed_echo_path in ('saveAsPassenger', 'loadEntityRecursive', 'target.discard()', 'originalTargetSnapshot'):
+    assert removed_echo_path not in domain_source, f'Echo transfer path remains: {removed_echo_path}'
 assert '* 0.55D' in domain_source, 'Cannon damage must use 55% current attack damage'
 assert 'BEACH_SPAWN_Y = 67.0D' in domain_source, 'Raised crescent spawn height regressed'
 assert 'BEACH_SPAWN_X = -34.0D' in domain_source, 'Target must spawn deep on the beach'
 assert 'shouldSuppressLifecycleUnload' in domain_source, 'Connector dimension-change guard is missing'
-assert 'originalTargetSnapshot' in domain_source, 'Fallback target restoration snapshot is missing'
 assert 'restoreTarget(session, server)' in domain_source, 'Guaranteed target restoration is missing'
 assert 'buildLagoonStairs(level)' in domain_source, 'Lagoon access ramp is missing'
 assert 'targetMissingTicks <= 20' in domain_source, 'Transient target lookup tolerance is missing'
 assert 'ownerMismatchTicks <= 40' in domain_source, 'Dimension transition tolerance is missing'
-assert 'pruneStaleSessions(server)' in domain_source, 'Stale sessions can block later casts'
+assert 'recoverFinishedSessions(server)' in domain_source, 'Finished sessions can block later casts'
 assert 'Drowned Domain closed (" + reason' in domain_source, 'Early-close diagnostics are missing'
 assert 'DomainAbilities.shouldSuppressLifecycleUnload(player)' in command_source, \
     'Origin-loss callback is not guarded during Connector dimension transitions'
@@ -93,7 +97,15 @@ assert 'ARENA_MARKER' in domain_source and 'if (arenaReady) return;' in domain_s
     'Arena must not be rebuilt on every cast'
 assert 'age % 20L == 0L' in domain_source, 'Domain effect refresh is not throttled'
 assert 'age % 10L == 0L' in domain_source, 'Target pathfinding refresh is not throttled'
-assert 'clearLegacyArenaGeometry(level)' in domain_source, 'Legacy ships must be purged before rebuild'
+assert 'buildOceanFoundation(level)' in domain_source, 'Two-layer ocean foundation migration is missing'
+assert 'clearLegacyCannons(level' in domain_source, 'Old high-cost CBC cannon layout is not removed'
+assert 'clearDomainProjectiles(session.domain)' in domain_source, 'Expired cannonballs must be purged at cleanup'
+dimension = parsed['data/elijah/dimension/drowned_domain.json']['generator']['settings']['layers']
+assert dimension == [
+    {'height': 1, 'block': 'minecraft:bedrock'},
+    {'height': 62, 'block': 'minecraft:sandstone'},
+    {'height': 2, 'block': 'minecraft:water'},
+], 'Domain generator must be sandstone topped by exactly two water blocks'
 assert 'buildDistantIslands(level)' in domain_source, 'Distant dune islands are missing'
 assert 'buildBillowedSail' in domain_source, 'Volumetric sails are missing'
 assert 'cannonball.setNoGravity(true)' in domain_source, 'Reliable straight cannon trajectory regressed'
@@ -101,6 +113,7 @@ assert 'cannonball.setGuaranteedImpact(aim)' in domain_source, 'Cannon impact gu
 projectile_source = (root / 'src/main/java/com/jamesrenrold/elijah/FlintlockBall.java').read_text()
 assert 'Server-driven tracer particles' in projectile_source, 'Cannonball tracer visibility regressed'
 assert 'closest.distanceToSqr(impact) <= 0.64D' in projectile_source, 'Cannon crossing check is missing'
-assert 'int groundPoints = 16' in projectile_source and 'int shellPoints = 18' in projectile_source, \
+assert 'int groundPoints = 8' in projectile_source and 'int shellPoints = 6' in projectile_source, \
     'Low-packet blast outline regressed'
+assert '.updateInterval(2)' in command_source, 'Projectile network synchronization is not throttled'
 print('Validated all power commands and the eight distinct active keybinds.')
