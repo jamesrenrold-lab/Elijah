@@ -228,7 +228,9 @@ public final class PowderPouch extends ItemStackHandler {
         for (int slot = 0; slot < TOTAL_SLOTS; slot++) {
             ItemStack stack = getStackInSlot(slot);
             if (stack.isEmpty()) continue;
-            if (slot != GENERATOR_SLOT && !isItemValid(slot, stack)) {
+            // The generator is output-only, but its saved contents must still
+            // be gunpowder. This also cleans malformed or legacy player data.
+            if (!stack.is(Items.GUNPOWDER)) {
                 super.setStackInSlot(slot, ItemStack.EMPTY);
                 continue;
             }
