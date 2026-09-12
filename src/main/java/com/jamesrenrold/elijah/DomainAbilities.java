@@ -102,16 +102,14 @@ public final class DomainAbilities {
         float targetYaw = target.getYRot();
         float targetPitch = target.getXRot();
 
-        LivingEntity movedTarget = moveTargetToDomain(target, domain);
+        LivingEntity movedTarget = transferLivingEntity(target, domain, 10.0D, ARENA_Y, 0.0D,
+                targetYaw, targetPitch);
         if (movedTarget == null) {
             message(player, "The target could not be pulled into the domain.");
             return 0;
         }
 
         player.teleportTo(domain, -10.0D, ARENA_Y, 0.0D, playerYaw, playerPitch);
-        movedTarget.teleportTo(10.0D, ARENA_Y, 0.0D);
-        movedTarget.setYRot(targetYaw);
-        movedTarget.setXRot(targetPitch);
         movedTarget.setDeltaMovement(Vec3.ZERO);
         movedTarget.hurtMarked = true;
 
@@ -134,7 +132,9 @@ public final class DomainAbilities {
      * modded mobs that override changeDimension and return null, preserves
      * equipment/attributes/AI, and restores the source if construction fails.
      */
-    private static LivingEntity moveTargetToDomain(LivingEntity target, ServerLevel destination) {
+    private static LivingEntity transferLivingEntity(LivingEntity target, ServerLevel destination,
+                                                      double x, double y, double z,
+                                                      float yaw, float pitch) {
         if (target instanceof ServerPlayer || destination == null
                 || !(target.level() instanceof ServerLevel source) || target.isRemoved()) return null;
 
@@ -149,7 +149,7 @@ public final class DomainAbilities {
 
         Entity recreated = EntityType.loadEntityRecursive(snapshot, destination, entity -> {
             entity.setUUID(id);
-            entity.moveTo(10.0D, ARENA_Y, 0.0D, originalYaw, originalPitch);
+            entity.moveTo(x, y, z, yaw, pitch);
             entity.setDeltaMovement(Vec3.ZERO);
             return entity;
         });
@@ -298,12 +298,8 @@ public final class DomainAbilities {
         if (entity instanceof LivingEntity target && target.isAlive()) {
             ServerLevel origin = server.getLevel(session.targetOrigin);
             if (origin != null) {
-                Entity moved = target.changeDimension(origin);
-                if (moved != null) {
-                    moved.teleportTo(session.targetPosition.x, session.targetPosition.y, session.targetPosition.z);
-                    moved.setYRot(session.targetYaw);
-                    moved.setXRot(session.targetPitch);
-                }
+                transferLivingEntity(target, origin, session.targetPosition.x, session.targetPosition.y,
+                        session.targetPosition.z, session.targetYaw, session.targetPitch);
             }
         }
     }
