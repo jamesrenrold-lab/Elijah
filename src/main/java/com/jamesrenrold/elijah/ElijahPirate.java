@@ -57,7 +57,7 @@ public final class ElijahPirate {
             "powder_pouch", () -> new MenuType<>(PowderMenu::new, FeatureFlags.DEFAULT_FLAGS));
     public static final RegistryObject<EntityType<FlintlockBall>> FLINTLOCK_BALL = ENTITIES.register(
             "flintlock_ball", () -> EntityType.Builder.<FlintlockBall>of(FlintlockBall::new, MobCategory.MISC)
-                    .sized(0.18F, 0.18F).clientTrackingRange(8).updateInterval(1)
+                    .sized(0.18F, 0.18F).clientTrackingRange(8).updateInterval(2)
                     .build(MOD_ID + ":flintlock_ball"));
     public static final RegistryObject<EntityType<UndeadCrewmate>> UNDEAD_CREWMATE = ENTITIES.register(
             "undead_crewmate", () -> EntityType.Builder.<UndeadCrewmate>of(UndeadCrewmate::new, MobCategory.MONSTER)
