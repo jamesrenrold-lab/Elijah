@@ -1,16 +1,14 @@
 {
   "type": "origins:active_self",
-  "name": "Blood Rush",
-  "description": "Quinary ability: on a 15-second cooldown, gain 20 blood charge and stay active for 10 seconds. While active the meter rises by 1% per second; while inactive it drains by 0.25% per second. Filling the meter to 100 consumes it and triggers 25 seconds of blindness, darkness, strength, 50% lifesteal and non-lethal health degeneration.",
+  "name": "Cursed Form",
+  "description": "Quinary ability: toggle Cursed Form on to gain 20 Curse immediately, 10% lifesteal, movement speed and attack speed. Curse rises by 1% per second until toggled off, then drains by 0.25% per second. Toggling it off starts a 20-second cooldown. Reaching 100 consumes the meter and triggers the 25-second overfill.",
   "entity_action": {
     "type": "origins:execute_command",
     "command": "elijah blood_rush"
   },
-  "cooldown": 300,
+  "cooldown": 1,
   "hud_render": {
-    "should_render": true,
-    "sprite_location": "origins:textures/gui/resource_bar.png",
-    "bar_index": 1
+    "should_render": false
   },
   "key": {
     "key": "key.origins.quinary_active",
