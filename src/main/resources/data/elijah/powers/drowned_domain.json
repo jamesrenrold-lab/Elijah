@@ -6,7 +6,7 @@
     "type": "origins:execute_command",
     "command": "elijah domain"
   },
-  "cooldown": 4800,
+  "cooldown": 100,
   "hud_render": {
     "should_render": true,
     "sprite_location": "origins:textures/gui/resource_bar.png",
