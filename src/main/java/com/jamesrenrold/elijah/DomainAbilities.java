@@ -61,6 +61,7 @@ public final class DomainAbilities {
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;
     private static final double WATER_SPAWN_Y = 65.0D;
+    private static final double BEACH_SPAWN_X = -34.0D;
     private static final double BEACH_SPAWN_Y = 67.0D;
     private static final UUID DOMAIN_SPEED_ID = UUID.fromString("c01c5046-3b27-49c5-9384-95f1f1cdb5db");
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
@@ -78,12 +79,6 @@ public final class DomainAbilities {
             int secondsLeft = Math.max(1,
                     (int) Math.ceil((active.endAt - active.domain.getGameTime()) / 20.0D));
             message(player, "Drowned Domain is already active: " + secondsLeft + "s remaining.");
-            return 0;
-        }
-
-        int cooldown = ElijahPirate.getOriginResource(player, "elijah:domain_cooldown");
-        if (cooldown > 0) {
-            message(player, String.format("Drowned Domain cooldown: %.1fs remaining.", cooldown / 20.0D));
             return 0;
         }
 
@@ -121,7 +116,7 @@ public final class DomainAbilities {
         // The target starts on the wide back of the sandy crescent while the
         // caster begins inside the lagoon, where the pirate's swim advantage
         // immediately matters.
-        LivingEntity movedTarget = transferLivingEntity(target, domain, -28.0D, BEACH_SPAWN_Y, 0.0D,
+        LivingEntity movedTarget = transferLivingEntity(target, domain, BEACH_SPAWN_X, BEACH_SPAWN_Y, 0.0D,
                 targetYaw, targetPitch, true);
         if (movedTarget == null) {
             message(player, "The target could not be pulled into the domain.");
@@ -133,19 +128,16 @@ public final class DomainAbilities {
         movedTarget.hurtMarked = true;
         forceTargetAggro(movedTarget, player);
 
-        Session session = new Session(player.getUUID(), movedTarget.getUUID(), domain,
+        Session session = new Session(player.getUUID(), movedTarget, domain,
                 playerOrigin, playerPosition, playerYaw, playerPitch,
                 targetOrigin, targetPosition, targetYaw, targetPitch,
                 targetWasPersistent, domain.getGameTime() + DOMAIN_TICKS);
         SESSIONS.put(player.getUUID(), session);
-        // Start the visible cooldown only after the dimension, target transfer,
-        // and session creation have all succeeded. A rejected cast never burns it.
-        ElijahPirate.setOriginResource(player, "elijah:domain_cooldown", 100);
         applyDomainBuffs(player);
         domain.playSound(null, player.blockPosition(), SoundEvents.AMBIENT_UNDERWATER_ENTER,
                 SoundSource.PLAYERS, 1.2F, 0.7F);
         message(player, "The Drowned Domain opens — the tide answers your call!");
-        message(player, "Domain cooldown: 5s on the visible Origins bar.");
+        message(player, "Drowned Domain has no cooldown while testing.");
         return 1;
     }
 
@@ -162,7 +154,9 @@ public final class DomainAbilities {
         if (target instanceof ServerPlayer || destination == null
                 || !(target.level() instanceof ServerLevel) || target.isRemoved()) return null;
 
+        ServerLevel source = (ServerLevel) target.level();
         UUID id = target.getUUID();
+        Vec3 originalPosition = target.position();
         float originalYaw = target.getYRot();
         float originalPitch = target.getXRot();
         CompoundTag snapshot = new CompoundTag();
@@ -172,6 +166,12 @@ public final class DomainAbilities {
         snapshot.putUUID("UUID", id);
         if (target instanceof Mob) snapshot.putBoolean("PersistenceRequired", persistenceRequired);
 
+        // Echo's working transfer order matters: remove the source before
+        // registering a second entity with the same UUID in another level.
+        // Keeping both live at once lets the server's UUID bookkeeping remove
+        // the destination copy a moment later.
+        target.discard();
+
         Entity recreated = EntityType.loadEntityRecursive(snapshot, destination, entity -> {
             entity.setUUID(id);
             entity.moveTo(x, y, z, yaw, pitch);
@@ -179,10 +179,21 @@ public final class DomainAbilities {
             return entity;
         });
         if (recreated instanceof LivingEntity moved && destination.addFreshEntity(recreated)) {
-            // Only remove the source after the destination entity is live.
-            target.discard();
             return moved;
         }
+
+        // A failed destination construction must never delete the mob. Restore
+        // the same complete snapshot at its original position immediately.
+        snapshot.putBoolean("PersistenceRequired",
+                target instanceof Mob && ((Mob) target).isPersistenceRequired());
+        Entity restored = EntityType.loadEntityRecursive(snapshot, source, entity -> {
+            entity.setUUID(id);
+            entity.moveTo(originalPosition.x, originalPosition.y, originalPosition.z,
+                    originalYaw, originalPitch);
+            entity.setDeltaMovement(Vec3.ZERO);
+            return entity;
+        });
+        if (restored != null) source.addFreshEntity(restored);
         return null;
     }
 
@@ -215,8 +226,8 @@ public final class DomainAbilities {
                 continue;
             }
             applyDomainBuffs(owner);
-            Entity entity = session.domain.getEntity(session.targetId);
-            if (!(entity instanceof LivingEntity target) || !target.isAlive()) {
+            LivingEntity target = session.target;
+            if (target.isRemoved() || !target.isAlive() || target.level() != session.domain) {
                 SESSIONS.remove(session.ownerId);
                 endSession(session, server, true);
                 continue;
@@ -334,6 +345,7 @@ public final class DomainAbilities {
         float damage = Math.max(1.0F, attackDamage + curseDamage);
         FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, damage, 4.0F);
         cannonball.setPos(origin.x, origin.y, origin.z);
+        cannonball.setGuaranteedImpact(aim);
         cannonball.setNoGravity(true);
         cannonball.shoot(direction.x, direction.y, direction.z, 4.6F, 0.0F);
         if (!session.domain.addFreshEntity(cannonball)) {
@@ -406,8 +418,8 @@ public final class DomainAbilities {
             }
         }
         if (!returnCombatants) return;
-        Entity entity = session.domain.getEntity(session.targetId);
-        if (entity instanceof LivingEntity target && target.isAlive()) {
+        LivingEntity target = session.target;
+        if (!target.isRemoved() && target.isAlive() && target.level() == session.domain) {
             ServerLevel origin = server.getLevel(session.targetOrigin);
             if (origin != null) {
                 transferLivingEntity(target, origin, session.targetPosition.x, session.targetPosition.y,
@@ -770,7 +782,7 @@ public final class DomainAbilities {
 
     private static final class Session {
         private final UUID ownerId;
-        private final UUID targetId;
+        private final LivingEntity target;
         private final ServerLevel domain;
         private final ResourceKey<Level> playerOrigin;
         private final Vec3 playerPosition;
@@ -787,12 +799,12 @@ public final class DomainAbilities {
         private int cannonIndex;
         private int lastDisplayedSecond = -1;
 
-        private Session(UUID ownerId, UUID targetId, ServerLevel domain,
+        private Session(UUID ownerId, LivingEntity target, ServerLevel domain,
                         ResourceKey<Level> playerOrigin, Vec3 playerPosition, float playerYaw, float playerPitch,
                         ResourceKey<Level> targetOrigin, Vec3 targetPosition, float targetYaw, float targetPitch,
                         boolean targetWasPersistent, long endAt) {
             this.ownerId = ownerId;
-            this.targetId = targetId;
+            this.target = target;
             this.domain = domain;
             this.playerOrigin = playerOrigin;
             this.playerPosition = playerPosition;
