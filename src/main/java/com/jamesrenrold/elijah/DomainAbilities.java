@@ -18,11 +18,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
@@ -31,9 +29,11 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.portal.PortalInfo;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.common.util.ITeleporter;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -44,11 +44,11 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * The pirate's island domain. The dimension itself is supplied by the data
@@ -62,18 +62,19 @@ public final class DomainAbilities {
             Registries.DIMENSION, new ResourceLocation(ElijahPirate.MOD_ID, "drowned_domain"));
 
     private static final int DOMAIN_TICKS = 40 * 20;
+    private static final int COOLDOWN_TICKS = 5 * 20;
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;
-    private static final double WATER_SPAWN_Y = 65.0D;
+    private static final double WATER_SPAWN_Y = 63.2D;
     private static final double BEACH_SPAWN_X = -34.0D;
     private static final double BEACH_SPAWN_Y = 67.0D;
     private static final UUID DOMAIN_SPEED_ID = UUID.fromString("c01c5046-3b27-49c5-9384-95f1f1cdb5db");
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
+    private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
     private static final BlockPos ARENA_MARKER = new BlockPos(0, 61, 0);
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
-    private static boolean arenaGeometryMigrated;
     private static boolean arenaReady;
 
     private DomainAbilities() {}
@@ -83,20 +84,26 @@ public final class DomainAbilities {
         if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
         MinecraftServer server = player.getServer();
         if (server == null) return 0;
-        pruneStaleSessions(server);
+
+        // Domain availability is owned entirely here. Origins only debounces
+        // the key for one tick; the visible five-second cooldown below is the
+        // sole gameplay cooldown, so a stale resource cannot lock the power.
+        recoverFinishedSessions(server);
         Session active = SESSIONS.get(player.getUUID());
         if (active != null) {
-            if (active.ending || player.level() != active.domain
-                    || active.domain.getGameTime() >= active.endAt) {
-                SESSIONS.remove(player.getUUID());
-                endSession(active, server, true, "stale session recovered");
-            } else {
-                int secondsLeft = Math.max(1,
-                        (int) Math.ceil((active.endAt - active.domain.getGameTime()) / 20.0D));
-                message(player, "Drowned Domain is already active: " + secondsLeft + "s remaining.");
-                return 0;
-            }
+            int secondsLeft = Math.max(1,
+                    (int) Math.ceil((active.endAt - server.overworld().getGameTime()) / 20.0D));
+            message(player, "Drowned Domain is already active: " + secondsLeft + "s remaining.");
+            return 0;
         }
+        long serverTime = server.overworld().getGameTime();
+        long cooldownUntil = COOLDOWNS.getOrDefault(player.getUUID(), 0L);
+        if (cooldownUntil > serverTime) {
+            int secondsLeft = Math.max(1, (int) Math.ceil((cooldownUntil - serverTime) / 20.0D));
+            message(player, "Drowned Domain cooldown: " + secondsLeft + "s");
+            return 0;
+        }
+        COOLDOWNS.remove(player.getUUID());
 
         PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
         if (pouch == null) return 0;
@@ -117,6 +124,7 @@ public final class DomainAbilities {
         }
 
         buildArena(domain);
+        clearDomainProjectiles(domain);
         ResourceKey<Level> playerOrigin = player.level().dimension();
         Vec3 playerPosition = player.position();
         float playerYaw = player.getYRot();
@@ -126,16 +134,10 @@ public final class DomainAbilities {
         float targetYaw = target.getYRot();
         float targetPitch = target.getXRot();
         boolean targetWasPersistent = target instanceof Mob mob && mob.isPersistenceRequired();
-        CompoundTag originalTargetSnapshot = snapshotTarget(target, targetWasPersistent);
-        if (originalTargetSnapshot == null) {
-            message(player, "The target could not be safely captured for the domain.");
-            return 0;
-        }
-
         // The target starts on the wide back of the sandy crescent while the
         // caster begins inside the lagoon, where the pirate's swim advantage
         // immediately matters.
-        LivingEntity movedTarget = transferLivingEntity(target, domain, BEACH_SPAWN_X, BEACH_SPAWN_Y, 0.0D,
+        LivingEntity movedTarget = moveEntity(target, domain, BEACH_SPAWN_X, BEACH_SPAWN_Y, 0.0D,
                 targetYaw, targetPitch, true);
         if (movedTarget == null) {
             message(player, "The target could not be pulled into the domain.");
@@ -144,6 +146,16 @@ public final class DomainAbilities {
 
         guardLifecycle(player, 60L);
         player.teleportTo(domain, 8.0D, WATER_SPAWN_Y, 0.0D, playerYaw, playerPitch);
+        if (player.level() != domain) {
+            ServerLevel targetReturnLevel = server.getLevel(targetOrigin);
+            if (targetReturnLevel != null) {
+                moveEntity(movedTarget, targetReturnLevel,
+                        targetPosition.x, targetPosition.y, targetPosition.z,
+                        targetYaw, targetPitch, targetWasPersistent);
+            }
+            message(player, "The caster could not enter the domain; the target was returned.");
+            return 0;
+        }
         movedTarget.setDeltaMovement(Vec3.ZERO);
         movedTarget.hurtMarked = true;
         forceTargetAggro(movedTarget, player);
@@ -151,89 +163,54 @@ public final class DomainAbilities {
         Session session = new Session(player.getUUID(), movedTarget, domain,
                 playerOrigin, playerPosition, playerYaw, playerPitch,
                 targetOrigin, targetPosition, targetYaw, targetPitch,
-                targetWasPersistent, originalTargetSnapshot, domain.getGameTime() + DOMAIN_TICKS);
+                targetWasPersistent, serverTime + DOMAIN_TICKS);
         SESSIONS.put(player.getUUID(), session);
         applyDomainBuffs(player);
         domain.playSound(null, player.blockPosition(), SoundEvents.AMBIENT_UNDERWATER_ENTER,
                 SoundSource.PLAYERS, 1.2F, 0.7F);
         message(player, "The Drowned Domain opens — the tide answers your call!");
-        message(player, "Drowned Domain has no cooldown while testing.");
+        message(player, "Drowned Domain cooldown begins when the domain closes: 5s.");
         return 1;
     }
 
-    private static void pruneStaleSessions(MinecraftServer server) {
+    private static void recoverFinishedSessions(MinecraftServer server) {
+        long now = server.overworld().getGameTime();
         for (Session session : new ArrayList<>(SESSIONS.values())) {
             ServerPlayer owner = server.getPlayerList().getPlayer(session.ownerId);
-            if (session.ending || owner == null || !owner.isAlive() || owner.level() != session.domain
-                    || session.domain.getGameTime() >= session.endAt) {
-                SESSIONS.remove(session.ownerId);
-                endSession(session, server, true, "stale session recovered");
+            boolean abandoned = owner != null && owner.level() != session.domain
+                    && now - session.startedAt > 40L;
+            if (session.ending || owner == null || !owner.isAlive() || now >= session.endAt || abandoned) {
+                finishSession(session, server, true, "stale session recovered");
             }
         }
     }
 
-    /**
-     * Recreates the target from its complete NBT snapshot in the destination.
-     * This is the same transfer strategy used by the Echo domain: it works for
-     * modded mobs that override changeDimension and return null, preserves
-     * equipment/attributes/AI, and restores the source if construction fails.
-     */
-    private static LivingEntity transferLivingEntity(LivingEntity target, ServerLevel destination,
-                                                      double x, double y, double z,
-                                                      float yaw, float pitch,
-                                                      boolean persistenceRequired) {
+    /** Uses Forge's normal dimension-transfer contract; no Echo clone/discard/NBT path is used. */
+    private static LivingEntity moveEntity(LivingEntity target, ServerLevel destination,
+                                           double x, double y, double z,
+                                           float yaw, float pitch,
+                                           boolean persistenceRequired) {
         if (target instanceof ServerPlayer || destination == null
                 || !(target.level() instanceof ServerLevel) || target.isRemoved()) return null;
+        ITeleporter directTeleporter = new ITeleporter() {
+            @Override
+            public PortalInfo getPortalInfo(Entity entity, ServerLevel destinationLevel,
+                                            Function<ServerLevel, PortalInfo> defaultPortalInfo) {
+                return new PortalInfo(new Vec3(x, y, z), Vec3.ZERO, yaw, pitch);
+            }
 
-        ServerLevel source = (ServerLevel) target.level();
-        UUID id = target.getUUID();
-        Vec3 originalPosition = target.position();
-        float originalYaw = target.getYRot();
-        float originalPitch = target.getXRot();
-        CompoundTag snapshot = new CompoundTag();
-        // saveAsPassenger writes the entity's `id` field, which
-        // EntityType.loadEntityRecursive needs to reconstruct modded mobs.
-        if (!target.saveAsPassenger(snapshot)) return null;
-        snapshot.putUUID("UUID", id);
-        if (target instanceof Mob) snapshot.putBoolean("PersistenceRequired", persistenceRequired);
-
-        // Echo's working transfer order matters: remove the source before
-        // registering a second entity with the same UUID in another level.
-        // Keeping both live at once lets the server's UUID bookkeeping remove
-        // the destination copy a moment later.
-        target.discard();
-
-        Entity recreated = EntityType.loadEntityRecursive(snapshot, destination, entity -> {
-            entity.setUUID(id);
-            entity.moveTo(x, y, z, yaw, pitch);
-            entity.setDeltaMovement(Vec3.ZERO);
-            return entity;
-        });
-        if (recreated instanceof LivingEntity moved && destination.addFreshEntity(recreated)) {
-            return moved;
-        }
-
-        // A failed destination construction must never delete the mob. Restore
-        // the same complete snapshot at its original position immediately.
-        snapshot.putBoolean("PersistenceRequired",
-                target instanceof Mob && ((Mob) target).isPersistenceRequired());
-        Entity restored = EntityType.loadEntityRecursive(snapshot, source, entity -> {
-            entity.setUUID(id);
-            entity.moveTo(originalPosition.x, originalPosition.y, originalPosition.z,
-                    originalYaw, originalPitch);
-            entity.setDeltaMovement(Vec3.ZERO);
-            return entity;
-        });
-        if (restored != null) source.addFreshEntity(restored);
-        return null;
-    }
-
-    private static CompoundTag snapshotTarget(LivingEntity target, boolean persistenceRequired) {
-        CompoundTag snapshot = new CompoundTag();
-        if (!target.saveAsPassenger(snapshot)) return null;
-        snapshot.putUUID("UUID", target.getUUID());
-        if (target instanceof Mob) snapshot.putBoolean("PersistenceRequired", persistenceRequired);
-        return snapshot;
+            @Override
+            public boolean playTeleportSound(ServerPlayer player, ServerLevel sourceLevel,
+                                             ServerLevel destinationLevel) {
+                return false;
+            }
+        };
+        Entity moved = target.changeDimension(destination, directTeleporter);
+        if (!(moved instanceof LivingEntity living)) return null;
+        living.moveTo(x, y, z, yaw, pitch);
+        living.setDeltaMovement(Vec3.ZERO);
+        if (persistenceRequired && living instanceof Mob mob) mob.setPersistenceRequired();
+        return living;
     }
 
     private static void guardLifecycle(ServerPlayer player, long ticks) {
@@ -247,6 +224,8 @@ public final class DomainAbilities {
     public static boolean shouldSuppressLifecycleUnload(ServerPlayer player) {
         MinecraftServer server = player.getServer();
         if (server == null) return false;
+        Session active = SESSIONS.get(player.getUUID());
+        if (active != null && !active.ending) return true;
         Long until = LIFECYCLE_GUARDS.get(player.getUUID());
         if (until == null) return false;
         if (server.overworld().getGameTime() <= until) return true;
@@ -256,13 +235,17 @@ public final class DomainAbilities {
 
     /** Ends a session when Origins removes the power or the player unloads it. */
     public static void clearTransient(ServerPlayer player) {
-        Session session = SESSIONS.remove(player.getUUID());
-        if (session != null) endSession(session, player.getServer(), true);
+        Session session = SESSIONS.get(player.getUUID());
+        if (session != null) finishSession(session, player.getServer(), true, "Origin removed");
         removeDomainBuffs(player);
     }
 
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
+        SESSIONS.clear();
+        COOLDOWNS.clear();
+        LIFECYCLE_GUARDS.clear();
+        arenaReady = false;
         ServerLevel domain = event.getServer().getLevel(DOMAIN_DIMENSION);
         if (domain != null) buildArena(domain);
     }
@@ -279,8 +262,7 @@ public final class DomainAbilities {
             } catch (Throwable error) {
                 LOGGER.error("Drowned Domain session {} failed; restoring its combatants",
                         session.ownerId, error);
-                SESSIONS.remove(session.ownerId);
-                endSession(session, server, true, "internal recovery");
+                finishSession(session, server, true, "internal recovery");
             }
         }
     }
@@ -288,24 +270,21 @@ public final class DomainAbilities {
     private static void tickSession(MinecraftServer server, Session session) {
             ServerPlayer owner = server.getPlayerList().getPlayer(session.ownerId);
             if (owner == null || !owner.isAlive()) {
-                SESSIONS.remove(session.ownerId);
-                endSession(session, server, true, "caster unavailable");
+                finishSession(session, server, true, "caster unavailable");
                 return;
             }
-            long now = session.domain.getGameTime();
+            long now = server.overworld().getGameTime();
             if (owner.level() != session.domain) {
                 // A dimension transfer can expose the old level for a few
                 // ticks. Tolerate that window instead of destroying a valid
                 // session before the client finishes changing dimensions.
                 if (++session.ownerMismatchTicks <= 40) return;
-                SESSIONS.remove(session.ownerId);
-                endSession(session, server, true, "caster left the domain");
+                finishSession(session, server, true, "caster left the domain");
                 return;
             }
             session.ownerMismatchTicks = 0;
             if (now >= session.endAt) {
-                SESSIONS.remove(session.ownerId);
-                endSession(session, server, true, "time expired");
+                finishSession(session, server, true, "time expired");
                 return;
             }
             long age = now - session.startedAt;
@@ -315,22 +294,19 @@ public final class DomainAbilities {
             if (!session.target.isAlive()
                     && session.target.getRemovalReason() == Entity.RemovalReason.KILLED) {
                 session.targetDefeated = true;
-                SESSIONS.remove(session.ownerId);
-                endSession(session, server, false, "target defeated");
+                finishSession(session, server, false, "target defeated");
                 return;
             }
             LivingEntity target = resolveTarget(session);
             if (target == null) {
                 if (++session.targetMissingTicks <= 20) return;
-                SESSIONS.remove(session.ownerId);
-                endSession(session, server, true, "target transfer was interrupted");
+                finishSession(session, server, true, "target transfer was interrupted");
                 return;
             }
             session.targetMissingTicks = 0;
             if (!target.isAlive()) {
                 session.targetDefeated = true;
-                SESSIONS.remove(session.ownerId);
-                endSession(session, server, false, "target defeated");
+                finishSession(session, server, false, "target defeated");
                 return;
             }
             forceTargetAggro(target, owner, age % 10L == 0L);
@@ -475,8 +451,8 @@ public final class DomainAbilities {
                 origin.x, origin.y, origin.z, 3, 0.08D, 0.08D, 0.08D, 0.02D);
         // A compact warning ring gives the target a readable tell without
         // filling the screen with explosion particles.
-        for (int point = 0; point < 12; point++) {
-            double angle = Math.PI * 2.0D * point / 12.0D;
+        for (int point = 0; point < 6; point++) {
+            double angle = Math.PI * 2.0D * point / 6.0D;
             session.domain.sendParticles(new net.minecraft.core.particles.DustParticleOptions(
                             new Vector3f(0.75F, 0.12F, 0.04F), 0.65F),
                     aim.x + Math.cos(angle) * 1.25D, aim.y + 0.08D,
@@ -524,27 +500,34 @@ public final class DomainAbilities {
         }
     }
 
-    private static void endSession(Session session, MinecraftServer server, boolean returnCombatants) {
-        endSession(session, server, returnCombatants, "cleanup");
-    }
-
-    private static void endSession(Session session, MinecraftServer server,
-                                   boolean returnCombatants, String reason) {
-        if (server == null || session.ending) return;
-        session.ending = true;
-        ServerPlayer owner = server.getPlayerList().getPlayer(session.ownerId);
-        if (owner != null) {
-            removeDomainBuffs(owner);
-            if (owner.isAlive()) {
-                guardLifecycle(owner, 60L);
-                teleportPlayerBack(owner, server, session);
-                message(owner, "Drowned Domain closed (" + reason + ") — ready immediately.");
-            }
+    private static void finishSession(Session session, MinecraftServer server,
+                                      boolean returnCombatants, String reason) {
+        if (session.ending) {
+            SESSIONS.remove(session.ownerId, session);
+            return;
         }
-        if (returnCombatants && !session.targetDefeated) restoreTarget(session, server);
+        session.ending = true;
+        SESSIONS.remove(session.ownerId, session);
+        if (server == null) return;
+        long now = server.overworld().getGameTime();
+        COOLDOWNS.put(session.ownerId, now + COOLDOWN_TICKS);
+        clearDomainProjectiles(session.domain);
+        ServerPlayer owner = server.getPlayerList().getPlayer(session.ownerId);
+        try {
+            if (owner != null) {
+                removeDomainBuffs(owner);
+                if (owner.isAlive()) {
+                    guardLifecycle(owner, 60L);
+                    teleportPlayerBack(owner, server, session);
+                    message(owner, "Drowned Domain closed (" + reason + "). Cooldown: 5s.");
+                }
+            }
+        } finally {
+            if (returnCombatants && !session.targetDefeated) restoreTarget(session, server);
+        }
     }
 
-    /** Returns the current copy, or reconstructs the pre-domain snapshot if that copy vanished. */
+    /** Returns the same Forge-transferred entity to its recorded origin. */
     private static void restoreTarget(Session session, MinecraftServer server) {
         ServerLevel origin = server.getLevel(session.targetOrigin);
         if (origin == null) return;
@@ -553,24 +536,14 @@ public final class DomainAbilities {
 
         LivingEntity target = resolveTarget(session);
         if (target != null && target.isAlive()) {
-            LivingEntity moved = transferLivingEntity(target, origin,
+            LivingEntity moved = moveEntity(target, origin,
                     session.targetPosition.x, session.targetPosition.y, session.targetPosition.z,
                     session.targetYaw, session.targetPitch, session.targetWasPersistent);
-            if (moved != null) return;
-            if (!target.isRemoved()) target.discard();
+            if (moved == null) {
+                LOGGER.error("Could not return Drowned Domain target {} to {}",
+                        session.targetId, session.targetOrigin.location());
+            }
         }
-
-        CompoundTag snapshot = session.originalTargetSnapshot.copy();
-        snapshot.putUUID("UUID", session.targetId);
-        snapshot.putBoolean("PersistenceRequired", session.targetWasPersistent);
-        Entity restored = EntityType.loadEntityRecursive(snapshot, origin, entity -> {
-            entity.setUUID(session.targetId);
-            entity.moveTo(session.targetPosition.x, session.targetPosition.y, session.targetPosition.z,
-                    session.targetYaw, session.targetPitch);
-            entity.setDeltaMovement(Vec3.ZERO);
-            return entity;
-        });
-        if (restored != null) origin.addFreshEntity(restored);
     }
 
     private static void teleportPlayerBack(ServerPlayer owner, MinecraftServer server, Session session) {
@@ -579,37 +552,48 @@ public final class DomainAbilities {
                 session.playerPosition.z, session.playerYaw, session.playerPitch);
     }
 
+    private static void clearDomainProjectiles(ServerLevel domain) {
+        AABB arena = new AABB(-180.0D, 0.0D, -180.0D, 180.0D, 140.0D, 180.0D);
+        for (FlintlockBall projectile : domain.getEntitiesOfClass(FlintlockBall.class, arena,
+                FlintlockBall::isCannonball)) {
+            projectile.discard();
+        }
+    }
+
     private static void buildArena(ServerLevel level) {
         if (arenaReady) return;
-        if (level.getBlockState(ARENA_MARKER).is(Blocks.CHISELED_SANDSTONE)) {
+        if (level.getBlockState(ARENA_MARKER).is(Blocks.GOLD_BLOCK)) {
             arenaReady = true;
             return;
         }
-        final int oceanSurface = 63;
         final int beachTop = 66;
-        clearLegacyArenaGeometry(level);
 
-        // A full barrier foundation supports every sand block without gravity
-        // updates. The crescent itself rises two blocks above the lagoon.
-        for (int x = -42; x <= 42; x++) {
-            for (int z = -42; z <= 42; z++) set(level, x, 62, z, Blocks.BARRIER);
-        }
+        // Version-2 terrain: one opaque sandstone seabed with exactly two
+        // water blocks above it. This also seals old 60-deep-ocean chunks so
+        // their transparent fluid layers are no longer rendered or simulated.
+        buildOceanFoundation(level);
+
+        // Remove only the obsolete terrain inside the playable square. The old
+        // migration swept more than two million positions; that scan was a
+        // major source of server stalls and client chunk-update storms.
+        clearLegacyCannons(level, 0, -76, true);
+        clearLegacyCannons(level, 0, 76, true);
+        clearLegacyCannons(level, -76, 0, false);
+        clearLegacyCannons(level, 76, 0, false);
         for (int x = -40; x <= 40; x++) {
             for (int z = -40; z <= 40; z++) {
-                set(level, x, oceanSurface, z, Blocks.SAND);
-                double outer = square((x + 4.0D) / 36.0D) + square(z / 32.0D);
-                double inner = square((x - 8.0D) / 33.0D) + square(z / 26.0D);
+                for (int y = 65; y <= 82; y++) set(level, x, y, z, Blocks.AIR);
+                double outer = square((x + 7.0D) / 34.0D) + square(z / 40.0D);
+                double inner = square((x - 6.0D) / 30.0D) + square(z / 31.0D);
                 boolean sandyCrescent = outer <= 1.0D && inner >= 1.0D;
                 if (sandyCrescent) {
+                    set(level, x, 63, z, Blocks.SANDSTONE);
                     set(level, x, 64, z, Blocks.SANDSTONE);
                     set(level, x, 65, z, Blocks.SAND);
                     set(level, x, beachTop, z, Blocks.SAND);
-                    set(level, x, 67, z, Blocks.AIR);
                 } else {
+                    set(level, x, 63, z, Blocks.WATER);
                     set(level, x, 64, z, Blocks.WATER);
-                    set(level, x, 65, z, Blocks.WATER);
-                    set(level, x, 66, z, Blocks.AIR);
-                    set(level, x, 67, z, Blocks.AIR);
                 }
             }
         }
@@ -630,28 +614,37 @@ public final class DomainAbilities {
         buildShip(level, 76, 0, false);
         buildDistantIslands(level);
         set(level, ARENA_MARKER.getX(), ARENA_MARKER.getY(), ARENA_MARKER.getZ(),
-                Blocks.CHISELED_SANDSTONE);
+                Blocks.GOLD_BLOCK);
         arenaReady = true;
     }
 
-    /** Removes every known legacy arena/ship footprint once after a restart. */
-    private static void clearLegacyArenaGeometry(ServerLevel level) {
-        if (arenaGeometryMigrated) return;
-        arenaGeometryMigrated = true;
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        for (int x = -115; x <= 115; x++) {
-            for (int z = -115; z <= 115; z++) {
-                boolean arena = Math.abs(x) <= 42 && Math.abs(z) <= 42;
-                boolean fleetLane = (Math.abs(x) >= 43 && Math.abs(x) <= 115 && Math.abs(z) <= 42)
-                        || (Math.abs(z) >= 43 && Math.abs(z) <= 115 && Math.abs(x) <= 42);
-                if (!arena && !fleetLane) continue;
-                for (int y = 64; y <= 105; y++) {
-                    pos.set(x, y, z);
-                    if (!level.getBlockState(pos).isAir()) level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
-                }
-                if (fleetLane) {
-                    set(level, x, 62, z, Blocks.WATER);
-                    set(level, x, 63, z, Blocks.WATER);
+    private static void buildOceanFoundation(ServerLevel level) {
+        // Radius 154 contains the playable wall, all four ships and the dune
+        // silhouettes. New chunks use the same layers through dimension JSON.
+        for (int x = -154; x <= 154; x++) {
+            for (int z = -154; z <= 154; z++) {
+                set(level, x, 62, z, Blocks.SANDSTONE);
+                set(level, x, 63, z, Blocks.WATER);
+                set(level, x, 64, z, Blocks.WATER);
+            }
+        }
+    }
+
+    /** Removes the old eighty-cannon layout without scanning the surrounding world. */
+    private static void clearLegacyCannons(ServerLevel level, int cx, int cz, boolean eastWest) {
+        int[] oldCannonAlong = {-23, -18, -13, -8, -3, 3, 8, 13, 18, 23};
+        for (int along : oldCannonAlong) {
+            for (int side : new int[]{-1, 1}) {
+                Direction facing = eastWest
+                        ? (side < 0 ? Direction.NORTH : Direction.SOUTH)
+                        : (side < 0 ? Direction.WEST : Direction.EAST);
+                int x = eastWest ? cx + along : cx + side * 11;
+                int z = eastWest ? cz + side * 11 : cz + along;
+                set(level, x, 65, z, Blocks.AIR);
+                set(level, x, 66, z, Blocks.AIR);
+                for (int segment = 1; segment <= 4; segment++) {
+                    set(level, x + facing.getStepX() * segment, 66,
+                            z + facing.getStepZ() * segment, Blocks.AIR);
                 }
             }
         }
@@ -659,6 +652,14 @@ public final class DomainAbilities {
 
     private static void buildSandDune(ServerLevel level, int cx, int cz, int radiusX,
                                       int radiusZ, int baseY, int height) {
+        // Every falling-sand footprint gets a solid sandstone shelf first.
+        for (int dx = -radiusX; dx <= radiusX; dx++) {
+            for (int dz = -radiusZ; dz <= radiusZ; dz++) {
+                if (square(dx / (double) radiusX) + square(dz / (double) radiusZ) <= 1.0D) {
+                    set(level, cx + dx, baseY - 1, cz + dz, Blocks.SANDSTONE);
+                }
+            }
+        }
         for (int layer = 0; layer < height; layer++) {
             int rx = Math.max(1, radiusX - layer);
             int rz = Math.max(1, radiusZ - layer);
@@ -749,7 +750,7 @@ public final class DomainAbilities {
     }
 
     private static void buildBarriers(ServerLevel level) {
-        for (int y = 64; y <= 110; y++) {
+        for (int y = 63; y <= 110; y++) {
             for (int n = -41; n <= 41; n++) {
                 set(level, -41, y, n, Blocks.BARRIER);
                 set(level, 41, y, n, Blocks.BARRIER);
@@ -782,12 +783,16 @@ public final class DomainAbilities {
             placeShipBlock(level, cx, cz, eastWest, along, halfWidth, 69, Blocks.DARK_OAK_FENCE);
         }
 
-        int[] cannonAlong = {-23, -18, -13, -8, -3, 3, 8, 13, 18, 23};
+        // Only the inward broadside needs live CBC blocks. Older builds placed
+        // eighty complete cannons (including the unseen outer broadsides),
+        // creating hundreds of ticking block entities around the player.
+        int[] cannonAlong = {-21, -14, -7, 0, 7, 14, 21};
+        int inwardSide = eastWest ? (cz < 0 ? 1 : -1) : (cx < 0 ? 1 : -1);
         for (int along : cannonAlong) {
             for (int side : new int[]{-1, 1}) {
                 placeShipBlock(level, cx, cz, eastWest, along, side * 12, 66, Blocks.POLISHED_BLACKSTONE);
-                buildCannon(level, cx, cz, eastWest, side, along);
             }
+            buildCannon(level, cx, cz, eastWest, inwardSide, along);
         }
 
         // Two-storey sterncastle with side and rear cabin windows.
@@ -924,7 +929,6 @@ public final class DomainAbilities {
         int dz = facing.getStepZ();
         // Enclosed lower gun deck: the chamber sits inside the hull and the
         // barrel exits sideways through the Y=66 port below the main deck.
-        setOptional(level, x, 65, z, "createbigcannons:cannon_carriage", facing);
         setOptional(level, x, 66, z, "createbigcannons:fixed_cannon_mount", facing);
         setOptional(level, x + dx, 66, z + dz, "createbigcannons:cast_iron_cannon_chamber", facing);
         setOptional(level, x + dx * 2, 66, z + dz * 2, "createbigcannons:cast_iron_cannon_barrel", facing);
@@ -945,14 +949,19 @@ public final class DomainAbilities {
         } else if (state.hasProperty(BlockStateProperties.FACING)) {
             state = state.setValue(BlockStateProperties.FACING, facing);
         }
-        level.setBlock(new BlockPos(x, y, z), state, 2);
+        BlockPos position = new BlockPos(x, y, z);
+        if (!level.getBlockState(position).equals(state)) level.setBlock(position, state, 2);
     }
 
     private static void set(ServerLevel level, int x, int y, int z, net.minecraft.world.level.block.Block block) {
         // Client update without neighbor updates: this keeps the two-deep
-        // source-water section stable and avoids tens of thousands of fluid
-        // and gravity updates while the arena is reconstructed.
-        level.setBlock(new BlockPos(x, y, z), block.defaultBlockState(), 2);
+        // source-water section stable and avoids fluid/gravity cascades. Skip
+        // unchanged cells so subsequent starts never resend the whole arena.
+        BlockPos position = new BlockPos(x, y, z);
+        BlockState desired = block.defaultBlockState();
+        if (!level.getBlockState(position).equals(desired)) {
+            level.setBlock(position, desired, 2);
+        }
     }
 
     private static void message(ServerPlayer player, String text) {
@@ -973,7 +982,6 @@ public final class DomainAbilities {
         private final float targetYaw;
         private final float targetPitch;
         private final boolean targetWasPersistent;
-        private final CompoundTag originalTargetSnapshot;
         private final long startedAt;
         private final long endAt;
         private long lastCannonball;
@@ -987,7 +995,7 @@ public final class DomainAbilities {
         private Session(UUID ownerId, LivingEntity target, ServerLevel domain,
                         ResourceKey<Level> playerOrigin, Vec3 playerPosition, float playerYaw, float playerPitch,
                         ResourceKey<Level> targetOrigin, Vec3 targetPosition, float targetYaw, float targetPitch,
-                        boolean targetWasPersistent, CompoundTag originalTargetSnapshot, long endAt) {
+                        boolean targetWasPersistent, long endAt) {
             this.ownerId = ownerId;
             this.target = target;
             this.targetId = target.getUUID();
@@ -1001,8 +1009,7 @@ public final class DomainAbilities {
             this.targetYaw = targetYaw;
             this.targetPitch = targetPitch;
             this.targetWasPersistent = targetWasPersistent;
-            this.originalTargetSnapshot = originalTargetSnapshot.copy();
-            this.startedAt = domain.getGameTime();
+            this.startedAt = endAt - DOMAIN_TICKS;
             this.endAt = endAt;
             this.lastCannonball = this.startedAt;
         }
