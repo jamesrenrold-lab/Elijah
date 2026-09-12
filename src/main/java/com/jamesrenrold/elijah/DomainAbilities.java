@@ -4,6 +4,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -106,7 +107,9 @@ public final class DomainAbilities {
         }
 
         player.teleportTo(domain, -10.0D, ARENA_Y, 0.0D, playerYaw, playerPitch);
-        movedTarget.teleportTo(10.0D, ARENA_Y, 0.0D, targetYaw, targetPitch);
+        movedTarget.teleportTo(10.0D, ARENA_Y, 0.0D);
+        movedTarget.setYRot(targetYaw);
+        movedTarget.setXRot(targetPitch);
         movedTarget.setDeltaMovement(Vec3.ZERO);
         movedTarget.hurtMarked = true;
 
@@ -256,8 +259,11 @@ public final class DomainAbilities {
             ServerLevel origin = server.getLevel(session.targetOrigin);
             if (origin != null) {
                 Entity moved = target.changeDimension(origin);
-                if (moved != null) moved.teleportTo(session.targetPosition.x, session.targetPosition.y,
-                        session.targetPosition.z, session.targetYaw, session.targetPitch);
+                if (moved != null) {
+                    moved.teleportTo(session.targetPosition.x, session.targetPosition.y, session.targetPosition.z);
+                    moved.setYRot(session.targetYaw);
+                    moved.setXRot(session.targetPitch);
+                }
             }
         }
     }
