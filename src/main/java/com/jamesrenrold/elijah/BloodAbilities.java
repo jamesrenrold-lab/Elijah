@@ -37,11 +37,12 @@ public final class BloodAbilities {
     private static final int BLOOD_COOLDOWN_TICKS = 15 * 20;
     private static final int HUNT_TICKS = 15 * 20;
     private static final int FLIGHT_TICKS = 20 * 20;
-    private static final int OVERDRIVE_TICKS = 20 * 20;
+    private static final int OVERDRIVE_TICKS = 25 * 20;
     private static final UUID BLOOD_SPEED_ID = UUID.fromString("75c9a1d0-8840-4a6b-b3d9-8fa4c3f88a11");
     private static final UUID BLOOD_ATTACK_SPEED_ID = UUID.fromString("b3a7c750-c8c5-4a9a-8c67-5ce2ef6cb4f9");
     private static final UUID BLOOD_LIFESTEAL_ID = UUID.fromString("f7ad2d3e-3e63-4da4-9f77-8fc6c9eb4e35");
     private static final UUID HUNT_LIFESTEAL_ID = UUID.fromString("9e8b1f7e-2f5f-4f84-a4e9-1b9b2a6d4c61");
+    private static final UUID OVERDRIVE_LIFESTEAL_ID = UUID.fromString("d7d2fb45-b19a-4f90-8fdb-8ce8b7a8c1c0");
     private static final DustParticleOptions RED_EYE =
             new DustParticleOptions(new Vector3f(0.95F, 0.02F, 0.02F), 0.65F);
 
@@ -72,6 +73,7 @@ public final class BloodAbilities {
         state.bloodOverdriveUntil = now + OVERDRIVE_TICKS;
         state.bloodLastDegenerationTick = now;
         state.bloodLastEnemyHitTick = now;
+        ensureOverdriveLifeSteal(player);
         player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, OVERDRIVE_TICKS, 0, false, true, true));
         player.addEffect(new MobEffectInstance(MobEffects.DARKNESS, OVERDRIVE_TICKS, 0, false, true, true));
         player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, OVERDRIVE_TICKS, 0, false, true, true));
@@ -183,6 +185,11 @@ public final class BloodAbilities {
                 "Blood Hunt additional life steal", 0.20D, AttributeModifier.Operation.ADDITION);
     }
 
+    private static void ensureOverdriveLifeSteal(ServerPlayer player) {
+        addModifier(lifeStealAttribute(player), OVERDRIVE_LIFESTEAL_ID,
+                "Blood overflow life steal", 0.50D, AttributeModifier.Operation.ADDITION);
+    }
+
     private static void removeBloodModifiers(ServerPlayer player) {
         AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
         AttributeInstance attackSpeed = player.getAttribute(Attributes.ATTACK_SPEED);
@@ -191,6 +198,7 @@ public final class BloodAbilities {
         AttributeInstance lifeSteal = lifeStealAttribute(player);
         if (lifeSteal != null) lifeSteal.removeModifier(BLOOD_LIFESTEAL_ID);
         if (lifeSteal != null) lifeSteal.removeModifier(HUNT_LIFESTEAL_ID);
+        if (lifeSteal != null) lifeSteal.removeModifier(OVERDRIVE_LIFESTEAL_ID);
     }
 
     @SubscribeEvent
@@ -211,6 +219,12 @@ public final class BloodAbilities {
         else {
             AttributeInstance lifeSteal = lifeStealAttribute(player);
             if (lifeSteal != null) lifeSteal.removeModifier(HUNT_LIFESTEAL_ID);
+        }
+
+        if (state.bloodOverdriveUntil > now) ensureOverdriveLifeSteal(player);
+        else {
+            AttributeInstance lifeSteal = lifeStealAttribute(player);
+            if (lifeSteal != null) lifeSteal.removeModifier(OVERDRIVE_LIFESTEAL_ID);
         }
 
         if (state.bloodHuntUntil <= now && state.bloodHuntUntil != 0L) endHunt(player, state);
@@ -337,4 +351,3 @@ public final class BloodAbilities {
 
     private BloodAbilities() {}
 }
-
