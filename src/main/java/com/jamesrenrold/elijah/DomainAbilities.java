@@ -13,6 +13,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
@@ -100,8 +101,8 @@ public final class DomainAbilities {
         float targetYaw = target.getYRot();
         float targetPitch = target.getXRot();
 
-        Entity changed = target.changeDimension(domain);
-        if (!(changed instanceof LivingEntity movedTarget)) {
+        LivingEntity movedTarget = moveTargetToDomain(target, domain);
+        if (movedTarget == null) {
             message(player, "The target could not be pulled into the domain.");
             return 0;
         }
@@ -124,6 +125,44 @@ public final class DomainAbilities {
                 SoundSource.PLAYERS, 1.2F, 0.7F);
         message(player, "The Drowned Domain opens — the tide answers your call!");
         return 1;
+    }
+
+    /**
+     * Recreates the target from its complete NBT snapshot in the destination.
+     * This is the same transfer strategy used by the Echo domain: it works for
+     * modded mobs that override changeDimension and return null, preserves
+     * equipment/attributes/AI, and restores the source if construction fails.
+     */
+    private static LivingEntity moveTargetToDomain(LivingEntity target, ServerLevel destination) {
+        if (target instanceof ServerPlayer || destination == null
+                || !(target.level() instanceof ServerLevel source) || target.isRemoved()) return null;
+
+        UUID id = target.getUUID();
+        Vec3 originalPosition = target.position();
+        float originalYaw = target.getYRot();
+        float originalPitch = target.getXRot();
+        CompoundTag snapshot = new CompoundTag();
+        if (!target.saveWithoutId(snapshot)) return null;
+        snapshot.putUUID("UUID", id);
+        target.discard();
+
+        Entity recreated = EntityType.loadEntityRecursive(snapshot, destination, entity -> {
+            entity.setUUID(id);
+            entity.moveTo(10.0D, ARENA_Y, 0.0D, originalYaw, originalPitch);
+            entity.setDeltaMovement(Vec3.ZERO);
+            return entity;
+        });
+        if (recreated instanceof LivingEntity moved && destination.addFreshEntity(recreated)) return moved;
+
+        Entity restored = EntityType.loadEntityRecursive(snapshot, source, entity -> {
+            entity.setUUID(id);
+            entity.moveTo(originalPosition.x, originalPosition.y, originalPosition.z,
+                    originalYaw, originalPitch);
+            entity.setDeltaMovement(Vec3.ZERO);
+            return entity;
+        });
+        if (restored != null) source.addFreshEntity(restored);
+        return null;
     }
 
     /** Ends a session when Origins removes the power or the player unloads it. */
