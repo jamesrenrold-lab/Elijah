@@ -1,0 +1,22 @@
+{
+  "type": "elijah:drowned_domain",
+  "generator": {
+    "type": "minecraft:flat",
+    "settings": {
+      "layers": [
+        {
+          "height": 1,
+          "block": "minecraft:bedrock"
+        },
+        {
+          "height": 63,
+          "block": "minecraft:water"
+        }
+      ],
+      "biome": "minecraft:ocean",
+      "lakes": false,
+      "features": false,
+      "structure_overrides": []
+    }
+  }
+}
