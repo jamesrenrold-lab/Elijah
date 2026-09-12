@@ -103,14 +103,17 @@ public final class DomainAbilities {
         float targetYaw = target.getYRot();
         float targetPitch = target.getXRot();
 
-        LivingEntity movedTarget = transferLivingEntity(target, domain, 10.0D, ARENA_Y, 0.0D,
+        // The target starts on the wide back of the sandy crescent while the
+        // caster begins inside the lagoon, where the pirate's swim advantage
+        // immediately matters.
+        LivingEntity movedTarget = transferLivingEntity(target, domain, -28.0D, ARENA_Y, 0.0D,
                 targetYaw, targetPitch);
         if (movedTarget == null) {
             message(player, "The target could not be pulled into the domain.");
             return 0;
         }
 
-        player.teleportTo(domain, -10.0D, ARENA_Y, 0.0D, playerYaw, playerPitch);
+        player.teleportTo(domain, 8.0D, ARENA_Y, 0.0D, playerYaw, playerPitch);
         movedTarget.setDeltaMovement(Vec3.ZERO);
         movedTarget.hurtMarked = true;
 
@@ -366,19 +369,19 @@ public final class DomainAbilities {
         for (int x = -42; x <= 42; x++) {
             for (int z = -42; z <= 42; z++) set(level, x, surface - 2, z, Blocks.BARRIER);
         }
-        // Fill all the way to the barrier walls. Water is exactly two source
-        // blocks deep and is sealed by invisible barriers so it cannot spread.
+        // Begin with a two-source-block-deep lagoon/ocean across the whole
+        // arena, then carve a shifted pair of ellipses into a broad sandy
+        // crescent. The inner ellipse opens toward the east, matching the
+        // requested lagoon shape and leaving substantially more usable water.
         for (int x = -40; x <= 40; x++) {
             for (int z = -40; z <= 40; z++) {
                 set(level, x, surface - 1, z, Blocks.SAND);
-                // Slightly more than half of the expanded arena is water,
-                // while keeping the requested two-source-block depth.
-                if (x <= -7) {
+                double outer = square((x + 4.0D) / 36.0D) + square(z / 32.0D);
+                double inner = square((x - 8.0D) / 33.0D) + square(z / 26.0D);
+                boolean sandyCrescent = outer <= 1.0D && inner >= 1.0D;
+                if (sandyCrescent) {
                     set(level, x, surface, z, Blocks.SAND);
                     set(level, x, surface + 1, z, Blocks.AIR);
-                } else if (x == -6) {
-                    set(level, x, surface, z, Blocks.BARRIER);
-                    set(level, x, surface + 1, z, Blocks.BARRIER);
                 } else {
                     set(level, x, surface, z, Blocks.WATER);
                     set(level, x, surface + 1, z, Blocks.WATER);
@@ -387,7 +390,7 @@ public final class DomainAbilities {
         }
 
         // Low dunes on the sandy half.
-        int[][] dunes = {{-29, -19}, {-20, -14}, {-11, -24}, {-31, 7}, {-20, 19}, {-10, 8}};
+        int[][] dunes = {{-31, -10}, {-30, 10}, {-24, -22}, {-23, 22}, {-10, -29}, {-9, 29}};
         for (int[] dune : dunes) {
             for (int dx = -3; dx <= 3; dx++) {
                 for (int dz = -2; dz <= 2; dz++) {
@@ -397,7 +400,7 @@ public final class DomainAbilities {
                 }
             }
         }
-        buildPalm(level, -23, surface, -1);
+        buildPalm(level, -29, surface, 5);
         buildBarriers(level);
         buildShip(level, 0, -64, false);
         buildShip(level, 0, 64, false);
@@ -419,6 +422,10 @@ public final class DomainAbilities {
         set(level, topX + 3, topY - 1, z, Blocks.JUNGLE_LEAVES);
         set(level, topX, topY - 1, z - 3, Blocks.JUNGLE_LEAVES);
         set(level, topX, topY - 1, z + 3, Blocks.JUNGLE_LEAVES);
+    }
+
+    private static double square(double value) {
+        return value * value;
     }
 
     private static void buildBarriers(ServerLevel level) {
