@@ -11,18 +11,8 @@
       "compare_to": 0
     },
     "if_action": {
-      "type": "origins:and",
-      "actions": [
-        {
-          "type": "origins:execute_command",
-          "command": "elijah crew"
-        },
-        {
-          "type": "origins:change_resource",
-          "resource": "elijah:crew_resource",
-          "change": -1
-        }
-      ]
+      "type": "origins:execute_command",
+      "command": "elijah crew"
     },
     "else_action": {
       "type": "origins:execute_command",
