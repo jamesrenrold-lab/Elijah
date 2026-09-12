@@ -110,6 +110,7 @@ public final class ElijahPirate {
                             current.bloodOverdriveUntil = 0L;
                             current.bloodLastDegenerationTick = 0L;
                             current.bloodLastEnemyHitTick = 0L;
+                            current.domainCooldownUntil = 0L;
                         }
                         if (event.isWasDeath() && !old.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
                             current.clearPowder();
@@ -154,6 +155,7 @@ public final class ElijahPirate {
                 .then(Commands.literal("blood_overdrive").executes(context -> BloodAbilities.triggerOverdrive(context.getSource())))
                 .then(Commands.literal("blood_hunt").executes(context -> BloodAbilities.activateHunt(context.getSource())))
                 .then(Commands.literal("blood_wings").executes(context -> BloodAbilities.activateWings(context.getSource())))
+                .then(Commands.literal("domain").executes(context -> DomainAbilities.activate(context.getSource())))
                 .then(Commands.literal("sea_on").executes(context -> PirateAbilities.setWisdom(context.getSource(), true)))
                 .then(Commands.literal("sea_off").executes(context -> PirateAbilities.setWisdom(context.getSource(), false)))
                 .then(Commands.literal("unload").executes(context -> unload(context.getSource()))));
@@ -292,6 +294,7 @@ public final class ElijahPirate {
 
     private int unload(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
+        DomainAbilities.clearTransient(player);
         BloodAbilities.clearTransient(player);
         if (player.containerMenu instanceof PowderMenu) player.closeContainer();
         player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch -> {
