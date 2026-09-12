@@ -45,6 +45,7 @@ public final class PowderPouch extends ItemStackHandler {
     public int xpBonusRemainder;
     public UUID lastCombatTarget;
     public long lastCombatTargetTick;
+    public boolean cursedFormActive;
     public long bloodBuffUntil;
     public long bloodCooldownUntil;
     public long bloodHuntUntil;
@@ -137,6 +138,7 @@ public final class PowderPouch extends ItemStackHandler {
         tag.putInt("XpBonusRemainder", xpBonusRemainder);
         if (lastCombatTarget != null) tag.putUUID("LastCombatTarget", lastCombatTarget);
         tag.putLong("LastCombatTargetTick", lastCombatTargetTick);
+        tag.putBoolean("CursedFormActive", cursedFormActive);
         tag.putLong("BloodBuffUntil", bloodBuffUntil);
         tag.putLong("BloodCooldownUntil", bloodCooldownUntil);
         tag.putLong("BloodHuntUntil", bloodHuntUntil);
@@ -160,6 +162,7 @@ public final class PowderPouch extends ItemStackHandler {
         xpBonusRemainder = Math.floorMod(tag.getInt("XpBonusRemainder"), 10);
         lastCombatTarget = tag.hasUUID("LastCombatTarget") ? tag.getUUID("LastCombatTarget") : null;
         lastCombatTargetTick = tag.getLong("LastCombatTargetTick");
+        cursedFormActive = tag.getBoolean("CursedFormActive");
         bloodBuffUntil = tag.getLong("BloodBuffUntil");
         bloodCooldownUntil = tag.getLong("BloodCooldownUntil");
         bloodHuntUntil = tag.getLong("BloodHuntUntil");
