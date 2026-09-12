@@ -17,6 +17,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
@@ -141,8 +142,8 @@ public final class DomainAbilities {
         Vec3 originalPosition = target.position();
         float originalYaw = target.getYRot();
         float originalPitch = target.getXRot();
-        CompoundTag snapshot = new CompoundTag();
-        if (!target.saveWithoutId(snapshot)) return null;
+        CompoundTag snapshot = target.saveWithoutId(new CompoundTag());
+        if (snapshot == null) return null;
         snapshot.putUUID("UUID", id);
         target.discard();
 
