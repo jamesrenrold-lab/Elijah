@@ -67,6 +67,8 @@ assert 'cooldown' not in domain and 'hud_render' not in domain, \
     'Testing domain must not have an Origins cooldown'
 assert 'elijah:domain_cooldown' not in origin['powers']
 assert 'elijah:domain_cooldown_recharge' not in origin['powers']
+assert 'data/elijah/powers/domain_cooldown.json' not in parsed
+assert 'data/elijah/powers/domain_cooldown_recharge.json' not in parsed
 domain_source = (root / 'src/main/java/com/jamesrenrold/elijah/DomainAbilities.java').read_text()
 assert 'domain_cooldown' not in domain_source, 'Testing domain must not have a Java cooldown'
 assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
@@ -76,6 +78,16 @@ assert domain_source.index('target.discard();') < domain_source.index('destinati
 assert '* 0.55D' in domain_source, 'Cannon damage must use 55% current attack damage'
 assert 'BEACH_SPAWN_Y = 67.0D' in domain_source, 'Raised crescent spawn height regressed'
 assert 'BEACH_SPAWN_X = -34.0D' in domain_source, 'Target must spawn deep on the beach'
+assert 'shouldSuppressLifecycleUnload' in domain_source, 'Connector dimension-change guard is missing'
+assert 'originalTargetSnapshot' in domain_source, 'Fallback target restoration snapshot is missing'
+assert 'restoreTarget(session, server)' in domain_source, 'Guaranteed target restoration is missing'
+assert 'buildLagoonStairs(level)' in domain_source, 'Lagoon access ramp is missing'
+assert 'targetMissingTicks <= 20' in domain_source, 'Transient target lookup tolerance is missing'
+assert 'ownerMismatchTicks <= 40' in domain_source, 'Dimension transition tolerance is missing'
+assert 'pruneStaleSessions(server)' in domain_source, 'Stale sessions can block later casts'
+assert 'Drowned Domain closed (" + reason' in domain_source, 'Early-close diagnostics are missing'
+assert 'DomainAbilities.shouldSuppressLifecycleUnload(player)' in command_source, \
+    'Origin-loss callback is not guarded during Connector dimension transitions'
 assert 'clearLegacyArenaGeometry(level)' in domain_source, 'Legacy ships must be purged before rebuild'
 assert 'buildDistantIslands(level)' in domain_source, 'Distant dune islands are missing'
 assert 'buildBillowedSail' in domain_source, 'Volumetric sails are missing'
