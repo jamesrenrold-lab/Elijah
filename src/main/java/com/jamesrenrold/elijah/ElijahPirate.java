@@ -148,6 +148,10 @@ public final class ElijahPirate {
         // unrestricted lets Connector/Apoli invoke them reliably for ordinary
         // players when an Origin keybind fires.
         event.getDispatcher().register(Commands.literal("elijah")
+                // Origins/Apoli executes power commands at permission level 2.
+                // Requiring that level keeps players from bypassing resource
+                // costs and cooldowns by typing the plumbing commands directly.
+                .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("pouch").executes(context -> openPouch(context.getSource())))
                 .then(Commands.literal("fire").executes(context -> fire(context.getSource())))
                 .then(Commands.literal("dirty_tactics").executes(context -> PirateAbilities.armDirtyTactics(context.getSource())))
@@ -232,55 +236,62 @@ public final class ElijahPirate {
                     .withStyle(ChatFormatting.GOLD), true);
             return 0;
         }
-        // Origins supplies four charges; one key press always spends one and
-        // summons exactly one crewmate.
-        int amount = 1;
+        // One accepted key press summons exactly one crewmate. The charge is
+        // deducted only after the entity has actually entered the world.
         LivingEntity target = player.getLastHurtMob();
         if (target == null || !target.isAlive()) target = player.getLastHurtByMob();
-        for (int i = 0; i < amount; i++) {
-            double angle = (Math.PI * 2.0D * (current % max)) / Math.max(1, max);
-            double x = player.getX() + Math.cos(angle) * 1.35D;
-            double z = player.getZ() + Math.sin(angle) * 1.35D;
-            UndeadCrewmate crew = UNDEAD_CREWMATE.get().create(level);
-            if (crew == null) continue;
-            crew.moveTo(x, player.getY(), z, player.getYRot(), 0.0F);
-            crew.setOwnerId(player.getUUID());
-            crew.equipHonshu();
-            // Snapshot the summoner's current combat stats. Account for the
-            // Honshu's own held-item modifier so total crew attack remains 80%.
-            AttributeInstance crewHealth = crew.getAttribute(Attributes.MAX_HEALTH);
-            if (crewHealth != null) {
-                double desiredHealth = Math.max(1.0D, player.getMaxHealth() * 0.80D);
-                double existingHealthBonus = crewHealth.getValue() - crewHealth.getBaseValue();
-                crewHealth.setBaseValue(Math.max(1.0D, desiredHealth - existingHealthBonus));
-                crew.setHealth(crew.getMaxHealth());
-            }
-            AttributeInstance crewAttack = crew.getAttribute(Attributes.ATTACK_DAMAGE);
-            if (crewAttack != null) {
-                double desiredAttack = Math.max(0.0D, player.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.80D);
-                double heldItemBonus = crewAttack.getValue() - crewAttack.getBaseValue();
-                crewAttack.setBaseValue(Math.max(0.0D, desiredAttack - heldItemBonus));
-            }
-            AttributeInstance crewSpeed = crew.getAttribute(Attributes.ATTACK_SPEED);
-            if (crewSpeed != null) {
-                double desiredSpeed = PirateConfig.CREW_ATTACK_SPEED.get();
-                double heldItemBonus = crewSpeed.getValue() - crewSpeed.getBaseValue();
-                crewSpeed.setBaseValue(Math.max(0.1D, desiredSpeed - heldItemBonus));
-            }
-            if (target != null && target.isAlive()) crew.setTarget(target);
-            crew.setCustomName(Component.translatable("entity.elijah.undead_crewmate"));
-            crew.setCustomNameVisible(false);
-            crew.finalizeSpawn(level, level.getCurrentDifficultyAt(player.blockPosition()),
-                    net.minecraft.world.entity.MobSpawnType.MOB_SUMMONED, null, null);
-            level.addFreshEntity(crew);
-            // finalizeSpawn and third-party mob patches may clear AI state;
-            // restore the remembered combat target after the entity is live.
-            if (target != null && target.isAlive()) crew.setTarget(target);
+        double angle = (Math.PI * 2.0D * (current % max)) / Math.max(1, max);
+        double x = player.getX() + Math.cos(angle) * 1.35D;
+        double z = player.getZ() + Math.sin(angle) * 1.35D;
+        UndeadCrewmate crew = UNDEAD_CREWMATE.get().create(level);
+        if (crew == null) return 0;
+        crew.moveTo(x, player.getY(), z, player.getYRot(), 0.0F);
+        // Finalize first so vanilla or third-party spawn hooks cannot replace
+        // the owner, equipment, target, or snapshotted combat attributes.
+        crew.finalizeSpawn(level, level.getCurrentDifficultyAt(player.blockPosition()),
+                net.minecraft.world.entity.MobSpawnType.MOB_SUMMONED, null, null);
+        crew.setOwnerId(player.getUUID());
+        crew.equipHonshu();
+        AttributeInstance crewHealth = crew.getAttribute(Attributes.MAX_HEALTH);
+        if (crewHealth != null) {
+            double desiredHealth = Math.max(1.0D, player.getMaxHealth() * 0.80D);
+            double existingHealthBonus = crewHealth.getValue() - crewHealth.getBaseValue();
+            crewHealth.setBaseValue(Math.max(1.0D, desiredHealth - existingHealthBonus));
+            crew.setHealth(crew.getMaxHealth());
         }
+        AttributeInstance crewAttack = crew.getAttribute(Attributes.ATTACK_DAMAGE);
+        if (crewAttack != null) {
+            double desiredAttack = Math.max(0.0D, player.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.80D);
+            double heldItemBonus = crewAttack.getValue() - crewAttack.getBaseValue();
+            crewAttack.setBaseValue(Math.max(0.0D, desiredAttack - heldItemBonus));
+        }
+        AttributeInstance crewSpeed = crew.getAttribute(Attributes.ATTACK_SPEED);
+        if (crewSpeed != null) {
+            double desiredSpeed = PirateConfig.CREW_ATTACK_SPEED.get();
+            double heldItemBonus = crewSpeed.getValue() - crewSpeed.getBaseValue();
+            crewSpeed.setBaseValue(Math.max(0.1D, desiredSpeed - heldItemBonus));
+        }
+        crew.setCustomName(Component.translatable("entity.elijah.undead_crewmate"));
+        crew.setCustomNameVisible(false);
+        if (!level.addFreshEntity(crew)) return 0;
+        if (target != null && target.isAlive()) crew.setTarget(target);
+        changeOriginResource(player, "elijah:crew_resource", -1);
         level.playSound(null, player.blockPosition(), SoundEvents.ZOMBIE_AMBIENT, SoundSource.PLAYERS, 0.8F, 0.65F);
-        player.displayClientMessage(Component.literal("The undead crew answers the call! (" + amount + ")")
+        player.displayClientMessage(Component.literal("The undead crew answers the call! (1)")
                 .withStyle(ChatFormatting.GOLD), true);
-        return amount;
+        return 1;
+    }
+
+    static int changeOriginResource(ServerPlayer player, String resource, int amount) {
+        return player.getServer().getCommands().performPrefixedCommand(
+                player.createCommandSourceStack().withPermission(2).withSuppressedOutput(),
+                "resource change @s " + resource + " " + amount);
+    }
+
+    static int setOriginResource(ServerPlayer player, String resource, int value) {
+        return player.getServer().getCommands().performPrefixedCommand(
+                player.createCommandSourceStack().withPermission(2).withSuppressedOutput(),
+                "resource set @s " + resource + " " + value);
     }
 
     private static double clampVelocity(double value) { return Math.max(-3.8, Math.min(3.8, value)); }
