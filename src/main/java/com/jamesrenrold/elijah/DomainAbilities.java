@@ -416,8 +416,8 @@ public final class DomainAbilities {
         for (int along = -15; along <= 15; along++) {
             int halfWidth = Math.max(2, 7 - Math.max(0, Math.abs(along) - 10) / 2);
             for (int across = -halfWidth; across <= halfWidth; across++) {
-                int x = eastWest ? cx + across : cx + along;
-                int z = eastWest ? cz + along : cz + across;
+                int x = eastWest ? cx + along : cx + across;
+                int z = eastWest ? cz + across : cz + along;
                 set(level, x, 64, z, Blocks.DARK_OAK_PLANKS);
                 set(level, x, 65, z, Blocks.DARK_OAK_PLANKS);
                 set(level, x, 66, z, Blocks.DARK_OAK_PLANKS);
@@ -429,15 +429,15 @@ public final class DomainAbilities {
         // Broad raised sterncastle and a long bowsprit.
         for (int along = 9; along <= 14; along++) {
             for (int across = -5; across <= 5; across++) {
-                int x = eastWest ? cx + across : cx + along;
-                int z = eastWest ? cz + along : cz + across;
+                int x = eastWest ? cx + along : cx + across;
+                int z = eastWest ? cz + across : cz + along;
                 set(level, x, 68, z, Blocks.DARK_OAK_PLANKS);
                 if (along >= 11) set(level, x, 69, z, Blocks.DARK_OAK_PLANKS);
             }
         }
         for (int along = -16; along <= -11; along++) {
-            int x = eastWest ? cx : cx + along;
-            int z = eastWest ? cz + along : cz;
+            int x = eastWest ? cx + along : cx;
+            int z = eastWest ? cz : cz + along;
             set(level, x, 68, z, Blocks.DARK_OAK_FENCE);
         }
         for (int side : new int[]{-1, 1}) buildCannon(level, cx, cz, eastWest, side, -7);
