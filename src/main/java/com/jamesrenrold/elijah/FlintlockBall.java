@@ -5,6 +5,9 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -23,6 +26,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraftforge.network.NetworkHooks;
 
 public final class FlintlockBall extends ThrowableProjectile {
+    private static final EntityDataAccessor<Boolean> CANNONBALL_DATA =
+            SynchedEntityData.defineId(FlintlockBall.class, EntityDataSerializers.BOOLEAN);
     private static final ResourceKey<DamageType> DAMAGE_TYPE = ResourceKey.create(
             Registries.DAMAGE_TYPE, new ResourceLocation(ElijahPirate.MOD_ID, "flintlock"));
     private float shotDamage = 3.0F;
@@ -45,13 +50,16 @@ public final class FlintlockBall extends ThrowableProjectile {
         FlintlockBall ball = new FlintlockBall(level, owner, damage, 0);
         ball.cannonball = true;
         ball.blastRadius = blastRadius;
+        ball.entityData.set(CANNONBALL_DATA, true);
         return ball;
     }
 
-    public boolean isCannonball() { return cannonball; }
+    public boolean isCannonball() { return cannonball || entityData.get(CANNONBALL_DATA); }
 
     @Override
-    protected void defineSynchedData() {}
+    protected void defineSynchedData() {
+        entityData.define(CANNONBALL_DATA, false);
+    }
 
     @Override
     protected float getGravity() { return 0.008F; }
@@ -126,6 +134,7 @@ public final class FlintlockBall extends ThrowableProjectile {
         effectTicks = tag.contains("EffectTicks") ? tag.getInt("EffectTicks") : 20;
         cannonball = tag.getBoolean("Cannonball");
         blastRadius = tag.contains("BlastRadius") ? tag.getFloat("BlastRadius") : 0.0F;
+        entityData.set(CANNONBALL_DATA, cannonball);
         tickCount = tag.getInt("Life");
     }
 
