@@ -11,6 +11,8 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageType;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -18,11 +20,13 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.ThrowableProjectile;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
 
 public final class FlintlockBall extends ThrowableProjectile {
@@ -67,6 +71,8 @@ public final class FlintlockBall extends ThrowableProjectile {
     @Override
     protected boolean canHitEntity(Entity target) {
         if (!super.canHitEntity(target)) return false;
+        if (getOwner() instanceof Player shooter && target instanceof UndeadCrewmate crew
+                && shooter.getUUID().equals(crew.getOwnerId())) return false;
         if (getOwner() instanceof Player shooter && target instanceof Player victim) {
             return shooter.canHarmPlayer(victim);
         }
@@ -112,13 +118,25 @@ public final class FlintlockBall extends ThrowableProjectile {
             if (distanceSquared > radiusSquared) continue;
             double falloff = 1.0D - Math.sqrt(distanceSquared) / blastRadius;
             float damage = (float) (shotDamage * (0.45D + 0.55D * falloff));
-            entity.hurt(source, damage);
+            if (entity.hurt(source, damage)) {
+                Vec3 away = entity.position().subtract(position());
+                if (away.lengthSqr() > 1.0E-4D) {
+                    double resistance = entity instanceof LivingEntity living
+                            ? living.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE) : 0.0D;
+                    double strength = 0.55D * falloff * Math.max(0.0D, 1.0D - resistance);
+                    Vec3 push = away.normalize().scale(strength);
+                    entity.push(push.x, Math.max(0.08D, 0.18D * falloff), push.z);
+                    entity.hurtMarked = true;
+                }
+            }
         }
         server.sendParticles(new net.minecraft.core.particles.DustParticleOptions(
                         new org.joml.Vector3f(0.12F, 0.12F, 0.12F), 0.75F),
                 getX(), getY(), getZ(), 6, 0.16D, 0.12D, 0.16D, 0.015D);
         server.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 2,
                 0.10D, 0.10D, 0.10D, 0.01D);
+        server.playSound(null, getX(), getY(), getZ(), SoundEvents.GENERIC_EXPLODE,
+                SoundSource.HOSTILE, 0.45F, 0.85F);
     }
 
     @Override
