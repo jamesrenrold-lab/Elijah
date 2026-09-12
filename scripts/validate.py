@@ -64,29 +64,24 @@ crew_action = parsed['data/elijah/powers/undead_crew.json']['entity_action']['if
 assert crew_action == {'type': 'origins:execute_command', 'command': 'elijah crew'}
 domain = parsed['data/elijah/powers/drowned_domain.json']
 assert 'cooldown' not in domain and 'hud_render' not in domain, \
-    'Rejected domain casts must not consume an active_self cooldown'
-domain_cooldown = parsed['data/elijah/powers/domain_cooldown.json']
-assert domain_cooldown['type'] == 'origins:resource'
-assert domain_cooldown['min'] == 0 and domain_cooldown['max'] == 100
-assert domain_cooldown['start_value'] == 0
-assert domain_cooldown['hud_render']['should_render'] is True
-domain_recharge = parsed['data/elijah/powers/domain_cooldown_recharge.json']
-assert domain_recharge['type'] == 'origins:action_over_time'
-assert domain_recharge['interval'] == 1
-assert domain_recharge['entity_action']['resource'] == 'elijah:domain_cooldown'
-assert domain_recharge['entity_action']['change'] == -1
-assert 'elijah:domain_cooldown' in origin['powers']
-assert 'elijah:domain_cooldown_recharge' in origin['powers']
+    'Testing domain must not have an Origins cooldown'
+assert 'elijah:domain_cooldown' not in origin['powers']
+assert 'elijah:domain_cooldown_recharge' not in origin['powers']
 domain_source = (root / 'src/main/java/com/jamesrenrold/elijah/DomainAbilities.java').read_text()
-assert 'getOriginResource(player, "elijah:domain_cooldown")' in domain_source
-assert 'setOriginResource(player, "elijah:domain_cooldown", 100)' in domain_source
+assert 'domain_cooldown' not in domain_source, 'Testing domain must not have a Java cooldown'
 assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
+assert 'target.discard();' in domain_source
+assert domain_source.index('target.discard();') < domain_source.index('destination.addFreshEntity(recreated)'), \
+    'Echo transfer order regressed: source must be removed before destination UUID registration'
 assert '* 0.55D' in domain_source, 'Cannon damage must use 55% current attack damage'
 assert 'BEACH_SPAWN_Y = 67.0D' in domain_source, 'Raised crescent spawn height regressed'
+assert 'BEACH_SPAWN_X = -34.0D' in domain_source, 'Target must spawn deep on the beach'
 assert 'clearLegacyArenaGeometry(level)' in domain_source, 'Legacy ships must be purged before rebuild'
 assert 'buildDistantIslands(level)' in domain_source, 'Distant dune islands are missing'
 assert 'buildBillowedSail' in domain_source, 'Volumetric sails are missing'
 assert 'cannonball.setNoGravity(true)' in domain_source, 'Reliable straight cannon trajectory regressed'
+assert 'cannonball.setGuaranteedImpact(aim)' in domain_source, 'Cannon impact guarantee is missing'
 projectile_source = (root / 'src/main/java/com/jamesrenrold/elijah/FlintlockBall.java').read_text()
 assert 'Server-driven tracer particles' in projectile_source, 'Cannonball tracer visibility regressed'
+assert 'closest.distanceToSqr(impact) <= 0.64D' in projectile_source, 'Cannon crossing check is missing'
 print('Validated all power commands and the eight distinct active keybinds.')
