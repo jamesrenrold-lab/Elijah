@@ -63,11 +63,24 @@ assert parsed['data/elijah/powers/blood_overflow.json']['entity_action'] == {
 crew_action = parsed['data/elijah/powers/undead_crew.json']['entity_action']['if_action']
 assert crew_action == {'type': 'origins:execute_command', 'command': 'elijah crew'}
 domain = parsed['data/elijah/powers/drowned_domain.json']
-assert domain['cooldown'] == 100, 'Domain cooldown must be the visible five-second Origins cooldown'
-assert domain['hud_render']['should_render'] is True
+assert 'cooldown' not in domain and 'hud_render' not in domain, \
+    'Rejected domain casts must not consume an active_self cooldown'
+domain_cooldown = parsed['data/elijah/powers/domain_cooldown.json']
+assert domain_cooldown['type'] == 'origins:resource'
+assert domain_cooldown['min'] == 0 and domain_cooldown['max'] == 100
+assert domain_cooldown['start_value'] == 0
+assert domain_cooldown['hud_render']['should_render'] is True
+domain_recharge = parsed['data/elijah/powers/domain_cooldown_recharge.json']
+assert domain_recharge['type'] == 'origins:action_over_time'
+assert domain_recharge['interval'] == 1
+assert domain_recharge['entity_action']['resource'] == 'elijah:domain_cooldown'
+assert domain_recharge['entity_action']['change'] == -1
+assert 'elijah:domain_cooldown' in origin['powers']
+assert 'elijah:domain_cooldown_recharge' in origin['powers']
 domain_source = (root / 'src/main/java/com/jamesrenrold/elijah/DomainAbilities.java').read_text()
-assert 'domainCooldown' not in domain_source and 'DOMAIN_COOLDOWN' not in domain_source, \
-    'Domain must not have a second hidden Java cooldown'
+assert 'getOriginResource(player, "elijah:domain_cooldown")' in domain_source
+assert 'setOriginResource(player, "elijah:domain_cooldown", 100)' in domain_source
+assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
 assert '* 0.55D' in domain_source, 'Cannon damage must use 55% current attack damage'
 assert 'BEACH_SPAWN_Y = 67.0D' in domain_source, 'Raised crescent spawn height regressed'
 assert 'clearLegacyArenaGeometry(level)' in domain_source, 'Legacy ships must be purged before rebuild'
