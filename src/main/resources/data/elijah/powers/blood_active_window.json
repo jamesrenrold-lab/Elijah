@@ -1,10 +1,10 @@
 {
   "type": "origins:resource",
-  "name": "Blood Rush Active Window",
-  "description": "Internal ten-second Blood Rush activity timer.",
+  "name": "Cursed Form Toggle",
+  "description": "Internal Cursed Form activity state.",
   "hidden": true,
   "min": 0,
-  "max": 10,
+  "max": 1,
   "start_value": 0,
   "hud_render": {
     "should_render": false
