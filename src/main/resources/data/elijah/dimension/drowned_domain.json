@@ -9,11 +9,11 @@
           "block": "minecraft:bedrock"
         },
         {
-          "height": 3,
-          "block": "minecraft:sand"
+          "height": 62,
+          "block": "minecraft:sandstone"
         },
         {
-          "height": 60,
+          "height": 2,
           "block": "minecraft:water"
         }
       ],
