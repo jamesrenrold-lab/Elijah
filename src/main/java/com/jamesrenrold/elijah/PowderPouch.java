@@ -56,8 +56,6 @@ public final class PowderPouch extends ItemStackHandler {
     public long bloodLastDegenerationTick;
     public long bloodLastEnemyHitTick;
     public long bloodAllowLifestealUntil;
-    /** Cooldown for the island domain, persisted with the player's Origin state. */
-    public long domainCooldownUntil;
     public long nextGeneratorTick;
 
     public PowderPouch() { super(TOTAL_SLOTS); }
@@ -150,7 +148,6 @@ public final class PowderPouch extends ItemStackHandler {
         tag.putLong("BloodLastDegenerationTick", bloodLastDegenerationTick);
         tag.putLong("BloodLastEnemyHitTick", bloodLastEnemyHitTick);
         tag.putLong("NextGeneratorTick", nextGeneratorTick);
-        tag.putLong("DomainCooldownUntil", domainCooldownUntil);
         return tag;
     }
 
@@ -174,7 +171,6 @@ public final class PowderPouch extends ItemStackHandler {
         bloodLastDegenerationTick = tag.getLong("BloodLastDegenerationTick");
         bloodLastEnemyHitTick = tag.getLong("BloodLastEnemyHitTick");
         nextGeneratorTick = tag.getLong("NextGeneratorTick");
-        domainCooldownUntil = tag.getLong("DomainCooldownUntil");
         // Do not call ItemStackHandler.deserializeNBT here: Forge resizes its internal
         // list to the serialized Size field. Read entries manually so both the old
         // one-slot pouch and the previous 10-slot pouch migrate safely.
