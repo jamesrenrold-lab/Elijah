@@ -65,4 +65,15 @@ assert crew_action == {'type': 'origins:execute_command', 'command': 'elijah cre
 domain = parsed['data/elijah/powers/drowned_domain.json']
 assert domain['cooldown'] == 100, 'Domain cooldown must be the visible five-second Origins cooldown'
 assert domain['hud_render']['should_render'] is True
+domain_source = (root / 'src/main/java/com/jamesrenrold/elijah/DomainAbilities.java').read_text()
+assert 'domainCooldown' not in domain_source and 'DOMAIN_COOLDOWN' not in domain_source, \
+    'Domain must not have a second hidden Java cooldown'
+assert '* 0.55D' in domain_source, 'Cannon damage must use 55% current attack damage'
+assert 'BEACH_SPAWN_Y = 67.0D' in domain_source, 'Raised crescent spawn height regressed'
+assert 'clearLegacyArenaGeometry(level)' in domain_source, 'Legacy ships must be purged before rebuild'
+assert 'buildDistantIslands(level)' in domain_source, 'Distant dune islands are missing'
+assert 'buildBillowedSail' in domain_source, 'Volumetric sails are missing'
+assert 'cannonball.setNoGravity(true)' in domain_source, 'Reliable straight cannon trajectory regressed'
+projectile_source = (root / 'src/main/java/com/jamesrenrold/elijah/FlintlockBall.java').read_text()
+assert 'Server-driven tracer particles' in projectile_source, 'Cannonball tracer visibility regressed'
 print('Validated all power commands and the eight distinct active keybinds.')
