@@ -18,6 +18,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraftforge.network.NetworkHooks;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.fml.ModList;
@@ -177,8 +178,19 @@ public final class UndeadCrewmate extends Zombie {
 
     private boolean isValidTarget(LivingEntity candidate, ServerPlayer owner) {
         return candidate != null && candidate != owner && candidate.isAlive()
-                && !(candidate instanceof ServerPlayer) && !candidate.isSpectator()
+                && candidate.level() == level() && !(candidate instanceof ServerPlayer)
+                && !(candidate instanceof UndeadCrewmate) && !candidate.isSpectator()
+                && !owner.isAlliedTo(candidate) && !isAlliedTo(candidate)
                 && owner.distanceToSqr(candidate) <= 48.0D * 48.0D;
+    }
+
+    private static double hitboxDistanceSqr(LivingEntity first, LivingEntity second) {
+        AABB a = first.getBoundingBox();
+        AABB b = second.getBoundingBox();
+        double dx = Math.max(0.0D, Math.max(a.minX - b.maxX, b.minX - a.maxX));
+        double dy = Math.max(0.0D, Math.max(a.minY - b.maxY, b.minY - a.maxY));
+        double dz = Math.max(0.0D, Math.max(a.minZ - b.maxZ, b.minZ - a.maxZ));
+        return dx * dx + dy * dy + dz * dz;
     }
 
     private static final class CrewCombatGoal extends Goal {
@@ -206,7 +218,10 @@ public final class UndeadCrewmate extends Zombie {
             if (target == null || !target.isAlive()) return;
             crew.getLookControl().setLookAt(target, 30.0F, 30.0F);
             double range = PirateConfig.CREW_ATTACK_RANGE.get();
-            double distance = crew.distanceToSqr(target);
+            // Measure the gap between hitboxes. Center-to-center distance made
+            // a configured 0.5-block hit range impossible against normal mobs
+            // even when the two models were physically touching.
+            double distance = hitboxDistanceSqr(crew, target);
             double pressureRange = PirateConfig.CREW_PRESSURE_RANGE.get();
             // Keep advancing while close enough to pressure the target. The
             // swing is attempted in this zone, but damage still requires the
@@ -241,9 +256,13 @@ public final class UndeadCrewmate extends Zombie {
     }
 
     @Override
+    protected int getExperienceReward() {
+        return 0;
+    }
+
+    @Override
     public Packet<ClientGamePacketListener> getAddEntityPacket() {
         return NetworkHooks.getEntitySpawningPacket(this);
     }
 
 }
-
