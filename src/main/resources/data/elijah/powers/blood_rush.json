@@ -3,23 +3,8 @@
   "name": "Blood Rush",
   "description": "Quinary ability: on a 15-second cooldown, gain 20 blood charge and stay active for 10 seconds. While active the meter rises by 1% per second; while inactive it drains by 0.25% per second. Filling the meter to 100 consumes it and triggers 25 seconds of blindness, darkness, strength, 50% lifesteal and non-lethal health degeneration.",
   "entity_action": {
-    "type": "origins:and",
-    "actions": [
-      {
-        "type": "origins:change_resource",
-        "resource": "elijah:blood_resource",
-        "change": 20
-      },
-      {
-        "type": "origins:change_resource",
-        "resource": "elijah:blood_active_window",
-        "change": 10
-      },
-      {
-        "type": "origins:execute_command",
-        "command": "elijah blood_rush"
-      }
-    ]
+    "type": "origins:execute_command",
+    "command": "elijah blood_rush"
   },
   "cooldown": 300,
   "hud_render": {
