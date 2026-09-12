@@ -88,6 +88,11 @@ assert 'pruneStaleSessions(server)' in domain_source, 'Stale sessions can block 
 assert 'Drowned Domain closed (" + reason' in domain_source, 'Early-close diagnostics are missing'
 assert 'DomainAbilities.shouldSuppressLifecycleUnload(player)' in command_source, \
     'Origin-loss callback is not guarded during Connector dimension transitions'
+assert 'onServerStarted(ServerStartedEvent event)' in domain_source, 'Arena prebuild is missing'
+assert 'ARENA_MARKER' in domain_source and 'if (arenaReady) return;' in domain_source, \
+    'Arena must not be rebuilt on every cast'
+assert 'age % 20L == 0L' in domain_source, 'Domain effect refresh is not throttled'
+assert 'age % 10L == 0L' in domain_source, 'Target pathfinding refresh is not throttled'
 assert 'clearLegacyArenaGeometry(level)' in domain_source, 'Legacy ships must be purged before rebuild'
 assert 'buildDistantIslands(level)' in domain_source, 'Distant dune islands are missing'
 assert 'buildBillowedSail' in domain_source, 'Volumetric sails are missing'
@@ -96,4 +101,6 @@ assert 'cannonball.setGuaranteedImpact(aim)' in domain_source, 'Cannon impact gu
 projectile_source = (root / 'src/main/java/com/jamesrenrold/elijah/FlintlockBall.java').read_text()
 assert 'Server-driven tracer particles' in projectile_source, 'Cannonball tracer visibility regressed'
 assert 'closest.distanceToSqr(impact) <= 0.64D' in projectile_source, 'Cannon crossing check is missing'
+assert 'int groundPoints = 16' in projectile_source and 'int shellPoints = 18' in projectile_source, \
+    'Low-packet blast outline regressed'
 print('Validated all power commands and the eight distinct active keybinds.')
