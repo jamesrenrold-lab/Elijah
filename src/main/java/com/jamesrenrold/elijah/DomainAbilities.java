@@ -80,14 +80,13 @@ public final class DomainAbilities {
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;
     private static final int CANNONBALLS_PER_VOLLEY = 25;
-    // CBC rounds are still real HE/AP/shrapnel/smoke projectiles, but one
-    // round every custom volley keeps the native shell types cycling at two rounds per second.
+    // Keep only explosive CBC ammunition: two native rounds per second,
+    // rotating through HE, AP and shrapnel shells without smoke rounds.
     private static final int CBC_BARRAGE_VOLLEY_PERIOD = 1;
     private static final List<ResourceLocation> CBC_BARRAGE_PROJECTILE_TYPES = List.of(
             new ResourceLocation("createbigcannons", "he_shell"),
             new ResourceLocation("createbigcannons", "ap_shell"),
-            new ResourceLocation("createbigcannons", "shrapnel_shell"),
-            new ResourceLocation("createbigcannons", "smoke_shell"));
+            new ResourceLocation("createbigcannons", "shrapnel_shell"));
     private static final Set<ResourceLocation> CBC_BARRAGE_PROJECTILE_IDS =
             Set.copyOf(CBC_BARRAGE_PROJECTILE_TYPES);
     private static final ResourceLocation CBC_DELAYED_IMPACT_FUZE =
