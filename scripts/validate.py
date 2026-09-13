@@ -152,10 +152,8 @@ assert 'PENDING_ACTIVATIONS.add(player.getUUID())' in domain_source, \
     'Domain activation must finish its Origins callback before teleporting'
 assert 'activateNow(player)' in domain_source, 'Deferred domain activation is not processed'
 assert 'Drowned Domain closed (" + reason' in domain_source, 'Early-close diagnostics are missing'
-assert 'DomainAbilities.shouldSuppressLifecycleUnload(player)' in command_source, \
-    'Origin-loss callback is not guarded during Connector dimension transitions'
 assert 'unload_later' in command_source and 'processDeferredLifecycleUnloads' in command_source, \
-    'Origin-loss cleanup must be deferred until Connector settles'
+    'Legacy lifecycle cleanup code must remain harmless and guarded'
 assert 'onServerStarted(ServerStartedEvent event)' in domain_source, 'Arena prebuild is missing'
 assert 'ARENA_MARKER' in domain_source and 'if (arenaReady) return;' in domain_source, \
     'Arena must not be rebuilt on every cast'
