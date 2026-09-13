@@ -9,6 +9,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -46,6 +47,10 @@ import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
 @Mod(ElijahPirate.MOD_ID)
 public final class ElijahPirate {
     public static final String MOD_ID = "elijah";
@@ -63,6 +68,7 @@ public final class ElijahPirate {
             "undead_crewmate", () -> EntityType.Builder.<UndeadCrewmate>of(UndeadCrewmate::new, MobCategory.MONSTER)
                     .sized(0.6F, 1.95F).clientTrackingRange(10).updateInterval(3)
                     .build(MOD_ID + ":undead_crewmate"));
+    private static final Map<UUID, Long> DEFERRED_LIFECYCLE_UNLOADS = new HashMap<>();
 
     public ElijahPirate() {
         IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
@@ -163,6 +169,7 @@ public final class ElijahPirate {
                 .then(Commands.literal("domain").executes(context -> DomainAbilities.activate(context.getSource())))
                 .then(Commands.literal("sea_on").executes(context -> PirateAbilities.setWisdom(context.getSource(), true)))
                 .then(Commands.literal("sea_off").executes(context -> PirateAbilities.setWisdom(context.getSource(), false)))
+                .then(Commands.literal("unload_later").executes(context -> scheduleUnload(context.getSource())))
                 .then(Commands.literal("unload").executes(context -> unload(context.getSource()))));
     }
 
@@ -316,6 +323,49 @@ public final class ElijahPirate {
                 "resource get @s " + resource);
     }
 
+    private int scheduleUnload(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        if (DomainAbilities.shouldSuppressLifecycleUnload(player)) return 0;
+        MinecraftServer server = player.getServer();
+        if (server != null) {
+            DEFERRED_LIFECYCLE_UNLOADS.put(player.getUUID(),
+                    server.overworld().getGameTime() + 10L);
+        }
+        return 1;
+    }
+
+    /**
+     * Connector may fire an Origins lost callback during a harmless transfer.
+     * Wait for the component to settle; a real Origin loss has no lifecycle
+     * power to cancel this request, while a domain return does.
+     */
+    static void processDeferredLifecycleUnloads(MinecraftServer server) {
+        if (DEFERRED_LIFECYCLE_UNLOADS.isEmpty()) return;
+        long now = server.overworld().getGameTime();
+        for (Map.Entry<UUID, Long> entry : new HashMap<>(DEFERRED_LIFECYCLE_UNLOADS).entrySet()) {
+            if (entry.getValue() > now) continue;
+            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+            if (player == null) {
+                DEFERRED_LIFECYCLE_UNLOADS.remove(entry.getKey());
+                continue;
+            }
+            if (DomainAbilities.shouldSuppressLifecycleUnload(player)) {
+                DEFERRED_LIFECYCLE_UNLOADS.put(entry.getKey(), now + 10L);
+                continue;
+            }
+            if (DomainAbilities.pirateLifecyclePowerStillPresent(player)) {
+                DEFERRED_LIFECYCLE_UNLOADS.remove(entry.getKey());
+                continue;
+            }
+            DEFERRED_LIFECYCLE_UNLOADS.remove(entry.getKey());
+            unloadNow(player);
+        }
+    }
+
+    static void clearDeferredLifecycleUnloads() {
+        DEFERRED_LIFECYCLE_UNLOADS.clear();
+    }
+
     private static double clampVelocity(double value) { return Math.max(-3.8, Math.min(3.8, value)); }
 
     private static double currentSpellPower(Player player) {
@@ -332,6 +382,11 @@ public final class ElijahPirate {
         // changing dimensions. Do not interpret that transition callback as a
         // genuine Origin change or it immediately tears down the domain.
         if (DomainAbilities.shouldSuppressLifecycleUnload(player)) return 0;
+        unloadNow(player);
+        return 1;
+    }
+
+    private static void unloadNow(ServerPlayer player) {
         // Remove only the separate dimension-repair source on a genuine
         // Origin loss; transfer callbacks are returned above.
         DomainAbilities.clearPowerBridge(player);
@@ -349,6 +404,5 @@ public final class ElijahPirate {
                 }
             }
         });
-        return 1;
     }
 }

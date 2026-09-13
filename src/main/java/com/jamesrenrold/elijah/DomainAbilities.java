@@ -102,6 +102,9 @@ public final class DomainAbilities {
     private static final UUID DOMAIN_SPEED_ID = UUID.fromString("c01c5046-3b27-49c5-9384-95f1f1cdb5db");
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
     private static final ResourceLocation PIRATE_POWER_SOURCE = new ResourceLocation("origins", "origin");
+    // Command-owned powers survive Connector rebuilding the normal Origin source.
+    private static final ResourceLocation DOMAIN_RESTORE_SOURCE =
+            new ResourceLocation("elijah", "domain_restore");
     // Clean up bridge grants left by 0.3.16 when this version takes over.
     private static final ResourceLocation LEGACY_POWER_BRIDGE_SOURCE =
             new ResourceLocation("elijah", "domain_bridge");
@@ -109,6 +112,7 @@ public final class DomainAbilities {
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
     private static final Map<UUID, PowerRepair> POWER_REPAIRS = new HashMap<>();
+    private static final Map<UUID, SavedResources> RESTORE_RESOURCES = new HashMap<>();
     private static final Map<UUID, Float> CBC_PROJECTILE_DAMAGE = new HashMap<>();
     private static final Map<UUID, PendingCbcDamage> CBC_EXPLOSION_DAMAGE = new HashMap<>();
     private static final Set<UUID> PENDING_ACTIVATIONS = new HashSet<>();
@@ -195,6 +199,7 @@ public final class DomainAbilities {
         float targetYaw = target.getYRot();
         float targetPitch = target.getXRot();
         boolean targetWasPersistent = target instanceof Mob mob && mob.isPersistenceRequired();
+        SavedResources savedResources = snapshotResources(player);
         // Flip the original arrangement: the target begins in the lagoon and
         // the caster enters on the raised circular sand ring.
         LivingEntity movedTarget = moveEntity(target, domain, WATER_SPAWN_X, WATER_SPAWN_Y, 0.0D,
@@ -226,7 +231,7 @@ public final class DomainAbilities {
         Session session = new Session(player.getUUID(), movedTarget, domain,
                 playerOrigin, playerPosition, playerYaw, playerPitch,
                 targetOrigin, targetPosition, targetYaw, targetPitch,
-                targetWasPersistent, serverTime + DOMAIN_TICKS);
+                targetWasPersistent, savedResources, serverTime + DOMAIN_TICKS);
         SESSIONS.put(player.getUUID(), session);
         // Connector cannot keep detaching powers that are deliberately absent.
         // The lifecycle callback is suppressed by the active session, so the
@@ -257,6 +262,12 @@ public final class DomainAbilities {
         POWER_REPAIRS.put(player.getUUID(), new PowerRepair(firstTick, 12));
     }
 
+    private static void schedulePowerRestore(ServerPlayer player, long firstTick,
+                                             SavedResources savedResources) {
+        if (savedResources != null) RESTORE_RESOURCES.put(player.getUUID(), savedResources);
+        schedulePowerRestore(player, firstTick);
+    }
+
     private static void processPowerRepairs(MinecraftServer server) {
         if (POWER_REPAIRS.isEmpty()) return;
         long now = server.overworld().getGameTime();
@@ -274,6 +285,7 @@ public final class DomainAbilities {
             ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
             if (player == null) {
                 POWER_REPAIRS.remove(entry.getKey());
+                RESTORE_RESOURCES.remove(entry.getKey());
                 continue;
             }
             // Use the live player command source: a raw UUID is not a reliable
@@ -283,8 +295,8 @@ public final class DomainAbilities {
             String playerId = player.getStringUUID();
             try {
                 // The domain deliberately removed these powers on entry.
-                // Restore them from the normal Origin source after return.
-                // Repeated grant calls are safe once the source is present:
+                // Restore them from a command-owned source after return.
+                // Repeated grant calls are safe once that source is present:
                 // Apoli returns 0 rather than recreating the live instance.
                 restorePiratePowers(player, server, source);
             } catch (Throwable error) {
@@ -296,6 +308,7 @@ public final class DomainAbilities {
             repair.attemptsRemaining--;
             if (repair.attemptsRemaining <= 0) {
                 POWER_REPAIRS.remove(entry.getKey());
+                RESTORE_RESOURCES.remove(entry.getKey());
             } else {
                 repair.nextTick = now + 10L;
             }
@@ -353,6 +366,31 @@ public final class DomainAbilities {
         return false;
     }
 
+    /** True while the domain intentionally has no active Pirate power instances. */
+    public static boolean arePiratePowersUnavailable(ServerPlayer player) {
+        UUID playerId = player.getUUID();
+        return SESSIONS.containsKey(playerId) || POWER_REPAIRS.containsKey(playerId);
+    }
+
+    private static SavedResources snapshotResources(ServerPlayer player) {
+        return new SavedResources(
+                ElijahPirate.getOriginResource(player, "elijah:blood_resource"),
+                ElijahPirate.getOriginResource(player, "elijah:blood_active_window"),
+                ElijahPirate.getOriginResource(player, "elijah:crew_resource"));
+    }
+
+    private static void restoreResources(ServerPlayer player, CommandSourceStack source) {
+        SavedResources saved = RESTORE_RESOURCES.get(player.getUUID());
+        if (saved == null) return;
+        for (String[] value : new String[][]{
+                {"elijah:blood_resource", Integer.toString(saved.bloodResource)},
+                {"elijah:blood_active_window", Integer.toString(saved.bloodActiveWindow)},
+                {"elijah:crew_resource", Integer.toString(saved.crewResource)}}) {
+            player.getServer().getCommands().performPrefixedCommand(source,
+                    "resource set @s " + value[0] + " " + value[1]);
+        }
+    }
+
     /**
      * Removes legacy 0.3.16 bridge grants during a genuine Origin loss.
      * The current domain flow does not create bridge grants.
@@ -366,6 +404,8 @@ public final class DomainAbilities {
             if ("elijah:pouch_lifecycle".equals(power)) continue;
             server.getCommands().performPrefixedCommand(source,
                     "power revoke @s " + power + " " + LEGACY_POWER_BRIDGE_SOURCE);
+            server.getCommands().performPrefixedCommand(source,
+                    "power revoke @s " + power + " " + DOMAIN_RESTORE_SOURCE);
         }
     }
 
@@ -375,6 +415,10 @@ public final class DomainAbilities {
         CommandSourceStack source = player.createCommandSourceStack()
                 .withSuppressedOutput().withPermission(4);
         for (String power : PIRATE_POWERS) {
+            if (!"elijah:pouch_lifecycle".equals(power)) {
+                server.getCommands().performPrefixedCommand(source,
+                        "power revoke @s " + power + " " + DOMAIN_RESTORE_SOURCE);
+            }
             server.getCommands().performPrefixedCommand(source,
                     "power revoke @s " + power + " " + PIRATE_POWER_SOURCE);
             // Remove any bridge left by 0.3.16 as well.
@@ -388,9 +432,12 @@ public final class DomainAbilities {
     private static void restorePiratePowers(ServerPlayer player, MinecraftServer server,
                                             CommandSourceStack source) {
         for (String power : PIRATE_POWERS) {
+            ResourceLocation restoreSource = "elijah:pouch_lifecycle".equals(power)
+                    ? PIRATE_POWER_SOURCE : DOMAIN_RESTORE_SOURCE;
             server.getCommands().performPrefixedCommand(source,
-                    "power grant @s " + power + " " + PIRATE_POWER_SOURCE);
+                    "power grant @s " + power + " " + restoreSource);
         }
+        restoreResources(player, source);
     }
 
     /** Ends a session when Origins removes the power or the player unloads it. */
@@ -398,6 +445,16 @@ public final class DomainAbilities {
         Session session = SESSIONS.get(player.getUUID());
         if (session != null) finishSession(session, player.getServer(), true, "Origin removed");
         removeDomainBuffs(player);
+    }
+
+    /** Called by the delayed lifecycle callback; a real Origin loss still cleans up. */
+    public static boolean pirateLifecyclePowerStillPresent(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        if (server == null) return false;
+        CommandSourceStack source = player.createCommandSourceStack()
+                .withSuppressedOutput().withPermission(4);
+        return server.getCommands().performPrefixedCommand(source,
+                "power has @s elijah:pouch_lifecycle") > 0;
     }
 
     /**
@@ -521,9 +578,11 @@ public final class DomainAbilities {
         COOLDOWNS.clear();
         LIFECYCLE_GUARDS.clear();
         POWER_REPAIRS.clear();
+        RESTORE_RESOURCES.clear();
         CBC_PROJECTILE_DAMAGE.clear();
         CBC_EXPLOSION_DAMAGE.clear();
         PENDING_ACTIVATIONS.clear();
+        ElijahPirate.clearDeferredLifecycleUnloads();
         arenaReady = false;
         ServerLevel domain = event.getServer().getLevel(DOMAIN_DIMENSION);
         if (domain != null) buildArena(domain);
@@ -534,6 +593,7 @@ public final class DomainAbilities {
         if (event.phase != TickEvent.Phase.END) return;
         MinecraftServer server = event.getServer();
         if (server == null) return;
+        ElijahPirate.processDeferredLifecycleUnloads(server);
         detonateCbcWaterImpacts(server);
         processPowerRepairs(server);
         if (!PENDING_ACTIVATIONS.isEmpty()) {
@@ -696,8 +756,10 @@ public final class DomainAbilities {
 
     private static void fireCannonBarrage(Session session, ServerPlayer owner, LivingEntity target) {
         int volleyNumber = session.cannonIndex / CANNONBALLS_PER_VOLLEY;
-        int curse = Math.max(0, Math.min(100,
-                ElijahPirate.getOriginResource(owner, "elijah:blood_resource")));
+        int curse = session.savedResources == null
+                ? ElijahPirate.getOriginResource(owner, "elijah:blood_resource")
+                : session.savedResources.bloodResource;
+        curse = Math.max(0, Math.min(100, curse));
         float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.55D);
         float curseDamage = (curse / 10) * 1.5F;
         // Elijah cannonballs deal double the normal calculated barrage damage.
@@ -973,7 +1035,7 @@ public final class DomainAbilities {
                 if (owner.isAlive()) {
                     guardLifecycle(owner, 200L);
                     // The restore must exist before return transfer callbacks.
-                    schedulePowerRestore(owner, now + 1L);
+                    schedulePowerRestore(owner, now + 1L, session.savedResources);
                     teleportPlayerBack(owner, server, session);
                     message(owner, "Drowned Domain closed (" + reason + "). Cooldown: 5s.");
                 }
@@ -1512,6 +1574,7 @@ public final class DomainAbilities {
         private final float targetYaw;
         private final float targetPitch;
         private final boolean targetWasPersistent;
+        private final SavedResources savedResources;
         private final long startedAt;
         private final long endAt;
         private long lastCannonball;
@@ -1525,7 +1588,7 @@ public final class DomainAbilities {
         private Session(UUID ownerId, LivingEntity target, ServerLevel domain,
                         ResourceKey<Level> playerOrigin, Vec3 playerPosition, float playerYaw, float playerPitch,
                         ResourceKey<Level> targetOrigin, Vec3 targetPosition, float targetYaw, float targetPitch,
-                        boolean targetWasPersistent, long endAt) {
+                        boolean targetWasPersistent, SavedResources savedResources, long endAt) {
             this.ownerId = ownerId;
             this.target = target;
             this.targetId = target.getUUID();
@@ -1539,9 +1602,22 @@ public final class DomainAbilities {
             this.targetYaw = targetYaw;
             this.targetPitch = targetPitch;
             this.targetWasPersistent = targetWasPersistent;
+            this.savedResources = savedResources;
             this.startedAt = endAt - DOMAIN_TICKS;
             this.endAt = endAt;
             this.lastCannonball = this.startedAt;
+        }
+    }
+
+    private static final class SavedResources {
+        private final int bloodResource;
+        private final int bloodActiveWindow;
+        private final int crewResource;
+
+        private SavedResources(int bloodResource, int bloodActiveWindow, int crewResource) {
+            this.bloodResource = Math.max(0, Math.min(100, bloodResource));
+            this.bloodActiveWindow = Math.max(0, Math.min(1, bloodActiveWindow));
+            this.crewResource = Math.max(0, Math.min(4, crewResource));
         }
     }
 

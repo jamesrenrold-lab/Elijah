@@ -94,8 +94,12 @@ assert 'POWER_REPAIRS' in domain_source and 'processPowerRepairs(server)' in dom
 assert 'new PowerRepair(firstTick, 12)' in domain_source
 assert 'readyForCommands' in domain_source and 'schedulePowerRestore' in domain_source
 assert '"power revoke @s " + power + " " + PIRATE_POWER_SOURCE' in domain_source
-assert '"power grant @s " + power + " " + PIRATE_POWER_SOURCE' in domain_source, \
-    'Return repair must restore powers from the normal Origin source'
+assert 'DOMAIN_RESTORE_SOURCE' in domain_source, \
+    'Return repair must use a dedicated command-owned source'
+assert 'restoreSource = "elijah:pouch_lifecycle".equals(power)' in domain_source, \
+    'Lifecycle power must remain Origin-owned so genuine Origin loss is detectable'
+assert 'SavedResources' in domain_source and 'restoreResources(player, source)' in domain_source, \
+    'Origins resource values must survive the temporary power strip'
 assert 'player.createCommandSourceStack()' in domain_source
 assert 'playerId = player.getStringUUID()' in domain_source
 assert 'raw UUID is not a reliable' in domain_source
@@ -125,7 +129,7 @@ assert 'shouldSuppressLifecycleUnload' in domain_source, 'Connector dimension-ch
 assert 'onPlayerChangedDimension' in domain_source, \
     'Power repair must run on the actual Forge dimension-change event'
 assert 'PIRATE_POWER_SOURCE' in domain_source and 'origins", "origin' in domain_source, \
-    'Power restore must use the standard Origins origin source'
+    'Power stripping must target the standard Origins origin source'
 assert 'onDomainBlockBreak' in domain_source and 'onDomainBlockPlace' in domain_source
 assert 'onDomainFluidPlace' in domain_source and 'onDomainExplosion' in domain_source
 assert 'getAffectedBlocks().clear()' in domain_source, 'Domain explosions must not damage blocks'
@@ -156,6 +160,8 @@ assert 'activateNow(player)' in domain_source, 'Deferred domain activation is no
 assert 'Drowned Domain closed (" + reason' in domain_source, 'Early-close diagnostics are missing'
 assert 'DomainAbilities.shouldSuppressLifecycleUnload(player)' in command_source, \
     'Origin-loss callback is not guarded during Connector dimension transitions'
+assert 'unload_later' in command_source and 'processDeferredLifecycleUnloads' in command_source, \
+    'Origin-loss cleanup must be deferred until Connector settles'
 assert 'onServerStarted(ServerStartedEvent event)' in domain_source, 'Arena prebuild is missing'
 assert 'ARENA_MARKER' in domain_source and 'if (arenaReady) return;' in domain_source, \
     'Arena must not be rebuilt on every cast'
@@ -206,4 +212,6 @@ assert 'server.overworld().getGameTime()' in blood_source, 'Blood timers need a 
 assert 'state.bloodHuntUntil > now' in blood_source and \
        'changeOriginResource(player, "elijah:blood_resource", 1)' in blood_source, \
     'Blood Hunt must add the second Curse point each second'
+assert 'arePiratePowersUnavailable(player)' in blood_source, \
+    'Blood resource commands must pause while domain powers are stripped'
 print('Validated all power commands and the eight distinct active keybinds.')
