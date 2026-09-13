@@ -90,7 +90,7 @@ assert 'STATEFUL_POWER_RESETS' in domain_source and 'power revoke @s ' in domain
     'Only the three stale active powers may be source-scoped refreshed'
 assert 'POWER_REPAIRS' in domain_source and 'processPowerRepairs(server)' in domain_source
 assert 'new PowerRepair(firstTick, 120)' in domain_source
-assert 'statefulPowersRefreshed' in domain_source and 'power revoke @s ' in domain_source
+assert 'statefulPowersRefreshed' in domain_source and 'originRebuilt' in domain_source and 'power revoke @s ' in domain_source
 assert '"power grant @s " + power + " " + PIRATE_POWER_SOURCE' in domain_source, \
     'Connector transfer recovery must target the live player and restore powers from the standard origin source'
 assert 'player.createCommandSourceStack()' in domain_source
@@ -107,7 +107,11 @@ assert 'changeDimension(destination, directTeleporter)' in domain_source, \
 for removed_echo_path in ('saveAsPassenger', 'loadEntityRecursive', 'target.discard()', 'originalTargetSnapshot'):
     assert removed_echo_path not in domain_source, f'Echo transfer path remains: {removed_echo_path}'
 assert '* 0.55D' in domain_source, 'Cannon damage must use 55% current attack damage'
-assert ' * 2.0F' in domain_source, 'Elijah cannonball damage must be doubled'
+assert 'float damage = Math.max(1.0F, attackDamage + curseDamage);' in domain_source, 'Elijah cannonball formula must remain unchanged'
+assert 'elijahDamage * 2.0F' in domain_source, 'CBC rounds must be exactly double Elijah damage'
+assert 'onLivingHurt(LivingHurtEvent event)' in domain_source
+assert 'createbigcannons.cannon_projectile' in domain_source
+assert 'origin set @s ' in domain_source and 'PIRATE_ORIGIN' in domain_source, 'Full Origin rebuild is required after Connector transfer'
 assert 'BEACH_SPAWN_Y = 67.0D' in domain_source, 'Raised crescent spawn height regressed'
 assert 'BEACH_SPAWN_X = -34.0D' in domain_source, 'Target must spawn deep on the beach'
 assert 'moveEntity(target, domain, WATER_SPAWN_X, WATER_SPAWN_Y' in domain_source, \
