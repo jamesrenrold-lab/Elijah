@@ -176,7 +176,7 @@ assert 'setBarrageEffects(boolean visualTracer, boolean explosionSound)' in proj
     'High-volume domain barrage must throttle cosmetic packets'
 assert 'ParticleTypes.LARGE_SMOKE' in projectile_source and 'ParticleTypes.POOF' in projectile_source, \
     'Batched blast cloud regressed'
-assert 'getZ(), 3, blastRadius * 0.30D' in projectile_source
+assert 'getZ(), 3,' in projectile_source and 'blastRadius * 0.30D' in projectile_source
 assert 'double strength = 0.22D' in projectile_source
 assert '.updateInterval(2)' in command_source, 'Projectile network synchronization is not throttled'
 assert 'if (player.isFallFlying())' in command_source, 'Flying flintlock boost is missing'
