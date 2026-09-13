@@ -13,9 +13,11 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -23,18 +25,23 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.portal.PortalInfo;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.util.ITeleporter;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingAttackEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -42,6 +49,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import org.joml.Vector3f;
 import org.slf4j.Logger;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HashMap;
@@ -68,12 +76,22 @@ public final class DomainAbilities {
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;
     private static final int CANNONBALLS_PER_VOLLEY = 25;
+    private static final List<ResourceLocation> CBC_BARRAGE_PROJECTILE_TYPES = List.of(
+            new ResourceLocation("createbigcannons", "he_shell"),
+            new ResourceLocation("createbigcannons", "ap_shell"),
+            new ResourceLocation("createbigcannons", "shrapnel_shell"),
+            new ResourceLocation("createbigcannons", "smoke_shell"));
+    private static final Set<ResourceLocation> CBC_BARRAGE_PROJECTILE_IDS =
+            Set.copyOf(CBC_BARRAGE_PROJECTILE_TYPES);
+    private static final ResourceLocation CBC_IMPACT_FUZE =
+            new ResourceLocation("createbigcannons", "impact_fuze");
     private static final double WATER_SPAWN_X = 8.0D;
     private static final double WATER_SPAWN_Y = 63.2D;
     private static final double BEACH_SPAWN_X = -34.0D;
     private static final double BEACH_SPAWN_Y = 67.0D;
     private static final UUID DOMAIN_SPEED_ID = UUID.fromString("c01c5046-3b27-49c5-9384-95f1f1cdb5db");
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
+    private static final ResourceLocation PIRATE_POWER_SOURCE = new ResourceLocation("origins", "origin");
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
@@ -171,7 +189,7 @@ public final class DomainAbilities {
             return;
         }
 
-        guardLifecycle(player, 60L);
+        guardLifecycle(player, 200L);
         player.teleportTo(domain, BEACH_SPAWN_X, BEACH_SPAWN_Y, 0.0D, playerYaw, playerPitch);
         if (player.level() != domain) {
             ServerLevel targetReturnLevel = server.getLevel(targetOrigin);
@@ -220,7 +238,9 @@ public final class DomainAbilities {
      * delayed component synchronization without ever revoking a power.
      */
     private static void schedulePowerRepair(ServerPlayer player, long firstTick) {
-        POWER_REPAIRS.put(player.getUUID(), new PowerRepair(firstTick, 6));
+        // Keep reconciling long enough to cover Connector callbacks that arrive
+        // after the actual dimension-change event, including the return trip.
+        POWER_REPAIRS.put(player.getUUID(), new PowerRepair(firstTick, 20));
     }
 
     private static void processPowerRepairs(MinecraftServer server) {
@@ -239,7 +259,7 @@ public final class DomainAbilities {
             try {
                 for (String power : PIRATE_POWERS) {
                     server.getCommands().performPrefixedCommand(source,
-                            "power grant " + playerId + " " + power + " elijah:pirate");
+                            "power grant " + playerId + " " + power + " " + PIRATE_POWER_SOURCE);
                 }
             } catch (Throwable error) {
                 LOGGER.error("Could not restore Pirate powers after dimension transfer for {}", playerId, error);
@@ -297,6 +317,9 @@ public final class DomainAbilities {
         if (server == null) return false;
         Session active = SESSIONS.get(player.getUUID());
         if (active != null && !active.ending) return true;
+        // A dimension-change callback can arrive after the player has already
+        // left the old level. Protect the repair window from unload cleanup.
+        if (POWER_REPAIRS.containsKey(player.getUUID())) return true;
         Long until = LIFECYCLE_GUARDS.get(player.getUUID());
         if (until == null) return false;
         if (server.overworld().getGameTime() <= until) return true;
@@ -309,6 +332,40 @@ public final class DomainAbilities {
         Session session = SESSIONS.get(player.getUUID());
         if (session != null) finishSession(session, player.getServer(), true, "Origin removed");
         removeDomainBuffs(player);
+    }
+
+    /**
+     * Repair after the real Forge transfer event as well as before it. This
+     * covers Connector removing the Origin component on the return trip.
+     */
+    @SubscribeEvent
+    public static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (!DOMAIN_DIMENSION.equals(event.getFrom())
+                && !DOMAIN_DIMENSION.equals(player.level().dimension())) return;
+        MinecraftServer server = player.getServer();
+        if (server == null) return;
+        long now = server.overworld().getGameTime();
+        guardLifecycle(player, 200L);
+        schedulePowerRepair(player, now + 1L);
+    }
+
+    /**
+     * CBC shell explosions and projectile hits cannot harm the domain owner.
+     * Explosion-tagged damage is covered even when CBC does not expose the
+     * originating projectile on the final DamageSource.
+     */
+    @SubscribeEvent
+    public static void onLivingAttack(LivingAttackEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        Session session = SESSIONS.get(player.getUUID());
+        if (session == null || session.ending) return;
+        DamageSource source = event.getSource();
+        if (source.is(DamageTypeTags.IS_EXPLOSION)
+                || isCbcBarrageProjectile(source.getDirectEntity())
+                || isCbcBarrageProjectile(source.getEntity())) {
+            event.setCanceled(true);
+        }
     }
 
     @SubscribeEvent
@@ -494,8 +551,6 @@ public final class DomainAbilities {
         float curseDamage = (curse / 10) * 1.5F;
         float damage = Math.max(1.0F, attackDamage + curseDamage);
         Vec3 targetSnapshot = target.getBoundingBox().getCenter();
-        boolean launchedAny = false;
-
         for (int volleyShot = 0; volleyShot < CANNONBALLS_PER_VOLLEY; volleyShot++) {
             int shot = session.cannonIndex++;
             Vec3 aim;
@@ -525,10 +580,12 @@ public final class DomainAbilities {
             FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, damage, 4.5F);
             cannonball.setPos(origin.x, origin.y, origin.z);
             cannonball.setGuaranteedImpact(aim);
-            cannonball.setBarrageEffects(volleyShot % 5 == 0, volleyShot % 12 == 0);
+            // Every shell gets its own impact explosion sound; there is no
+            // separate shared volley boom.
+            cannonball.setBarrageEffects(volleyShot % 5 == 0, true);
             cannonball.setNoGravity(true);
             cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F);
-            launchedAny |= session.domain.addFreshEntity(cannonball);
+            session.domain.addFreshEntity(cannonball);
 
             // One tiny impact marker per shell keeps twenty-five-shot volleys
             // readable without recreating the old particle-packet lag spike.
@@ -536,10 +593,71 @@ public final class DomainAbilities {
                             new Vector3f(0.75F, 0.12F, 0.04F), 0.55F),
                     aim.x, aim.y + 0.08D, aim.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
         }
-        if (launchedAny) {
-            session.domain.playSound(null, 0.0D, 92.0D, 0.0D, SoundEvents.FIREWORK_ROCKET_BLAST,
-                    SoundSource.HOSTILE, 4.0F, 0.48F);
+        fireCreateBigCannonBarrage(session, owner, target);
+    }
+
+    /**
+     * Launches real Create Big Cannons projectile entities when CBC is installed.
+     * Reflection keeps Elijah optional: worlds without CBC retain the normal
+     * barrage and simply skip these extra shells.
+     */
+    private static void fireCreateBigCannonBarrage(Session session, ServerPlayer owner, LivingEntity target) {
+        Vec3 targetSnapshot = target.getBoundingBox().getCenter();
+        int patternBase = session.cannonIndex;
+        for (int typeIndex = 0; typeIndex < CBC_BARRAGE_PROJECTILE_TYPES.size(); typeIndex++) {
+            ResourceLocation projectileId = CBC_BARRAGE_PROJECTILE_TYPES.get(typeIndex);
+            Vec3 aim;
+            if (typeIndex == 0) {
+                aim = new Vec3(
+                        Math.max(-40.0D, Math.min(40.0D, targetSnapshot.x)),
+                        targetSnapshot.y,
+                        Math.max(-40.0D, Math.min(40.0D, targetSnapshot.z)));
+            } else {
+                int shot = patternBase + typeIndex;
+                double angle = shot * 2.399963229728653D;
+                double normalizedRadius = ((shot * 73L) % 997L) / 996.0D;
+                double radius = 36.0D * Math.sqrt(normalizedRadius);
+                aim = findArenaSurface(session.domain, owner,
+                        Math.cos(angle) * radius, Math.sin(angle) * radius);
+            }
+            double launchAngle = (patternBase + typeIndex) * 1.618033988749895D;
+            Vec3 origin = new Vec3(
+                    aim.x + Math.cos(launchAngle) * (7.0D + typeIndex * 2.0D),
+                    108.0D + typeIndex * 2.0D,
+                    aim.z + Math.sin(launchAngle) * (7.0D + typeIndex * 2.0D));
+            spawnCreateBigCannonProjectile(session.domain, owner, projectileId, origin, aim);
         }
+    }
+
+    private static void spawnCreateBigCannonProjectile(ServerLevel domain, ServerPlayer owner,
+                                                        ResourceLocation projectileId,
+                                                        Vec3 origin, Vec3 aim) {
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(projectileId).orElse(null);
+        if (type == null) return;
+        Entity projectile = type.create(domain);
+        if (projectile == null) return;
+
+        Vec3 direction = aim.subtract(origin).normalize();
+        float yaw = (float) (Math.atan2(direction.x, direction.z) * 180.0D / Math.PI);
+        float pitch = (float) (Math.atan2(direction.y, direction.horizontalDistance())
+                * 180.0D / Math.PI);
+        projectile.moveTo(origin.x, origin.y, origin.z, yaw, pitch);
+        projectile.setDeltaMovement(direction.scale(5.0D));
+        projectile.setNoGravity(true);
+        if (projectile instanceof Projectile ballistic) ballistic.setOwner(owner);
+
+        Item fuze = BuiltInRegistries.ITEM.getOptional(CBC_IMPACT_FUZE).orElse(null);
+        if (fuze != null) {
+            try {
+                Method setFuze = projectile.getClass().getMethod("setFuze", ItemStack.class);
+                setFuze.invoke(projectile, new ItemStack(fuze));
+            } catch (ReflectiveOperationException error) {
+                LOGGER.warn("Could not install the CBC impact fuze on {}", projectileId, error);
+                projectile.discard();
+                return;
+            }
+        }
+        if (!domain.addFreshEntity(projectile)) projectile.discard();
     }
 
     /** Finds the top solid block at an arena coordinate for terrain impacts. */
@@ -607,7 +725,7 @@ public final class DomainAbilities {
             if (owner != null) {
                 removeDomainBuffs(owner);
                 if (owner.isAlive()) {
-                    guardLifecycle(owner, 60L);
+                    guardLifecycle(owner, 200L);
                     teleportPlayerBack(owner, server, session);
                     schedulePowerRepair(owner, now + 2L);
                     message(owner, "Drowned Domain closed (" + reason + "). Cooldown: 5s.");
@@ -649,6 +767,16 @@ public final class DomainAbilities {
                 FlintlockBall::isCannonball)) {
             projectile.discard();
         }
+        for (Entity projectile : domain.getEntitiesOfClass(Entity.class, arena,
+                DomainAbilities::isCbcBarrageProjectile)) {
+            projectile.discard();
+        }
+    }
+
+    private static boolean isCbcBarrageProjectile(Entity entity) {
+        if (entity == null) return false;
+        ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
+        return id != null && CBC_BARRAGE_PROJECTILE_IDS.contains(id);
     }
 
     /**
