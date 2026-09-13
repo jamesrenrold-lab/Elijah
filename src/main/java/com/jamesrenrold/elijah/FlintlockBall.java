@@ -40,6 +40,8 @@ public final class FlintlockBall extends ThrowableProjectile {
     private float blastRadius;
     private boolean detonated;
     private boolean hasGuaranteedImpact;
+    private boolean visualTracer = true;
+    private boolean explosionSound = true;
     private double impactX;
     private double impactY;
     private double impactZ;
@@ -70,6 +72,12 @@ public final class FlintlockBall extends ThrowableProjectile {
         impactX = impact.x;
         impactY = impact.y;
         impactZ = impact.z;
+    }
+
+    /** Throttles cosmetic packets for the twenty-five-shell domain volleys. */
+    public void setBarrageEffects(boolean visualTracer, boolean explosionSound) {
+        this.visualTracer = visualTracer;
+        this.explosionSound = explosionSound;
     }
 
     @Override
@@ -146,34 +154,16 @@ public final class FlintlockBall extends ThrowableProjectile {
                 }
             }
         }
-        // A low-packet smoke outline marks the exact configured damage volume.
-        // Earlier versions sent over 170 individual particle packets per hit.
-        int groundPoints = 8;
-        for (int point = 0; point < groundPoints; point++) {
-            double angle = Math.PI * 2.0D * point / groundPoints;
-            double px = getX() + Math.cos(angle) * blastRadius;
-            double pz = getZ() + Math.sin(angle) * blastRadius;
-            server.sendParticles(ParticleTypes.LARGE_SMOKE, px, getY() + 0.18D, pz, 1,
-                    0.04D, 0.06D, 0.04D, 0.003D);
+        // Two batched particle packets per impact keep fifty explosions per
+        // second visible without hundreds of per-point network packets.
+        server.sendParticles(ParticleTypes.LARGE_SMOKE, getX(), getY() + 0.25D, getZ(), 7,
+                blastRadius * 0.48D, 0.55D, blastRadius * 0.48D, 0.012D);
+        server.sendParticles(ParticleTypes.POOF, getX(), getY() + 0.20D, getZ(), 4,
+                0.75D, 0.25D, 0.75D, 0.025D);
+        if (explosionSound) {
+            server.playSound(null, getX(), getY(), getZ(), SoundEvents.GENERIC_EXPLODE,
+                    SoundSource.HOSTILE, 0.35F, 0.85F);
         }
-        int shellPoints = 6;
-        double goldenAngle = Math.PI * (3.0D - Math.sqrt(5.0D));
-        for (int point = 0; point < shellPoints; point++) {
-            double y = 1.0D - (2.0D * point + 1.0D) / shellPoints;
-            double horizontal = Math.sqrt(Math.max(0.0D, 1.0D - y * y));
-            double angle = goldenAngle * point;
-            server.sendParticles(ParticleTypes.LARGE_SMOKE,
-                    getX() + Math.cos(angle) * horizontal * blastRadius,
-                    getY() + y * blastRadius,
-                    getZ() + Math.sin(angle) * horizontal * blastRadius,
-                    1, 0.035D, 0.035D, 0.035D, 0.002D);
-        }
-        server.sendParticles(ParticleTypes.POOF, getX(), getY() + 0.25D, getZ(), 5,
-                0.45D, 0.22D, 0.45D, 0.025D);
-        server.sendParticles(ParticleTypes.SMOKE, getX(), getY() + 0.35D, getZ(), 8,
-                1.25D, 0.65D, 1.25D, 0.012D);
-        server.playSound(null, getX(), getY(), getZ(), SoundEvents.GENERIC_EXPLODE,
-                SoundSource.HOSTILE, 0.45F, 0.85F);
     }
 
     @Override
@@ -196,7 +186,7 @@ public final class FlintlockBall extends ThrowableProjectile {
                 }
             }
         }
-        if (!level().isClientSide && isCannonball() && level() instanceof ServerLevel server
+        if (!level().isClientSide && isCannonball() && visualTracer && level() instanceof ServerLevel server
                 && (tickCount & 3) == 0) {
             // Server-driven tracer particles make every volley visible even if
             // a client resource pack or renderer suppresses the black model.
@@ -224,6 +214,8 @@ public final class FlintlockBall extends ThrowableProjectile {
         tag.putBoolean("Cannonball", cannonball);
         tag.putFloat("BlastRadius", blastRadius);
         tag.putBoolean("HasGuaranteedImpact", hasGuaranteedImpact);
+        tag.putBoolean("VisualTracer", visualTracer);
+        tag.putBoolean("ExplosionSound", explosionSound);
         if (hasGuaranteedImpact) {
             tag.putDouble("ImpactX", impactX);
             tag.putDouble("ImpactY", impactY);
@@ -240,6 +232,8 @@ public final class FlintlockBall extends ThrowableProjectile {
         cannonball = tag.getBoolean("Cannonball");
         blastRadius = tag.contains("BlastRadius") ? tag.getFloat("BlastRadius") : 0.0F;
         hasGuaranteedImpact = tag.getBoolean("HasGuaranteedImpact");
+        visualTracer = !tag.contains("VisualTracer") || tag.getBoolean("VisualTracer");
+        explosionSound = !tag.contains("ExplosionSound") || tag.getBoolean("ExplosionSound");
         impactX = tag.getDouble("ImpactX");
         impactY = tag.getDouble("ImpactY");
         impactZ = tag.getDouble("ImpactZ");

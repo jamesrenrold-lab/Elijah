@@ -67,6 +67,7 @@ public final class DomainAbilities {
     private static final int COOLDOWN_TICKS = 5 * 20;
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;
+    private static final int CANNONBALLS_PER_VOLLEY = 25;
     private static final double WATER_SPAWN_X = 8.0D;
     private static final double WATER_SPAWN_Y = 63.2D;
     private static final double BEACH_SPAWN_X = -34.0D;
@@ -76,6 +77,7 @@ public final class DomainAbilities {
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
+    private static final Map<UUID, Long> POWER_RESETS = new HashMap<>();
     private static final Set<UUID> PENDING_ACTIVATIONS = new HashSet<>();
     private static final BlockPos ARENA_MARKER = new BlockPos(0, 61, 0);
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
@@ -201,6 +203,37 @@ public final class DomainAbilities {
         }
     }
 
+    /**
+     * Connector can preserve a dead ActiveCooldownPower instance even with a
+     * zero-length JSON cooldown. Revoke and immediately re-grant only this
+     * power from the Pirate origin source after the return teleport, creating
+     * a clean key listener without resetting the player's other powers.
+     */
+    private static void processPowerResets(MinecraftServer server) {
+        if (POWER_RESETS.isEmpty()) return;
+        long now = server.overworld().getGameTime();
+        for (Map.Entry<UUID, Long> entry : new ArrayList<>(POWER_RESETS.entrySet())) {
+            if (entry.getValue() > now) continue;
+            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+            if (player == null) continue;
+            POWER_RESETS.remove(entry.getKey());
+            String playerId = player.getStringUUID();
+            CommandSourceStack source = server.createCommandSourceStack().withSuppressedOutput().withPermission(4);
+            try {
+                server.getCommands().performPrefixedCommand(source,
+                        "power remove " + playerId + " elijah:drowned_domain");
+                int granted = server.getCommands().performPrefixedCommand(source,
+                        "power grant " + playerId + " elijah:drowned_domain elijah:pirate");
+                if (granted <= 0) {
+                    LOGGER.warn("Drowned Domain power reset returned no grant result for {}", playerId);
+                }
+            } catch (Throwable error) {
+                LOGGER.error("Could not reset Drowned Domain power for {}", playerId, error);
+                message(player, "Drowned Domain key reset failed; please send the latest log.");
+            }
+        }
+    }
+
     /** Uses Forge's normal dimension-transfer contract; no Echo clone/discard/NBT path is used. */
     private static LivingEntity moveEntity(LivingEntity target, ServerLevel destination,
                                            double x, double y, double z,
@@ -261,6 +294,7 @@ public final class DomainAbilities {
         SESSIONS.clear();
         COOLDOWNS.clear();
         LIFECYCLE_GUARDS.clear();
+        POWER_RESETS.clear();
         PENDING_ACTIVATIONS.clear();
         arenaReady = false;
         ServerLevel domain = event.getServer().getLevel(DOMAIN_DIMENSION);
@@ -272,6 +306,7 @@ public final class DomainAbilities {
         if (event.phase != TickEvent.Phase.END) return;
         MinecraftServer server = event.getServer();
         if (server == null) return;
+        processPowerResets(server);
         if (!PENDING_ACTIVATIONS.isEmpty()) {
             List<UUID> pending = new ArrayList<>(PENDING_ACTIVATIONS);
             PENDING_ACTIVATIONS.removeAll(pending);
@@ -353,7 +388,7 @@ public final class DomainAbilities {
             if (now >= session.startedAt + CANNON_DELAY_TICKS
                     && now - session.lastCannonball >= CANNON_INTERVAL_TICKS) {
                 session.lastCannonball = now;
-                fireCannonball(session, owner, target);
+                fireCannonBarrage(session, owner, target);
             }
     }
 
@@ -430,64 +465,70 @@ public final class DomainAbilities {
         return best;
     }
 
-    private static void fireCannonball(Session session, ServerPlayer owner, LivingEntity target) {
-        int shot = session.cannonIndex++;
-        // Snapshot the target's exact hitbox centre now. The projectile never
-        // reads the target again: it flies a fixed line to where the target WAS
-        // when the broadside fired, giving a fast-moving target a fair dodge.
-        Vec3 targetCentre = target.getBoundingBox().getCenter();
-        Vec3 aim = new Vec3(
-                Math.max(-40.0D, Math.min(40.0D, targetCentre.x)),
-                targetCentre.y,
-                Math.max(-40.0D, Math.min(40.0D, targetCentre.z)));
-
-        // Alternate between the four invisible arena walls. These launch
-        // points line up with the four ships outside the barrier, making the
-        // barrage read as broadside fire rather than projectiles appearing in
-        // the sky. Spawn just inside the barrier so it cannot intercept them.
-        int wall = shot & 3;
-        double lateralBase = wall < 2 ? aim.z : aim.x;
-        double lateral = Math.max(-28.0D, Math.min(28.0D,
-                lateralBase + ((shot % 5) - 2) * 1.5D));
-        double firingY = Math.max(70.0D, aim.y + 3.5D);
-        Vec3 origin = switch (wall) {
-            case 0 -> new Vec3(-39.0D, firingY, lateral);
-            case 1 -> new Vec3(39.0D, firingY, lateral);
-            case 2 -> new Vec3(lateral, firingY, -39.0D);
-            default -> new Vec3(lateral, firingY, 39.0D);
-        };
-        Vec3 direction = aim.subtract(origin).normalize();
-
+    private static void fireCannonBarrage(Session session, ServerPlayer owner, LivingEntity target) {
         int curse = Math.max(0, Math.min(100,
                 ElijahPirate.getOriginResource(owner, "elijah:blood_resource")));
         float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.55D);
         float curseDamage = (curse / 10) * 1.5F;
         float damage = Math.max(1.0F, attackDamage + curseDamage);
-        FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, damage, 4.5F);
-        cannonball.setPos(origin.x, origin.y, origin.z);
-        cannonball.setGuaranteedImpact(aim);
-        cannonball.setNoGravity(true);
-        cannonball.shoot(direction.x, direction.y, direction.z, 4.6F, 0.0F);
-        if (!session.domain.addFreshEntity(cannonball)) {
-            message(owner, "Drowned Domain cannon failed to launch; retrying next volley.");
-            return;
-        }
-        session.domain.sendParticles(net.minecraft.core.particles.ParticleTypes.SMOKE,
-                origin.x, origin.y, origin.z, 7, 0.18D, 0.18D, 0.18D, 0.035D);
-        session.domain.sendParticles(net.minecraft.core.particles.ParticleTypes.FLAME,
-                origin.x, origin.y, origin.z, 3, 0.08D, 0.08D, 0.08D, 0.02D);
-        // A compact warning ring gives the target a readable tell without
-        // filling the screen with explosion particles.
-        for (int point = 0; point < 10; point++) {
-            double angle = Math.PI * 2.0D * point / 10.0D;
+        Vec3 targetSnapshot = target.getBoundingBox().getCenter();
+        boolean launchedAny = false;
+
+        for (int volleyShot = 0; volleyShot < CANNONBALLS_PER_VOLLEY; volleyShot++) {
+            int shot = session.cannonIndex++;
+            Vec3 aim;
+            // Five shells in every volley record the opponent's exact current
+            // position. The other twenty sweep a low-discrepancy pattern over
+            // the full arena so sand, water, and every route are bombarded.
+            if (volleyShot % 5 == 0) {
+                aim = new Vec3(
+                        Math.max(-40.0D, Math.min(40.0D, targetSnapshot.x)),
+                        targetSnapshot.y,
+                        Math.max(-40.0D, Math.min(40.0D, targetSnapshot.z)));
+            } else {
+                double angle = shot * 2.399963229728653D;
+                double normalizedRadius = ((shot * 73L) % 997L) / 996.0D;
+                double radius = 39.0D * Math.sqrt(normalizedRadius);
+                double x = Math.cos(angle) * radius;
+                double z = Math.sin(angle) * radius;
+                aim = findArenaSurface(session.domain, owner, x, z);
+            }
+
+            double launchAngle = shot * 1.618033988749895D;
+            Vec3 origin = new Vec3(
+                    aim.x + Math.cos(launchAngle) * (4.0D + shot % 7),
+                    98.0D + shot % 9,
+                    aim.z + Math.sin(launchAngle) * (4.0D + shot % 7));
+            Vec3 direction = aim.subtract(origin).normalize();
+            FlintlockBall cannonball = FlintlockBall.cannonball(session.domain, owner, damage, 4.5F);
+            cannonball.setPos(origin.x, origin.y, origin.z);
+            cannonball.setGuaranteedImpact(aim);
+            cannonball.setBarrageEffects(volleyShot % 5 == 0, volleyShot % 12 == 0);
+            cannonball.setNoGravity(true);
+            cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F);
+            launchedAny |= session.domain.addFreshEntity(cannonball);
+
+            // One tiny impact marker per shell keeps twenty-five-shot volleys
+            // readable without recreating the old particle-packet lag spike.
             session.domain.sendParticles(new net.minecraft.core.particles.DustParticleOptions(
-                            new Vector3f(0.75F, 0.12F, 0.04F), 0.65F),
-                    aim.x + Math.cos(angle) * 4.5D, aim.y + 0.08D,
-                    aim.z + Math.sin(angle) * 4.5D, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+                            new Vector3f(0.75F, 0.12F, 0.04F), 0.55F),
+                    aim.x, aim.y + 0.08D, aim.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
         }
-        // Loud enough to carry from the wall/ship to the entire arena.
-        session.domain.playSound(null, origin.x, origin.y, origin.z, SoundEvents.FIREWORK_ROCKET_BLAST,
-                SoundSource.HOSTILE, 4.0F, 0.55F);
+        if (launchedAny) {
+            session.domain.playSound(null, 0.0D, 92.0D, 0.0D, SoundEvents.FIREWORK_ROCKET_BLAST,
+                    SoundSource.HOSTILE, 4.0F, 0.48F);
+        }
+    }
+
+    /** Finds the top solid block at an arena coordinate for terrain impacts. */
+    private static Vec3 findArenaSurface(ServerLevel domain, ServerPlayer owner, double x, double z) {
+        Vec3 start = new Vec3(x, 92.0D, z);
+        Vec3 end = new Vec3(x, 61.0D, z);
+        HitResult hit = domain.clip(new ClipContext(start, end,
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, owner));
+        return hit.getType() == HitResult.Type.MISS
+                ? new Vec3(x, 63.0D, z)
+                : hit.getLocation().add(0.0D, 0.06D, 0.0D);
     }
 
     private static void applyDomainBuffs(ServerPlayer player) {
@@ -538,6 +579,10 @@ public final class DomainAbilities {
         if (server == null) return;
         long now = server.overworld().getGameTime();
         COOLDOWNS.put(session.ownerId, now + COOLDOWN_TICKS);
+        // Wait for the return teleport and Connector's own origin resync, then
+        // replace only the domain key power. This removes the once-per-life
+        // lock while leaving the authoritative Java cooldown untouched.
+        POWER_RESETS.put(session.ownerId, now + 10L);
         clearDomainProjectiles(session.domain);
         ServerPlayer owner = server.getPlayerList().getPlayer(session.ownerId);
         try {

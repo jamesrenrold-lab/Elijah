@@ -78,6 +78,16 @@ assert 'COOLDOWN_TICKS = 5 * 20' in domain_source and 'COOLDOWNS' in domain_sour
     'Domain must use the rebuilt five-second Java cooldown'
 assert 'COOLDOWNS.put(session.ownerId, now + COOLDOWN_TICKS)' in domain_source, \
     'Cooldown must begin only when session cleanup starts'
+assert 'CANNONBALLS_PER_VOLLEY = 25' in domain_source, \
+    'Domain must launch twenty-five shells per half-second volley'
+assert 'volleyShot < CANNONBALLS_PER_VOLLEY' in domain_source
+assert 'fireCannonBarrage(session, owner, target)' in domain_source
+assert 'cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F)' in domain_source, \
+    'Sky barrage speed regressed'
+assert 'POWER_RESETS.put(session.ownerId, now + 10L)' in domain_source, \
+    'Domain power must be refreshed after the return teleport'
+assert '"power remove " + playerId + " elijah:drowned_domain"' in domain_source
+assert '"power grant " + playerId + " elijah:drowned_domain elijah:pirate"' in domain_source
 assert 'WATER_SPAWN_Y = 63.2D' in domain_source, 'Lagoon spawn height regressed'
 assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
 assert 'changeDimension(destination, directTeleporter)' in domain_source, \
@@ -137,8 +147,10 @@ assert 'Server-driven tracer particles' in projectile_source, 'Cannonball tracer
 assert 'closest.distanceToSqr(impact) <= 0.64D' in projectile_source, 'Cannon crossing check is missing'
 assert 'isCannonball() && hit.getType() == HitResult.Type.BLOCK' in projectile_source, \
     'Domain cannonballs must phase through blocks to their recorded target point'
-assert 'int groundPoints = 8' in projectile_source and 'int shellPoints = 6' in projectile_source, \
-    'Low-packet blast outline regressed'
+assert 'setBarrageEffects(boolean visualTracer, boolean explosionSound)' in projectile_source, \
+    'High-volume domain barrage must throttle cosmetic packets'
+assert 'ParticleTypes.LARGE_SMOKE' in projectile_source and 'ParticleTypes.POOF' in projectile_source, \
+    'Batched blast cloud regressed'
 assert '.updateInterval(2)' in command_source, 'Projectile network synchronization is not throttled'
 blood_source = (root / 'src/main/java/com/jamesrenrold/elijah/BloodAbilities.java').read_text()
 assert 'state.cursedFormActive = true' in blood_source

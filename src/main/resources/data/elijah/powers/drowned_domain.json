@@ -1,7 +1,7 @@
 {
   "type": "origins:active_self",
   "name": "Drowned Domain",
-  "description": "Pull the hostile mob you are directly looking at into a separate, spawn-free island dimension for 40 seconds. It remains persistent and permanently aggressive toward you for the entire domain. You begin on the raised circular sand arena while the target starts inside the two-block-deep lagoon. After five seconds, fast cannonballs snapshot the target's exact position every half-second, phase through terrain, and fly to that fixed point without homing; their 4.5-block blast radius is outlined before impact. Damage is 55% of your current attack damage, plus 1.5 per completed 10% Curse. You gain 50% movement speed, powerful swimming, Regeneration II and 50% lifesteal while inside. Java owns the 5-second cooldown after the domain closes.",
+  "description": "Pull the hostile mob you are directly looking at into a separate, spawn-free island dimension for 40 seconds. It remains persistent and permanently aggressive toward you for the entire domain. You begin on the raised circular sand arena while the target starts inside the two-block-deep lagoon. After five seconds, 25 fast cannonballs rain from the sky every half-second: five snapshot the target while twenty continually sweep the arena. They phase through terrain, never home, and detonate in a 4.5-block radius. Damage is 55% of your current attack damage, plus 1.5 per completed 10% Curse. You gain 50% movement speed, powerful swimming, Regeneration II and 50% lifesteal while inside. Java owns the 5-second cooldown and refreshes the Origins key after the domain closes.",
   "cooldown": 0,
   "hud_render": {
     "should_render": false
