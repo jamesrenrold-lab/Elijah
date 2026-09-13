@@ -147,9 +147,9 @@ public final class FlintlockBall extends ThrowableProjectile {
                 if (away.lengthSqr() > 1.0E-4D) {
                     double resistance = entity instanceof LivingEntity living
                             ? living.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE) : 0.0D;
-                    double strength = 0.22D * falloff * Math.max(0.0D, 1.0D - resistance);
+                    double strength = 0.08D * falloff * Math.max(0.0D, 1.0D - resistance);
                     Vec3 push = away.normalize().scale(strength);
-                    entity.push(push.x, Math.max(0.015D, 0.05D * falloff), push.z);
+                    entity.push(push.x, Math.max(0.006D, 0.02D * falloff), push.z);
                     entity.hurtMarked = true;
                 }
             }
