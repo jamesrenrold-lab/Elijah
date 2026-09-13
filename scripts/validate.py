@@ -89,8 +89,8 @@ assert 'power remove @s' not in domain_source, \
 assert 'STATEFUL_POWER_RESETS' in domain_source and 'power revoke @s ' in domain_source, \
     'Only the three stale active powers may be source-scoped refreshed'
 assert 'POWER_REPAIRS' in domain_source and 'processPowerRepairs(server)' in domain_source
-assert 'new PowerRepair(firstTick, 120)' in domain_source
-assert 'statefulPowersRefreshed' in domain_source and 'originRebuilt' in domain_source and 'power revoke @s ' in domain_source
+assert 'new PowerRepair(firstTick, 12)' in domain_source
+assert 'statefulPowersRefreshed' in domain_source and 'readyForCommands' in domain_source and 'power revoke @s ' in domain_source
 assert '"power grant @s " + power + " " + PIRATE_POWER_SOURCE' in domain_source, \
     'Connector transfer recovery must target the live player and restore powers from the standard origin source'
 assert 'player.createCommandSourceStack()' in domain_source
@@ -98,8 +98,8 @@ assert 'playerId = player.getStringUUID()' in domain_source
 assert 'raw UUID is not a reliable' in domain_source
 for pirate_power in origin['powers']:
     assert f'"{pirate_power}"' in domain_source, f'Transfer repair omits {pirate_power}'
-assert domain_source.count('schedulePowerRepair(') >= 3, \
-    'Power repair must run after both entry and return teleports'
+assert domain_source.count('schedulePowerRepair(') >= 2 and 'markPowerRepairReady' in domain_source, \
+    'Power repair guard must be installed before both transfers and released after the event'
 assert 'WATER_SPAWN_Y = 63.2D' in domain_source, 'Lagoon spawn height regressed'
 assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
 assert 'changeDimension(destination, directTeleporter)' in domain_source, \
@@ -111,7 +111,7 @@ assert 'float damage = Math.max(1.0F, attackDamage + curseDamage);' in domain_so
 assert 'elijahDamage * 2.0F' in domain_source, 'CBC rounds must be exactly double Elijah damage'
 assert 'onLivingHurt(LivingHurtEvent event)' in domain_source
 assert 'createbigcannons.cannon_projectile' in domain_source
-assert 'origin set @s ' in domain_source and 'PIRATE_ORIGIN' in domain_source, 'Full Origin rebuild is required after Connector transfer'
+assert 'origin set @s ' not in domain_source and 'PIRATE_ORIGIN' not in domain_source, 'Transfer repair must not reset the complete Origin'
 assert 'BEACH_SPAWN_Y = 67.0D' in domain_source, 'Raised crescent spawn height regressed'
 assert 'BEACH_SPAWN_X = -34.0D' in domain_source, 'Target must spawn deep on the beach'
 assert 'moveEntity(target, domain, WATER_SPAWN_X, WATER_SPAWN_Y' in domain_source, \
