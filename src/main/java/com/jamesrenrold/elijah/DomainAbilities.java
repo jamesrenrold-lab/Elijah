@@ -610,7 +610,8 @@ public final class DomainAbilities {
                 ElijahPirate.getOriginResource(owner, "elijah:blood_resource")));
         float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.55D);
         float curseDamage = (curse / 10) * 1.5F;
-        float damage = Math.max(1.0F, attackDamage + curseDamage);
+        // Elijah cannonballs deal double the normal calculated barrage damage.
+        float damage = Math.max(1.0F, attackDamage + curseDamage) * 2.0F;
         Vec3 targetSnapshot = target.getBoundingBox().getCenter();
         for (int volleyShot = 0; volleyShot < CANNONBALLS_PER_VOLLEY; volleyShot++) {
             int shot = session.cannonIndex++;
