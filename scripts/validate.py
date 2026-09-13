@@ -86,27 +86,23 @@ assert 'cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F)' in 
     'Sky barrage speed regressed'
 assert 'power remove @s' not in domain_source, \
     'Domain cleanup must never use the broad power-removal command'
-assert 'stripPiratePowers(player)' in domain_source, \
-    'Domain must intentionally remove Pirate powers during the session'
-assert 'restorePiratePowers(player, server, source)' in domain_source, \
-    'Domain must restore Pirate powers after return'
-assert 'POWER_REPAIRS' in domain_source and 'processPowerRepairs(server)' in domain_source
-assert 'new PowerRepair(firstTick, 12)' in domain_source
-assert 'readyForCommands' in domain_source and 'schedulePowerRestore' in domain_source
-assert '"power revoke @s " + power + " " + PIRATE_POWER_SOURCE' in domain_source
+assert 'stripPiratePowers(player)' not in domain_source, \
+    'Domain entry must never revoke Pirate powers'
+assert 'restorePiratePowers(player, server, source)' not in domain_source, \
+    'Domain return must not recreate Pirate power instances'
+assert 'POWER_REPAIRS' not in domain_source and 'processPowerRepairs(server)' not in domain_source
+assert 'SavedResources' not in domain_source and 'PowerRepair' not in domain_source
+assert 'power grant @s ' not in domain_source, \
+    'Domain must not re-grant powers after teleporting'
 assert 'DOMAIN_RESTORE_SOURCE' in domain_source, \
     'Return repair must use a dedicated command-owned source'
-assert 'restoreSource = "elijah:pouch_lifecycle".equals(power)' in domain_source, \
-    'Lifecycle power must remain Origin-owned so genuine Origin loss is detectable'
-assert 'SavedResources' in domain_source and 'restoreResources(player, source)' in domain_source, \
-    'Origins resource values must survive the temporary power strip'
-assert 'player.createCommandSourceStack()' in domain_source
-assert 'playerId = player.getStringUUID()' in domain_source
-assert 'raw UUID is not a reliable' in domain_source
+assert 'restoreSource = "elijah:pouch_lifecycle".equals(power)' not in domain_source
+assert 'SavedResources' not in domain_source and 'restoreResources(player, source)' not in domain_source
+assert 'Keep every power instance and its state alive through the transfer.' in domain_source
 for pirate_power in origin['powers']:
-    assert f'"{pirate_power}"' in domain_source, f'Transfer repair omits {pirate_power}'
-assert domain_source.count('schedulePowerRestore(') >= 1 and 'PlayerChangedDimensionEvent' in domain_source, \
-    'Power restore must be scheduled before return and released after the event'
+    assert f'"{pirate_power}"' in domain_source, f'Pirate power list omits {pirate_power}'
+assert 'PlayerChangedDimensionEvent' in domain_source, \
+    'Lifecycle guard must run on the actual Forge dimension-change event'
 assert 'WATER_SPAWN_Y = 63.2D' in domain_source, 'Lagoon spawn height regressed'
 assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
 assert 'changeDimension(destination, directTeleporter)' in domain_source, \
@@ -127,9 +123,7 @@ assert 'player.teleportTo(domain, BEACH_SPAWN_X, BEACH_SPAWN_Y' in domain_source
     'Caster must begin on the raised sand arena'
 assert 'shouldSuppressLifecycleUnload' in domain_source, 'Connector dimension-change guard is missing'
 assert 'onPlayerChangedDimension' in domain_source, \
-    'Power repair must run on the actual Forge dimension-change event'
-assert 'PIRATE_POWER_SOURCE' in domain_source and 'origins", "origin' in domain_source, \
-    'Power stripping must target the standard Origins origin source'
+    'Lifecycle guard must run on the actual Forge dimension-change event'
 assert 'onDomainBlockBreak' in domain_source and 'onDomainBlockPlace' in domain_source
 assert 'onDomainFluidPlace' in domain_source and 'onDomainExplosion' in domain_source
 assert 'getAffectedBlocks().clear()' in domain_source, 'Domain explosions must not damage blocks'
@@ -212,6 +206,6 @@ assert 'server.overworld().getGameTime()' in blood_source, 'Blood timers need a 
 assert 'state.bloodHuntUntil > now' in blood_source and \
        'changeOriginResource(player, "elijah:blood_resource", 1)' in blood_source, \
     'Blood Hunt must add the second Curse point each second'
-assert 'arePiratePowersUnavailable(player)' in blood_source, \
-    'Blood resource commands must pause while domain powers are stripped'
+assert 'arePiratePowersUnavailable(player)' not in blood_source, \
+    'Blood resource ticking must remain active inside the domain'
 print('Validated all power commands and the eight distinct active keybinds.')
