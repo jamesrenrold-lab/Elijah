@@ -101,7 +101,8 @@ public final class DomainAbilities {
     private static final double BEACH_SPAWN_Y = 67.0D;
     private static final UUID DOMAIN_SPEED_ID = UUID.fromString("c01c5046-3b27-49c5-9384-95f1f1cdb5db");
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
-    private static final ResourceLocation PIRATE_POWER_SOURCE = new ResourceLocation("origins", "origin");
+    private static final ResourceLocation POWER_BRIDGE_SOURCE = new ResourceLocation("elijah", "domain_bridge");
+    private static final String LIFECYCLE_POWER = "elijah:pouch_lifecycle";
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
@@ -117,8 +118,6 @@ public final class DomainAbilities {
             "elijah:blood_hunt", "elijah:blood_wings", "elijah:drowned_domain",
             "elijah:wisdom_of_the_sea", "elijah:land_legs", "elijah:pirate_frailty",
             "elijah:flintlock_fall_resistance", "elijah:pouch_lifecycle");
-    private static final List<String> STATEFUL_POWER_RESETS = List.of(
-            "elijah:powder_pouch", "elijah:blood_rush", "elijah:drowned_domain");
     private static final BlockPos ARENA_MARKER = new BlockPos(0, 61, 0);
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
     private static boolean arenaReady;
@@ -290,25 +289,19 @@ public final class DomainAbilities {
                     .withSuppressedOutput().withPermission(4);
             String playerId = player.getStringUUID();
             try {
-                // Grant only the declared Pirate IDs. This is additive and
-                // leaves already-live power instances untouched; importantly,
-                // there is no same-Origin reset that would fire all lost
-                // callbacks and wipe unrelated power state.
+                // Keep a separate source for transfer recovery, but only add a
+                // power when Apoli confirms that the type is actually absent.
+                // This is critical: Apoli creates a new Power instance when a
+                // new source is added, so granting blindly would reset live
+                // resource/cooldown state and break unrelated powers.
                 for (String power : PIRATE_POWERS) {
-                    server.getCommands().performPrefixedCommand(source,
-                            "power grant @s " + power + " " + PIRATE_POWER_SOURCE);
-                }
-                // These are the only powers known to retain a stale active
-                // instance after Connector's detach. Refresh them once, after
-                // the transfer is stable, without touching other powers.
-                if (!repair.statefulPowersRefreshed) {
-                    for (String power : STATEFUL_POWER_RESETS) {
+                    if (LIFECYCLE_POWER.equals(power)) continue;
+                    int present = server.getCommands().performPrefixedCommand(source,
+                            "power has @s " + power);
+                    if (present == 0) {
                         server.getCommands().performPrefixedCommand(source,
-                                "power revoke @s " + power + " " + PIRATE_POWER_SOURCE);
-                        server.getCommands().performPrefixedCommand(source,
-                                "power grant @s " + power + " " + PIRATE_POWER_SOURCE);
+                                "power grant @s " + power + " " + POWER_BRIDGE_SOURCE);
                     }
-                    repair.statefulPowersRefreshed = true;
                 }
             } catch (Throwable error) {
                 LOGGER.error("Could not restore Pirate powers after dimension transfer for {}", playerId, error);
@@ -374,6 +367,23 @@ public final class DomainAbilities {
         if (server.overworld().getGameTime() <= until) return true;
         LIFECYCLE_GUARDS.remove(player.getUUID());
         return false;
+    }
+
+    /**
+     * Removes only the transfer bridge source during a genuine Origin loss.
+     * The lifecycle power is intentionally excluded so this cannot recurse
+     * through its own lost callback.
+     */
+    public static void clearPowerBridge(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        if (server == null) return;
+        CommandSourceStack source = player.createCommandSourceStack()
+                .withSuppressedOutput().withPermission(4);
+        for (String power : PIRATE_POWERS) {
+            if (LIFECYCLE_POWER.equals(power)) continue;
+            server.getCommands().performPrefixedCommand(source,
+                    "power revoke @s " + power + " " + POWER_BRIDGE_SOURCE);
+        }
     }
 
     /** Ends a session when Origins removes the power or the player unloads it. */
@@ -1537,7 +1547,6 @@ public final class DomainAbilities {
         private long nextTick;
         private int attemptsRemaining;
         private boolean readyForCommands;
-        private boolean statefulPowersRefreshed;
 
         private PowerRepair(long nextTick, int attemptsRemaining) {
             this.nextTick = nextTick;
