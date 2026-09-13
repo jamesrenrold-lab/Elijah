@@ -107,6 +107,7 @@ assert 'changeDimension(destination, directTeleporter)' in domain_source, \
 for removed_echo_path in ('saveAsPassenger', 'loadEntityRecursive', 'target.discard()', 'originalTargetSnapshot'):
     assert removed_echo_path not in domain_source, f'Echo transfer path remains: {removed_echo_path}'
 assert '* 0.55D' in domain_source, 'Cannon damage must use 55% current attack damage'
+assert ' * 2.0F' in domain_source, 'Elijah cannonball damage must be doubled'
 assert 'BEACH_SPAWN_Y = 67.0D' in domain_source, 'Raised crescent spawn height regressed'
 assert 'BEACH_SPAWN_X = -34.0D' in domain_source, 'Target must spawn deep on the beach'
 assert 'moveEntity(target, domain, WATER_SPAWN_X, WATER_SPAWN_Y' in domain_source, \
