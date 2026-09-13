@@ -124,7 +124,6 @@ public final class FlintlockBall extends ThrowableProjectile {
         super.onHit(hit);
         if (level() instanceof ServerLevel server) {
             if (cannonball) detonate();
-            server.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 4, 0.08, 0.08, 0.08, 0.01);
             discard();
         }
     }
@@ -156,11 +155,7 @@ public final class FlintlockBall extends ThrowableProjectile {
         }
         // Keep only a tiny tell on selected impacts. The sound still
         // belongs to each shell, but no impact creates a cloud or camera shake.
-        if (visualTracer) {
-            server.sendParticles(ParticleTypes.SMOKE, getX(), getY() + 0.12D, getZ(), 1,
-                    0.0D, 0.0D, 0.0D, 0.004D);
-        }
-        if (explosionSound) {
+         if (explosionSound) {
             server.playSound(null, getX(), getY(), getZ(), SoundEvents.GENERIC_EXPLODE,
                     SoundSource.HOSTILE, 0.12F, 0.85F);
         }
@@ -186,21 +181,11 @@ public final class FlintlockBall extends ThrowableProjectile {
                 }
             }
         }
-        if (!level().isClientSide && isCannonball() && visualTracer && level() instanceof ServerLevel server
-                && (tickCount % 6) == 0) {
-            // Server-driven tracer particles make every volley visible even if
-            // a client resource pack or renderer suppresses the black model.
-            server.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 1,
-                    0.02D, 0.02D, 0.02D, 0.003D);
-        }
-        // The longer safety timeout only prevents permanently orphaned domain
+         // The longer safety timeout only prevents permanently orphaned domain
         // shells if another mod disrupts their recorded impact; ordinary
         // flintlock rounds keep their original short lifetime.
         if (!level().isClientSide && tickCount >= (isCannonball() ? 120 : 30)) discard();
-        if (level().isClientSide && !isCannonball() && tickCount % 2 == 0) {
-            level().addParticle(ParticleTypes.SMOKE, getX(), getY(), getZ(), 0, 0, 0);
-        }
-    }
+     }
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
