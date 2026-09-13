@@ -405,6 +405,24 @@ public final class DomainAbilities {
         }
     }
 
+    /** Applies the requested exact native-CBC damage to direct and explosive hits. */
+    @SubscribeEvent
+    public static void onLivingHurt(LivingHurtEvent event) {
+        LivingEntity victim = event.getEntity();
+        if (!DOMAIN_DIMENSION.equals(victim.level().dimension())) return;
+        DamageSource source = event.getSource();
+        Float directDamage = getCbcDamage(source.getDirectEntity());
+        if (directDamage != null) {
+            event.setAmount(directDamage);
+            return;
+        }
+        if (!"createbigcannons.cannon_projectile".equals(source.getMsgId())) return;
+        PendingCbcDamage pending = CBC_EXPLOSION_DAMAGE.remove(victim.getUUID());
+        if (pending != null && pending.expiresAt >= victim.level().getGameTime()) {
+            event.setAmount(pending.amount);
+        }
+    }
+
     @SubscribeEvent
     public static void onDomainBlockBreak(BlockEvent.BreakEvent event) {
         if (DOMAIN_DIMENSION.equals(event.getPlayer().level().dimension())) {
@@ -431,7 +449,30 @@ public final class DomainAbilities {
     public static void onDomainExplosion(ExplosionEvent.Detonate event) {
         if (DOMAIN_DIMENSION.equals(event.getLevel().dimension())) {
             event.getAffectedBlocks().clear();
+            Entity source = getExplosionSource(event.getExplosion());
+            Float fixedDamage = getCbcDamage(source);
+            if (fixedDamage != null) {
+                long expiresAt = event.getLevel().getGameTime() + 2L;
+                event.getAffectedEntities().removeIf(entity ->
+                        entity instanceof ServerPlayer player
+                                && SESSIONS.containsKey(player.getUUID()));
+                for (Entity entity : event.getAffectedEntities()) {
+                    if (entity instanceof LivingEntity living && living.isAlive()) {
+                        CBC_EXPLOSION_DAMAGE.put(living.getUUID(),
+                                new PendingCbcDamage(fixedDamage, expiresAt));
+                    }
+                }
+            }
         }
+    }
+
+    /** Suppress CBC's native cloud/blast-wave packet while preserving its damage. */
+    @SubscribeEvent
+    public static void onDomainExplosionStart(ExplosionEvent.Start event) {
+        if (!DOMAIN_DIMENSION.equals(event.getLevel().dimension())) return;
+        Entity source = getExplosionSource(event.getExplosion());
+        if (getCbcDamage(source) == null) return;
+        muteCbcExplosionEffects(event.getExplosion());
     }
 
     private static boolean isDomainLevel(LevelAccessor accessor) {
@@ -729,6 +770,7 @@ public final class DomainAbilities {
             projectile.setDeltaMovement(direction.scale(1.2D));
             projectile.setNoGravity(true);
             if (projectile instanceof Projectile ballistic) ballistic.setOwner(owner);
+            setCbcDamageField(projectile, nativeDamage);
 
             Item fuze = BuiltInRegistries.ITEM.getOptional(CBC_DELAYED_IMPACT_FUZE).orElse(null);
             if (fuze == null) {
@@ -742,7 +784,11 @@ public final class DomainAbilities {
             // a free-running airburst timer.
             fuzeStack.getOrCreateTag().putInt("FuzeTimer", CBC_IMPACT_DELAY_TICKS);
             setFuze.invoke(projectile, fuzeStack);
-            if (!domain.addFreshEntity(projectile)) projectile.discard();
+            if (!domain.addFreshEntity(projectile)) {
+                projectile.discard();
+            } else {
+                CBC_PROJECTILE_DAMAGE.put(projectile.getUUID(), nativeDamage);
+            }
         } catch (Throwable error) {
             if (projectile != null && !projectile.isRemoved()) projectile.discard();
             LOGGER.warn("Could not launch optional CBC projectile {}", projectileId, error);
@@ -754,6 +800,56 @@ public final class DomainAbilities {
      * Arm its delayed-impact timer at the first water contact so a shell
      * detonates in the lagoon instead of tunnelling into the seabed.
      */
+    private static Float getCbcDamage(Entity entity) {
+        return entity == null || !isCbcBarrageProjectile(entity)
+                ? null : CBC_PROJECTILE_DAMAGE.get(entity.getUUID());
+    }
+
+    private static Entity getExplosionSource(Explosion explosion) {
+        for (String methodName : new String[]{"getDirectSourceEntity", "getSource"}) {
+            try {
+                Method method = explosion.getClass().getMethod(methodName);
+                Object value = method.invoke(explosion);
+                if (value instanceof Entity entity) return entity;
+            } catch (Throwable ignored) {
+                // The helper is optional across the Forge mappings used by CBC.
+            }
+        }
+        return null;
+    }
+
+    private static void muteCbcExplosionEffects(Explosion explosion) {
+        for (Class<?> type = explosion.getClass(); type != null; type = type.getSuperclass()) {
+            try {
+                Field field = type.getDeclaredField("noEffects");
+                field.setAccessible(true);
+                field.setBoolean(explosion, true);
+                return;
+            } catch (NoSuchFieldException ignored) {
+                // The field lives on ShellExplosion in supported CBC builds.
+            } catch (Throwable error) {
+                LOGGER.debug("Could not mute CBC shell effects", error);
+                return;
+            }
+        }
+    }
+
+    private static void setCbcDamageField(Entity projectile, float damage) {
+        for (Class<?> type = projectile.getClass(); type != null; type = type.getSuperclass()) {
+            try {
+                Field field = type.getDeclaredField("damage");
+                field.setAccessible(true);
+                field.setFloat(projectile, damage);
+                return;
+            } catch (NoSuchFieldException ignored) {
+                // The field lives on AbstractCannonProjectile in supported CBC builds.
+            } catch (Throwable error) {
+                LOGGER.debug("Could not set CBC direct damage", error);
+                return;
+            }
+        }
+    }
+
     private static void detonateCbcWaterImpacts(MinecraftServer server) {
         for (ServerLevel domain : server.getAllLevels()) {
             if (!DOMAIN_DIMENSION.equals(domain.dimension())) continue;
