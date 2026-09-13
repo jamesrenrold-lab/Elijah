@@ -121,15 +121,15 @@ assert 'player.teleportTo(domain, BEACH_SPAWN_X, BEACH_SPAWN_Y' in domain_source
 assert 'shouldSuppressLifecycleUnload' in domain_source, 'Connector dimension-change guard is missing'
 assert 'onPlayerChangedDimension' in domain_source, \
     'Power repair must run on the actual Forge dimension-change event'
-assert 'PIRATE_POWER_SOURCE' in domain_source and 'origins", "origin' in domain_source, \
-    'Power repair must use the standard Origins origin source'
+assert 'POWER_BRIDGE_SOURCE' in domain_source and 'elijah", "domain_bridge' in domain_source, \
+    'Power repair must use a separate persistent bridge source'
 assert 'onDomainBlockBreak' in domain_source and 'onDomainBlockPlace' in domain_source
 assert 'onDomainFluidPlace' in domain_source and 'onDomainExplosion' in domain_source
 assert 'getAffectedBlocks().clear()' in domain_source, 'Domain explosions must not damage blocks'
 assert 'CBC_DELAYED_IMPACT_FUZE' in domain_source and 'delayed_impact_fuze' in domain_source
 assert 'CBC_TIMED_FUZE' not in domain_source, 'CBC rounds must not use a free-running timed fuze'
 assert 'setExplosionCountdown' in domain_source and 'detonateCbcWaterImpacts' in domain_source
-assert 'power revoke @s ' in domain_source and 'STATEFUL_POWER_RESETS' in domain_source
+assert 'power revoke @s ' in domain_source and 'clearPowerBridge' in domain_source
 assert 'ClipContext.Fluid.ANY' in domain_source, 'CBC rounds must acquire reliable fluid-surface impact points'
 assert 'Always run the idempotent arena build' in domain_source, 'Existing damaged arenas must be repaired on restart'
 assert 'CBC_BARRAGE_PROJECTILE_TYPES' in domain_source, \
