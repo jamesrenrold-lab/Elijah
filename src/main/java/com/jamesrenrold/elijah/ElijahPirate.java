@@ -207,8 +207,24 @@ public final class ElijahPirate {
         player.containerMenu.broadcastChanges();
 
         double strength = PirateConfig.BASE_RECOIL.get() + PirateConfig.RECOIL_PER_POWDER.get() * count;
-        Vec3 velocity = player.getDeltaMovement().add(aim.scale(-strength))
-                .add(0, player.onGround() ? 0.08 : 0, 0);
+        Vec3 velocity;
+        if (player.isFallFlying()) {
+            // During Elytra-style flight, split the kick evenly between a
+            // horizontal forward boost and upward lift.
+            Vec3 forward = new Vec3(aim.x, 0.0D, aim.z);
+            if (forward.lengthSqr() < 1.0E-6D) {
+                double yaw = Math.toRadians(player.getYRot());
+                forward = new Vec3(-Math.sin(yaw), 0.0D, Math.cos(yaw));
+            } else {
+                forward = forward.normalize();
+            }
+            velocity = player.getDeltaMovement()
+                    .add(forward.scale(strength * 0.50D))
+                    .add(0.0D, strength * 0.50D, 0.0D);
+        } else {
+            velocity = player.getDeltaMovement().add(aim.scale(-strength))
+                    .add(0.0D, player.onGround() ? 0.08D : 0.0D, 0.0D);
+        }
         // Keep server and client velocity inside the vanilla motion-packet range.
         player.setDeltaMovement(new Vec3(clampVelocity(velocity.x), clampVelocity(velocity.y), clampVelocity(velocity.z)));
         player.hasImpulse = true;

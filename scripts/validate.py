@@ -67,8 +67,8 @@ assert parsed['data/elijah/powers/blood_overflow.json']['entity_action'] == {
 crew_action = parsed['data/elijah/powers/undead_crew.json']['entity_action']['if_action']
 assert crew_action == {'type': 'origins:execute_command', 'command': 'elijah crew'}
 domain = parsed['data/elijah/powers/drowned_domain.json']
-assert domain.get('cooldown') == 0 and domain.get('hud_render') == {'should_render': False}, \
-    'Origins must never retain a cross-dimension cooldown; Java owns the visible cooldown'
+assert domain.get('cooldown') == 1 and domain.get('hud_render') == {'should_render': False}, \
+    'Origins must only debounce the key for one tick; Java owns the visible cooldown'
 assert 'elijah:domain_cooldown' not in origin['powers']
 assert 'elijah:domain_cooldown_recharge' not in origin['powers']
 assert 'data/elijah/powers/domain_cooldown.json' not in parsed
@@ -84,10 +84,9 @@ assert 'volleyShot < CANNONBALLS_PER_VOLLEY' in domain_source
 assert 'fireCannonBarrage(session, owner, target)' in domain_source
 assert 'cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F)' in domain_source, \
     'Sky barrage speed regressed'
-assert 'POWER_RESETS.put(session.ownerId, now + 10L)' in domain_source, \
-    'Domain power must be refreshed after the return teleport'
-assert '"power remove " + playerId + " elijah:drowned_domain"' in domain_source
-assert '"power grant " + playerId + " elijah:drowned_domain elijah:pirate"' in domain_source
+assert 'POWER_RESETS' not in domain_source and 'power remove' not in domain_source \
+       and 'power grant' not in domain_source, \
+    'Domain cleanup must never mutate Origins powers or trigger the lost-power callback'
 assert 'WATER_SPAWN_Y = 63.2D' in domain_source, 'Lagoon spawn height regressed'
 assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
 assert 'changeDimension(destination, directTeleporter)' in domain_source, \
@@ -152,6 +151,9 @@ assert 'setBarrageEffects(boolean visualTracer, boolean explosionSound)' in proj
 assert 'ParticleTypes.LARGE_SMOKE' in projectile_source and 'ParticleTypes.POOF' in projectile_source, \
     'Batched blast cloud regressed'
 assert '.updateInterval(2)' in command_source, 'Projectile network synchronization is not throttled'
+assert 'if (player.isFallFlying())' in command_source, 'Flying flintlock boost is missing'
+assert 'forward.scale(strength * 0.50D)' in command_source
+assert '.add(0.0D, strength * 0.50D, 0.0D)' in command_source
 blood_source = (root / 'src/main/java/com/jamesrenrold/elijah/BloodAbilities.java').read_text()
 assert 'state.cursedFormActive = true' in blood_source
 assert 'state.cursedFormActive = false' in blood_source

@@ -77,7 +77,6 @@ public final class DomainAbilities {
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
-    private static final Map<UUID, Long> POWER_RESETS = new HashMap<>();
     private static final Set<UUID> PENDING_ACTIVATIONS = new HashSet<>();
     private static final BlockPos ARENA_MARKER = new BlockPos(0, 61, 0);
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
@@ -203,37 +202,6 @@ public final class DomainAbilities {
         }
     }
 
-    /**
-     * Connector can preserve a dead ActiveCooldownPower instance even with a
-     * zero-length JSON cooldown. Revoke and immediately re-grant only this
-     * power from the Pirate origin source after the return teleport, creating
-     * a clean key listener without resetting the player's other powers.
-     */
-    private static void processPowerResets(MinecraftServer server) {
-        if (POWER_RESETS.isEmpty()) return;
-        long now = server.overworld().getGameTime();
-        for (Map.Entry<UUID, Long> entry : new ArrayList<>(POWER_RESETS.entrySet())) {
-            if (entry.getValue() > now) continue;
-            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
-            if (player == null) continue;
-            POWER_RESETS.remove(entry.getKey());
-            String playerId = player.getStringUUID();
-            CommandSourceStack source = server.createCommandSourceStack().withSuppressedOutput().withPermission(4);
-            try {
-                server.getCommands().performPrefixedCommand(source,
-                        "power remove " + playerId + " elijah:drowned_domain");
-                int granted = server.getCommands().performPrefixedCommand(source,
-                        "power grant " + playerId + " elijah:drowned_domain elijah:pirate");
-                if (granted <= 0) {
-                    LOGGER.warn("Drowned Domain power reset returned no grant result for {}", playerId);
-                }
-            } catch (Throwable error) {
-                LOGGER.error("Could not reset Drowned Domain power for {}", playerId, error);
-                message(player, "Drowned Domain key reset failed; please send the latest log.");
-            }
-        }
-    }
-
     /** Uses Forge's normal dimension-transfer contract; no Echo clone/discard/NBT path is used. */
     private static LivingEntity moveEntity(LivingEntity target, ServerLevel destination,
                                            double x, double y, double z,
@@ -294,7 +262,6 @@ public final class DomainAbilities {
         SESSIONS.clear();
         COOLDOWNS.clear();
         LIFECYCLE_GUARDS.clear();
-        POWER_RESETS.clear();
         PENDING_ACTIVATIONS.clear();
         arenaReady = false;
         ServerLevel domain = event.getServer().getLevel(DOMAIN_DIMENSION);
@@ -306,7 +273,6 @@ public final class DomainAbilities {
         if (event.phase != TickEvent.Phase.END) return;
         MinecraftServer server = event.getServer();
         if (server == null) return;
-        processPowerResets(server);
         if (!PENDING_ACTIVATIONS.isEmpty()) {
             List<UUID> pending = new ArrayList<>(PENDING_ACTIVATIONS);
             PENDING_ACTIVATIONS.removeAll(pending);
@@ -579,10 +545,6 @@ public final class DomainAbilities {
         if (server == null) return;
         long now = server.overworld().getGameTime();
         COOLDOWNS.put(session.ownerId, now + COOLDOWN_TICKS);
-        // Wait for the return teleport and Connector's own origin resync, then
-        // replace only the domain key power. This removes the once-per-life
-        // lock while leaving the authoritative Java cooldown untouched.
-        POWER_RESETS.put(session.ownerId, now + 10L);
         clearDomainProjectiles(session.domain);
         ServerPlayer owner = server.getPlayerList().getPlayer(session.ownerId);
         try {
