@@ -287,7 +287,7 @@ public final class BloodAbilities {
             // Connector can reconstruct Origins powers while crossing a
             // dimension. Reassert the small data-driven toggle periodically
             // so Curse growth always resumes after entering the domain.
-            if (player.tickCount % 20 == 0 && !DomainAbilities.arePiratePowersUnavailable(player)) {
+            if (player.tickCount % 20 == 0) {
                 ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 1);
                 // The ordinary Origins timer grants +1 Curse each second.
                 // Blood Hunt contributes one additional point on the same
@@ -298,7 +298,7 @@ public final class BloodAbilities {
             }
         } else {
             removeRushModifiers(player);
-            if (player.tickCount % 20 == 0 && !DomainAbilities.arePiratePowersUnavailable(player)) {
+            if (player.tickCount % 20 == 0) {
                 ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 0);
             }
         }
