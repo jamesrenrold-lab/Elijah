@@ -102,7 +102,6 @@ public final class DomainAbilities {
     private static final UUID DOMAIN_SPEED_ID = UUID.fromString("c01c5046-3b27-49c5-9384-95f1f1cdb5db");
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
     private static final ResourceLocation PIRATE_POWER_SOURCE = new ResourceLocation("origins", "origin");
-    private static final ResourceLocation PIRATE_ORIGIN = new ResourceLocation("elijah", "pirate");
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
@@ -247,17 +246,23 @@ public final class DomainAbilities {
         }
     }
 
-    /**
-     * Connector can briefly detach the complete origin source while a player
-     * changes dimensions. Re-granting the declared Pirate powers from their
-     * original source is idempotent and does not invoke action_on_callback's
-     * lost action. Repeating the repair covers both sides of Connector's
-     * delayed component synchronization without ever revoking a power.
-     */
-    private static void schedulePowerRepair(ServerPlayer player, long firstTick) {
-        // Keep reconciling long enough to cover Connector callbacks that arrive
-        // after the actual dimension-change event, including the return trip.
-        POWER_REPAIRS.put(player.getUUID(), new PowerRepair(firstTick, 120));
+undefined    private static void schedulePowerRepair(ServerPlayer player, long firstTick) {
+        // Keep the guard alive across the transfer, but only reconcile for a
+        // few seconds after the completed event. A minute-long command loop can
+        // itself interfere with active/stateful powers.
+        POWER_REPAIRS.put(player.getUUID(), new PowerRepair(firstTick, 12));
+    }
+
+    private static void markPowerRepairReady(ServerPlayer player, long firstTick) {
+        PowerRepair repair = POWER_REPAIRS.get(player.getUUID());
+        if (repair == null) {
+            repair = new PowerRepair(firstTick, 12);
+            POWER_REPAIRS.put(player.getUUID(), repair);
+        }
+        if (!repair.readyForCommands) {
+            repair.readyForCommands = true;
+            repair.nextTick = firstTick;
+        }
     }
 
     private static void processPowerRepairs(MinecraftServer server) {
@@ -266,6 +271,14 @@ public final class DomainAbilities {
         for (Map.Entry<UUID, PowerRepair> entry : new ArrayList<>(POWER_REPAIRS.entrySet())) {
             PowerRepair repair = entry.getValue();
             if (repair.nextTick > now) continue;
+            // The event is the normal path. If a third-party teleporter skips
+            // it, use a delayed fallback instead of leaving the lifecycle guard
+            // active forever.
+            if (!repair.readyForCommands) {
+                if (now < repair.nextTick + 20L) continue;
+                repair.readyForCommands = true;
+                repair.nextTick = now;
+            }
             ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
             if (player == null) {
                 POWER_REPAIRS.remove(entry.getKey());
@@ -277,20 +290,17 @@ public final class DomainAbilities {
                     .withSuppressedOutput().withPermission(4);
             String playerId = player.getStringUUID();
             try {
-                if (!repair.originRebuilt) {
-                    // Re-selecting the same Origin forces Connector to rebuild
-                    // the complete power component instead of merely granting
-                    // IDs that may still point at stale power instances.
-                    server.getCommands().performPrefixedCommand(source,
-                            "origin set @s " + PIRATE_POWER_SOURCE + " " + PIRATE_ORIGIN);
-                    repair.originRebuilt = true;
-                }
+                // Grant only the declared Pirate IDs. This is additive and
+                // leaves already-live power instances untouched; importantly,
+                // there is no same-Origin reset that would fire all lost
+                // callbacks and wipe unrelated power state.
                 for (String power : PIRATE_POWERS) {
                     server.getCommands().performPrefixedCommand(source,
                             "power grant @s " + power + " " + PIRATE_POWER_SOURCE);
                 }
-                // These three active powers also get a source-scoped rebuild
-                // in case Connector reapplies its component after origin set.
+                // These are the only powers known to retain a stale active
+                // instance after Connector's detach. Refresh them once, after
+                // the transfer is stable, without touching other powers.
                 if (!repair.statefulPowersRefreshed) {
                     for (String power : STATEFUL_POWER_RESETS) {
                         server.getCommands().performPrefixedCommand(source,
@@ -386,7 +396,9 @@ public final class DomainAbilities {
         if (server == null) return;
         long now = server.overworld().getGameTime();
         guardLifecycle(player, 200L);
-        schedulePowerRepair(player, now + 1L);
+        // Forge fires this after Connector has completed the dimension transfer.
+        // Do not run power commands from the pre-transfer callback.
+        markPowerRepairReady(player, now + 2L);
     }
 
     /**
@@ -1524,7 +1536,7 @@ public final class DomainAbilities {
     private static final class PowerRepair {
         private long nextTick;
         private int attemptsRemaining;
-        private boolean originRebuilt;
+        private boolean readyForCommands;
         private boolean statefulPowersRefreshed;
 
         private PowerRepair(long nextTick, int attemptsRemaining) {
