@@ -85,7 +85,9 @@ assert 'fireCannonBarrage(session, owner, target)' in domain_source
 assert 'cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F)' in domain_source, \
     'Sky barrage speed regressed'
 assert 'POWER_RESETS' not in domain_source and 'power remove' not in domain_source, \
-    'Domain cleanup must never revoke a power or trigger the lost-power callback'
+    'Domain cleanup must never use the broad power-removal command'
+assert 'STATEFUL_POWER_RESETS' in domain_source and 'power revoke @s ' in domain_source, \
+    'Only the three stale active powers may be source-scoped refreshed'
 assert 'POWER_REPAIRS' in domain_source and 'processPowerRepairs(server)' in domain_source
 assert 'new PowerRepair(firstTick, 120)' in domain_source
 assert 'statefulPowersRefreshed' in domain_source and 'power revoke @s ' in domain_source
