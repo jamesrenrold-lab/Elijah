@@ -611,7 +611,7 @@ public final class DomainAbilities {
         float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.55D);
         float curseDamage = (curse / 10) * 1.5F;
         // Elijah cannonballs deal double the normal calculated barrage damage.
-        float damage = Math.max(1.0F, attackDamage + curseDamage) * 2.0F;
+        float damage = Math.max(1.0F, attackDamage + curseDamage);
         Vec3 targetSnapshot = target.getBoundingBox().getCenter();
         for (int volleyShot = 0; volleyShot < CANNONBALLS_PER_VOLLEY; volleyShot++) {
             int shot = session.cannonIndex++;
@@ -653,7 +653,7 @@ public final class DomainAbilities {
             // marker packet for every round in a twenty-five-shot volley.
         }
         if (volleyNumber % CBC_BARRAGE_VOLLEY_PERIOD == 0) {
-            fireCreateBigCannonBarrage(session, owner, target, volleyNumber);
+            fireCreateBigCannonBarrage(session, owner, target, volleyNumber, damage);
         }
     }
 
@@ -663,7 +663,8 @@ public final class DomainAbilities {
      * barrage and simply skip these extra shells.
      */
     private static void fireCreateBigCannonBarrage(Session session, ServerPlayer owner,
-                                                        LivingEntity target, int volleyNumber) {
+                                                        LivingEntity target, int volleyNumber,
+                                                        float elijahDamage) {
         Vec3 targetSnapshot = target.getBoundingBox().getCenter();
         // Rotate through all four genuine CBC ammunition types. The interval
         // is deliberately sparse because CBC supplies its own shell cloud,
@@ -690,12 +691,14 @@ public final class DomainAbilities {
                 aim.x + Math.cos(launchAngle) * (8.0D + typeIndex),
                 108.0D + typeIndex * 2.0D,
                 aim.z + Math.sin(launchAngle) * (8.0D + typeIndex));
-        spawnCreateBigCannonProjectile(session.domain, owner, projectileId, origin, aim);
+        spawnCreateBigCannonProjectile(session.domain, owner, projectileId, origin, aim,
+                elijahDamage * 2.0F);
     }
 
     private static void spawnCreateBigCannonProjectile(ServerLevel domain, ServerPlayer owner,
                                                         ResourceLocation projectileId,
-                                                        Vec3 origin, Vec3 aim) {
+                                                        Vec3 origin, Vec3 aim,
+                                                        float nativeDamage) {
         Entity projectile = null;
         try {
             EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(projectileId).orElse(null);
