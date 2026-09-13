@@ -154,15 +154,15 @@ public final class FlintlockBall extends ThrowableProjectile {
                 }
             }
         }
-        // Two batched particle packets per impact keep fifty explosions per
-        // second visible without hundreds of per-point network packets.
-        server.sendParticles(ParticleTypes.LARGE_SMOKE, getX(), getY() + 0.25D, getZ(), 3,
-                blastRadius * 0.30D, 0.30D, blastRadius * 0.30D, 0.006D);
-        server.sendParticles(ParticleTypes.POOF, getX(), getY() + 0.20D, getZ(), 1,
-                0.45D, 0.15D, 0.45D, 0.012D);
+        // Keep only a tiny tell on selected impacts. The sound still
+        // belongs to each shell, but no impact creates a cloud or camera shake.
+        if (visualTracer) {
+            server.sendParticles(ParticleTypes.SMOKE, getX(), getY() + 0.12D, getZ(), 1,
+                    0.0D, 0.0D, 0.0D, 0.004D);
+        }
         if (explosionSound) {
             server.playSound(null, getX(), getY(), getZ(), SoundEvents.GENERIC_EXPLODE,
-                    SoundSource.HOSTILE, 0.35F, 0.85F);
+                    SoundSource.HOSTILE, 0.12F, 0.85F);
         }
     }
 
@@ -191,7 +191,7 @@ public final class FlintlockBall extends ThrowableProjectile {
             // Server-driven tracer particles make every volley visible even if
             // a client resource pack or renderer suppresses the black model.
             server.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 1,
-                    0.04D, 0.04D, 0.04D, 0.006D);
+                    0.02D, 0.02D, 0.02D, 0.003D);
         }
         // The longer safety timeout only prevents permanently orphaned domain
         // shells if another mod disrupts their recorded impact; ordinary

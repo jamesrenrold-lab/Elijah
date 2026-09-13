@@ -80,6 +80,9 @@ public final class DomainAbilities {
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;
     private static final int CANNONBALLS_PER_VOLLEY = 25;
+    // CBC rounds are still real HE/AP/shrapnel/smoke projectiles, but one
+    // round every four custom volleys keeps their native shell effects readable.
+    private static final int CBC_BARRAGE_VOLLEY_PERIOD = 4;
     private static final List<ResourceLocation> CBC_BARRAGE_PROJECTILE_TYPES = List.of(
             new ResourceLocation("createbigcannons", "he_shell"),
             new ResourceLocation("createbigcannons", "ap_shell"),
@@ -87,11 +90,9 @@ public final class DomainAbilities {
             new ResourceLocation("createbigcannons", "smoke_shell"));
     private static final Set<ResourceLocation> CBC_BARRAGE_PROJECTILE_IDS =
             Set.copyOf(CBC_BARRAGE_PROJECTILE_TYPES);
-    private static final ResourceLocation CBC_IMPACT_FUZE =
-            new ResourceLocation("createbigcannons", "impact_fuze");
-    private static final ResourceLocation CBC_TIMED_FUZE =
-            new ResourceLocation("createbigcannons", "timed_fuze");
-    private static final int CBC_FUZE_TIMER_TICKS = 6;
+    private static final ResourceLocation CBC_DELAYED_IMPACT_FUZE =
+            new ResourceLocation("createbigcannons", "delayed_impact_fuze");
+    private static final int CBC_IMPACT_DELAY_TICKS = 2;
     private static final double WATER_SPAWN_X = 8.0D;
     private static final double WATER_SPAWN_Y = 63.2D;
     private static final double BEACH_SPAWN_X = -34.0D;
@@ -112,6 +113,8 @@ public final class DomainAbilities {
             "elijah:blood_hunt", "elijah:blood_wings", "elijah:drowned_domain",
             "elijah:wisdom_of_the_sea", "elijah:land_legs", "elijah:pirate_frailty",
             "elijah:flintlock_fall_resistance", "elijah:pouch_lifecycle");
+    private static final List<String> STATEFUL_POWER_RESETS = List.of(
+            "elijah:powder_pouch", "elijah:blood_rush", "elijah:drowned_domain");
     private static final BlockPos ARENA_MARKER = new BlockPos(0, 61, 0);
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
     private static boolean arenaReady;
@@ -271,6 +274,20 @@ public final class DomainAbilities {
                     server.getCommands().performPrefixedCommand(source,
                             "power grant @s " + power + " " + PIRATE_POWER_SOURCE);
                 }
+                // Grant is intentionally idempotent, but Connector can leave
+                // these three ActiveSelfPower instances stale: their action
+                // callback/cooldown object survives while the Origin source is
+                // reattached. Rebuild only the affected instances, scoped to
+                // the standard source so unrelated powers remain untouched.
+                if (!repair.statefulPowersRefreshed) {
+                    for (String power : STATEFUL_POWER_RESETS) {
+                        server.getCommands().performPrefixedCommand(source,
+                                "power revoke @s " + power + " " + PIRATE_POWER_SOURCE);
+                        server.getCommands().performPrefixedCommand(source,
+                                "power grant @s " + power + " " + PIRATE_POWER_SOURCE);
+                    }
+                    repair.statefulPowersRefreshed = true;
+                }
             } catch (Throwable error) {
                 LOGGER.error("Could not restore Pirate powers after dimension transfer for {}", playerId, error);
                 message(player, "Pirate power transfer repair failed; please send the latest log.");
@@ -428,6 +445,7 @@ public final class DomainAbilities {
         if (event.phase != TickEvent.Phase.END) return;
         MinecraftServer server = event.getServer();
         if (server == null) return;
+        detonateCbcWaterImpacts(server);
         processPowerRepairs(server);
         if (!PENDING_ACTIVATIONS.isEmpty()) {
             List<UUID> pending = new ArrayList<>(PENDING_ACTIVATIONS);
@@ -588,6 +606,7 @@ public final class DomainAbilities {
     }
 
     private static void fireCannonBarrage(Session session, ServerPlayer owner, LivingEntity target) {
+        int volleyNumber = session.cannonIndex / CANNONBALLS_PER_VOLLEY;
         int curse = Math.max(0, Math.min(100,
                 ElijahPirate.getOriginResource(owner, "elijah:blood_resource")));
         float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.55D);
@@ -633,7 +652,9 @@ public final class DomainAbilities {
             // The shell's own blast is the only impact visual; avoid a second
             // marker packet for every round in a twenty-five-shot volley.
         }
-        fireCreateBigCannonBarrage(session, owner, target);
+        if (volleyNumber % CBC_BARRAGE_VOLLEY_PERIOD == 0) {
+            fireCreateBigCannonBarrage(session, owner, target, volleyNumber);
+        }
     }
 
     /**
@@ -641,32 +662,35 @@ public final class DomainAbilities {
      * Reflection keeps Elijah optional: worlds without CBC retain the normal
      * barrage and simply skip these extra shells.
      */
-    private static void fireCreateBigCannonBarrage(Session session, ServerPlayer owner, LivingEntity target) {
+    private static void fireCreateBigCannonBarrage(Session session, ServerPlayer owner,
+                                                        LivingEntity target, int volleyNumber) {
         Vec3 targetSnapshot = target.getBoundingBox().getCenter();
-        int patternBase = session.cannonIndex;
-        for (int typeIndex = 0; typeIndex < CBC_BARRAGE_PROJECTILE_TYPES.size(); typeIndex++) {
-            ResourceLocation projectileId = CBC_BARRAGE_PROJECTILE_TYPES.get(typeIndex);
-            Vec3 aim;
-            if (typeIndex == 0) {
-                aim = new Vec3(
-                        Math.max(-40.0D, Math.min(40.0D, targetSnapshot.x)),
-                        targetSnapshot.y,
-                        Math.max(-40.0D, Math.min(40.0D, targetSnapshot.z)));
-            } else {
-                int shot = patternBase + typeIndex;
-                double angle = shot * 2.399963229728653D;
-                double normalizedRadius = ((shot * 73L) % 997L) / 996.0D;
-                double radius = 36.0D * Math.sqrt(normalizedRadius);
-                aim = findArenaSurface(session.domain, owner,
-                        Math.cos(angle) * radius, Math.sin(angle) * radius);
-            }
-            double launchAngle = (patternBase + typeIndex) * 1.618033988749895D;
-            Vec3 origin = new Vec3(
-                    aim.x + Math.cos(launchAngle) * (7.0D + typeIndex * 2.0D),
-                    108.0D + typeIndex * 2.0D,
-                    aim.z + Math.sin(launchAngle) * (7.0D + typeIndex * 2.0D));
-            spawnCreateBigCannonProjectile(session.domain, owner, projectileId, origin, aim);
+        // Rotate through all four genuine CBC ammunition types. The interval
+        // is deliberately sparse because CBC supplies its own shell cloud,
+        // blast-wave sound and client screen-shake packet.
+        int typeIndex = (volleyNumber / CBC_BARRAGE_VOLLEY_PERIOD)
+                % CBC_BARRAGE_PROJECTILE_TYPES.size();
+        ResourceLocation projectileId = CBC_BARRAGE_PROJECTILE_TYPES.get(typeIndex);
+        Vec3 aim;
+        if (typeIndex == 0) {
+            aim = new Vec3(
+                    Math.max(-40.0D, Math.min(40.0D, targetSnapshot.x)),
+                    targetSnapshot.y,
+                    Math.max(-40.0D, Math.min(40.0D, targetSnapshot.z)));
+        } else {
+            int shot = session.cannonIndex + typeIndex;
+            double angle = shot * 2.399963229728653D;
+            double normalizedRadius = ((shot * 73L) % 997L) / 996.0D;
+            double radius = 36.0D * Math.sqrt(normalizedRadius);
+            aim = findArenaSurface(session.domain, owner,
+                    Math.cos(angle) * radius, Math.sin(angle) * radius);
         }
+        double launchAngle = (session.cannonIndex + typeIndex) * 1.618033988749895D;
+        Vec3 origin = new Vec3(
+                aim.x + Math.cos(launchAngle) * (8.0D + typeIndex),
+                108.0D + typeIndex * 2.0D,
+                aim.z + Math.sin(launchAngle) * (8.0D + typeIndex));
+        spawnCreateBigCannonProjectile(session.domain, owner, projectileId, origin, aim);
     }
 
     private static void spawnCreateBigCannonProjectile(ServerLevel domain, ServerPlayer owner,
@@ -684,24 +708,51 @@ public final class DomainAbilities {
             float pitch = (float) (Math.atan2(direction.y, direction.horizontalDistance())
                     * 180.0D / Math.PI);
             projectile.moveTo(origin.x, origin.y, origin.z, yaw, pitch);
-            projectile.setDeltaMovement(direction.scale(5.0D));
+            projectile.setDeltaMovement(direction.scale(3.0D));
             projectile.setNoGravity(true);
             if (projectile instanceof Projectile ballistic) ballistic.setOwner(owner);
 
-            Item fuze = BuiltInRegistries.ITEM.getOptional(CBC_TIMED_FUZE).orElse(null);
+            Item fuze = BuiltInRegistries.ITEM.getOptional(CBC_DELAYED_IMPACT_FUZE).orElse(null);
             if (fuze == null) {
-                LOGGER.warn("CBC timed fuze is unavailable; skipping {}", projectileId);
+                LOGGER.warn("CBC delayed impact fuze is unavailable; skipping {}", projectileId);
                 projectile.discard();
                 return;
             }
             Method setFuze = projectile.getClass().getMethod("setFuze", ItemStack.class);
             ItemStack fuzeStack = new ItemStack(fuze);
-            fuzeStack.getOrCreateTag().putInt("FuzeTimer", CBC_FUZE_TIMER_TICKS);
+            // The timer starts only after the impact fuze activates; it is not
+            // a free-running airburst timer.
+            fuzeStack.getOrCreateTag().putInt("FuzeTimer", CBC_IMPACT_DELAY_TICKS);
             setFuze.invoke(projectile, fuzeStack);
             if (!domain.addFreshEntity(projectile)) projectile.discard();
         } catch (Throwable error) {
             if (projectile != null && !projectile.isRemoved()) projectile.discard();
             LOGGER.warn("Could not launch optional CBC projectile {}", projectileId, error);
+        }
+    }
+
+    /**
+     * CBC's native fuze callback is not run for every fluid-surface contact.
+     * Arm its delayed-impact timer at the first water contact so a shell
+     * detonates in the lagoon instead of tunnelling into the seabed.
+     */
+    private static void detonateCbcWaterImpacts(MinecraftServer server) {
+        for (ServerLevel domain : server.getAllLevels()) {
+            if (!DOMAIN_DIMENSION.equals(domain.dimension())) continue;
+            AABB arena = new AABB(-48.0D, 60.0D, -48.0D, 48.0D, 120.0D, 48.0D);
+            for (Entity projectile : domain.getEntitiesOfClass(Entity.class, arena,
+                    DomainAbilities::isCbcBarrageProjectile)) {
+                if (!projectile.isInWater()
+                        && domain.getFluidState(projectile.blockPosition()).isEmpty()) continue;
+                try {
+                    Method setExplosionCountdown = projectile.getClass()
+                            .getMethod("setExplosionCountdown", int.class);
+                    setExplosionCountdown.invoke(projectile, 0);
+                } catch (Throwable error) {
+                    LOGGER.debug("CBC projectile {} did not expose an explosion countdown",
+                            projectile.getType(), error);
+                }
+            }
         }
     }
 
@@ -1346,6 +1397,7 @@ public final class DomainAbilities {
     private static final class PowerRepair {
         private long nextTick;
         private int attemptsRemaining;
+        private boolean statefulPowersRefreshed;
 
         private PowerRepair(long nextTick, int attemptsRemaining) {
             this.nextTick = nextTick;

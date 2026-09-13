@@ -88,6 +88,7 @@ assert 'POWER_RESETS' not in domain_source and 'power remove' not in domain_sour
     'Domain cleanup must never revoke a power or trigger the lost-power callback'
 assert 'POWER_REPAIRS' in domain_source and 'processPowerRepairs(server)' in domain_source
 assert 'new PowerRepair(firstTick, 120)' in domain_source
+assert 'statefulPowersRefreshed' in domain_source and 'power revoke @s ' in domain_source
 assert '"power grant @s " + power + " " + PIRATE_POWER_SOURCE' in domain_source, \
     'Connector transfer recovery must target the live player and restore powers from the standard origin source'
 assert 'player.createCommandSourceStack()' in domain_source
@@ -118,13 +119,18 @@ assert 'PIRATE_POWER_SOURCE' in domain_source and 'origins", "origin' in domain_
 assert 'onDomainBlockBreak' in domain_source and 'onDomainBlockPlace' in domain_source
 assert 'onDomainFluidPlace' in domain_source and 'onDomainExplosion' in domain_source
 assert 'getAffectedBlocks().clear()' in domain_source, 'Domain explosions must not damage blocks'
-assert 'CBC_TIMED_FUZE' in domain_source and 'FuzeTimer' in domain_source
+assert 'CBC_DELAYED_IMPACT_FUZE' in domain_source and 'delayed_impact_fuze' in domain_source
+assert 'CBC_TIMED_FUZE' not in domain_source, 'CBC rounds must not use a free-running timed fuze'
+assert 'setExplosionCountdown' in domain_source and 'detonateCbcWaterImpacts' in domain_source
+assert 'power revoke @s ' in domain_source and 'STATEFUL_POWER_RESETS' in domain_source
 assert 'ClipContext.Fluid.ANY' in domain_source, 'CBC rounds must acquire reliable fluid-surface impact points'
 assert 'Always run the idempotent arena build' in domain_source, 'Existing damaged arenas must be repaired on restart'
 assert 'CBC_BARRAGE_PROJECTILE_TYPES' in domain_source, \
     'Optional Create Big Cannons barrage types are missing'
 assert 'setBarrageEffects(volleyShot % 5 == 0, true)' in domain_source, \
     'Every custom shell must get its own impact explosion sound'
+assert 'CBC_BARRAGE_VOLLEY_PERIOD = 4' in domain_source, \
+    'Native CBC shell effects must be throttled to a readable cadence'
 assert 'FIREWORK_ROCKET_BLAST' not in domain_source, \
     'The shared volley boom must be removed'
 assert 'restoreTarget(session, server)' in domain_source, 'Guaranteed target restoration is missing'
@@ -174,10 +180,10 @@ assert 'isCannonball() && hit.getType() == HitResult.Type.BLOCK' in projectile_s
     'Domain cannonballs must phase through blocks to their recorded target point'
 assert 'setBarrageEffects(boolean visualTracer, boolean explosionSound)' in projectile_source, \
     'High-volume domain barrage must throttle cosmetic packets'
-assert 'ParticleTypes.LARGE_SMOKE' in projectile_source and 'ParticleTypes.POOF' in projectile_source, \
-    'Batched blast cloud regressed'
-assert 'getZ(), 3,' in projectile_source and 'blastRadius * 0.30D' in projectile_source
-assert 'double strength = 0.22D' in projectile_source
+assert 'ParticleTypes.SMOKE' in projectile_source and 'ParticleTypes.LARGE_SMOKE' not in projectile_source \
+    and 'ParticleTypes.POOF' not in projectile_source, 'Blast particle cloud must stay minimal'
+assert 'getZ(), 1,' in projectile_source and '0.0D, 0.0D, 0.0D' in projectile_source
+assert 'double strength = 0.08D' in projectile_source
 assert '.updateInterval(2)' in command_source, 'Projectile network synchronization is not throttled'
 assert 'if (player.isFallFlying())' in command_source, 'Flying flintlock boost is missing'
 assert 'forward.scale(strength * 0.50D)' in command_source
