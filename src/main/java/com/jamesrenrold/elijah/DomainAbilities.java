@@ -32,6 +32,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -43,6 +44,8 @@ import net.minecraftforge.common.util.ITeleporter;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.event.level.ExplosionEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -86,6 +89,9 @@ public final class DomainAbilities {
             Set.copyOf(CBC_BARRAGE_PROJECTILE_TYPES);
     private static final ResourceLocation CBC_IMPACT_FUZE =
             new ResourceLocation("createbigcannons", "impact_fuze");
+    private static final ResourceLocation CBC_TIMED_FUZE =
+            new ResourceLocation("createbigcannons", "timed_fuze");
+    private static final int CBC_FUZE_TIMER_TICKS = 6;
     private static final double WATER_SPAWN_X = 8.0D;
     private static final double WATER_SPAWN_Y = 63.2D;
     private static final double BEACH_SPAWN_X = -34.0D;
@@ -241,7 +247,7 @@ public final class DomainAbilities {
     private static void schedulePowerRepair(ServerPlayer player, long firstTick) {
         // Keep reconciling long enough to cover Connector callbacks that arrive
         // after the actual dimension-change event, including the return trip.
-        POWER_REPAIRS.put(player.getUUID(), new PowerRepair(firstTick, 20));
+        POWER_REPAIRS.put(player.getUUID(), new PowerRepair(firstTick, 120));
     }
 
     private static void processPowerRepairs(MinecraftServer server) {
@@ -255,12 +261,15 @@ public final class DomainAbilities {
                 POWER_REPAIRS.remove(entry.getKey());
                 continue;
             }
-            CommandSourceStack source = server.createCommandSourceStack().withSuppressedOutput().withPermission(4);
+            // Use the live player command source: a raw UUID is not a reliable
+            // EntityArgument target for Connector's Forge-side Apoli command.
+            CommandSourceStack source = player.createCommandSourceStack()
+                    .withSuppressedOutput().withPermission(4);
             String playerId = player.getStringUUID();
             try {
                 for (String power : PIRATE_POWERS) {
                     server.getCommands().performPrefixedCommand(source,
-                            "power grant " + playerId + " " + power + " " + PIRATE_POWER_SOURCE);
+                            "power grant @s " + power + " " + PIRATE_POWER_SOURCE);
                 }
             } catch (Throwable error) {
                 LOGGER.error("Could not restore Pirate powers after dimension transfer for {}", playerId, error);
@@ -367,6 +376,39 @@ public final class DomainAbilities {
                 || isCbcBarrageProjectile(source.getEntity())) {
             event.setCanceled(true);
         }
+    }
+
+    @SubscribeEvent
+    public static void onDomainBlockBreak(BlockEvent.BreakEvent event) {
+        if (DOMAIN_DIMENSION.equals(event.getPlayer().level().dimension())) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onDomainBlockPlace(BlockEvent.EntityPlaceEvent event) {
+        if (isDomainLevel(event.getLevel())) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onDomainFluidPlace(BlockEvent.FluidPlaceBlockEvent event) {
+        if (isDomainLevel(event.getLevel())) {
+            event.setCanceled(true);
+        }
+    }
+
+    /** Preserve entity damage and visuals while making every domain explosion block-safe. */
+    @SubscribeEvent
+    public static void onDomainExplosion(ExplosionEvent.Detonate event) {
+        if (DOMAIN_DIMENSION.equals(event.getLevel().dimension())) {
+            event.getAffectedBlocks().clear();
+        }
+    }
+
+    private static boolean isDomainLevel(LevelAccessor accessor) {
+        return accessor instanceof Level level && DOMAIN_DIMENSION.equals(level.dimension());
     }
 
     @SubscribeEvent
@@ -588,11 +630,8 @@ public final class DomainAbilities {
             cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F);
             session.domain.addFreshEntity(cannonball);
 
-            // One tiny impact marker per shell keeps twenty-five-shot volleys
-            // readable without recreating the old particle-packet lag spike.
-            session.domain.sendParticles(new net.minecraft.core.particles.DustParticleOptions(
-                            new Vector3f(0.75F, 0.12F, 0.04F), 0.55F),
-                    aim.x, aim.y + 0.08D, aim.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+            // The shell's own blast is the only impact visual; avoid a second
+            // marker packet for every round in a twenty-five-shot volley.
         }
         fireCreateBigCannonBarrage(session, owner, target);
     }
@@ -649,14 +688,16 @@ public final class DomainAbilities {
             projectile.setNoGravity(true);
             if (projectile instanceof Projectile ballistic) ballistic.setOwner(owner);
 
-            Item fuze = BuiltInRegistries.ITEM.getOptional(CBC_IMPACT_FUZE).orElse(null);
+            Item fuze = BuiltInRegistries.ITEM.getOptional(CBC_TIMED_FUZE).orElse(null);
             if (fuze == null) {
-                LOGGER.warn("CBC impact fuze is unavailable; skipping {}", projectileId);
+                LOGGER.warn("CBC timed fuze is unavailable; skipping {}", projectileId);
                 projectile.discard();
                 return;
             }
             Method setFuze = projectile.getClass().getMethod("setFuze", ItemStack.class);
-            setFuze.invoke(projectile, new ItemStack(fuze));
+            ItemStack fuzeStack = new ItemStack(fuze);
+            fuzeStack.getOrCreateTag().putInt("FuzeTimer", CBC_FUZE_TIMER_TICKS);
+            setFuze.invoke(projectile, fuzeStack);
             if (!domain.addFreshEntity(projectile)) projectile.discard();
         } catch (Throwable error) {
             if (projectile != null && !projectile.isRemoved()) projectile.discard();
@@ -669,7 +710,7 @@ public final class DomainAbilities {
         Vec3 start = new Vec3(x, 92.0D, z);
         Vec3 end = new Vec3(x, 61.0D, z);
         HitResult hit = domain.clip(new ClipContext(start, end,
-                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, owner));
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, owner));
         return hit.getType() == HitResult.Type.MISS
                 ? new Vec3(x, 63.0D, z)
                 : hit.getLocation().add(0.0D, 0.06D, 0.0D);
@@ -798,10 +839,9 @@ public final class DomainAbilities {
 
     private static void buildArena(ServerLevel level) {
         if (arenaReady) return;
-        if (level.getBlockState(ARENA_MARKER).is(Blocks.DIAMOND_BLOCK)) {
-            arenaReady = true;
-            return;
-        }
+        // Always run the idempotent arena build once per server start. If a
+        // previous version already left the marker, this repairs any blocks
+        // destroyed by old CBC explosions before the protection hooks apply.
         final int beachTop = 66;
 
         // Version-2 terrain: one opaque sandstone seabed with exactly two

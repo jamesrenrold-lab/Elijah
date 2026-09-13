@@ -3,12 +3,12 @@
 A pirate Origin built for Forge 47.4.4+ with Fabric Origins 1.10.x through Connector.
 The JAR includes the Origin data, powder-pouch screen, flintlock renderer, Dirty Tactics, undead crewmates and pirate passives.
 
-**Updating from an earlier release:** remove the old Elijah JAR and install 0.3.8 on the client and server. Do not keep two Elijah versions installed. Existing pouch contents are preserved.
+**Updating from an earlier release:** remove the old Elijah JAR and install 0.3.9 on the client and server. Do not keep two Elijah versions installed. Existing pouch contents are preserved.
 
 ## Install
 
 1. Download the `Elijah-Pirate-1.20.1` artifact from the latest successful GitHub Actions build and unzip it.
-2. Put `elijah-pirate-0.3.8.jar` in your Minecraft instance's `mods` folder.
+2. Put `elijah-pirate-0.3.9.jar` in your Minecraft instance's `mods` folder.
 3. On multiplayer, install that same JAR on the server and every player's client.
 4. Keep your existing Forge / Connector / Fabric Origins / Even More Origins Keybinds setup installed. Restart Minecraft and the server.
 5. Select **Elijah — The Powder Corsair**. An operator can select it for a player with:

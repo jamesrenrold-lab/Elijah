@@ -147,19 +147,19 @@ public final class FlintlockBall extends ThrowableProjectile {
                 if (away.lengthSqr() > 1.0E-4D) {
                     double resistance = entity instanceof LivingEntity living
                             ? living.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE) : 0.0D;
-                    double strength = 0.55D * falloff * Math.max(0.0D, 1.0D - resistance);
+                    double strength = 0.22D * falloff * Math.max(0.0D, 1.0D - resistance);
                     Vec3 push = away.normalize().scale(strength);
-                    entity.push(push.x, Math.max(0.08D, 0.18D * falloff), push.z);
+                    entity.push(push.x, Math.max(0.015D, 0.05D * falloff), push.z);
                     entity.hurtMarked = true;
                 }
             }
         }
         // Two batched particle packets per impact keep fifty explosions per
         // second visible without hundreds of per-point network packets.
-        server.sendParticles(ParticleTypes.LARGE_SMOKE, getX(), getY() + 0.25D, getZ(), 7,
-                blastRadius * 0.48D, 0.55D, blastRadius * 0.48D, 0.012D);
-        server.sendParticles(ParticleTypes.POOF, getX(), getY() + 0.20D, getZ(), 4,
-                0.75D, 0.25D, 0.75D, 0.025D);
+        server.sendParticles(ParticleTypes.LARGE_SMOKE, getX(), getY() + 0.25D, getZ(), 3,
+                blastRadius * 0.30D, 0.30D, blastRadius * 0.30D, 0.006D);
+        server.sendParticles(ParticleTypes.POOF, getX(), getY() + 0.20D, getZ(), 1,
+                0.45D, 0.15D, 0.45D, 0.012D);
         if (explosionSound) {
             server.playSound(null, getX(), getY(), getZ(), SoundEvents.GENERIC_EXPLODE,
                     SoundSource.HOSTILE, 0.35F, 0.85F);
@@ -178,7 +178,7 @@ public final class FlintlockBall extends ThrowableProjectile {
                 double progress = Math.max(0.0D, Math.min(1.0D,
                         impact.subtract(previousPosition).dot(travelled) / travelledSquared));
                 Vec3 closest = previousPosition.add(travelled.scale(progress));
-                if (closest.distanceToSqr(impact) <= 0.64D) {
+                if (closest.distanceToSqr(impact) <= 4.0D) {
                     setPos(impact.x, impact.y, impact.z);
                     detonate();
                     discard();
@@ -187,15 +187,11 @@ public final class FlintlockBall extends ThrowableProjectile {
             }
         }
         if (!level().isClientSide && isCannonball() && visualTracer && level() instanceof ServerLevel server
-                && (tickCount & 3) == 0) {
+                && (tickCount % 6) == 0) {
             // Server-driven tracer particles make every volley visible even if
             // a client resource pack or renderer suppresses the black model.
-            server.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 2,
-                    0.06D, 0.06D, 0.06D, 0.01D);
-            if ((tickCount & 7) == 0) {
-                server.sendParticles(ParticleTypes.FLAME, getX(), getY(), getZ(), 1,
-                        0.02D, 0.02D, 0.02D, 0.0D);
-            }
+            server.sendParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 1,
+                    0.04D, 0.04D, 0.04D, 0.006D);
         }
         // The longer safety timeout only prevents permanently orphaned domain
         // shells if another mod disrupts their recorded impact; ordinary

@@ -87,9 +87,12 @@ assert 'cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F)' in 
 assert 'POWER_RESETS' not in domain_source and 'power remove' not in domain_source, \
     'Domain cleanup must never revoke a power or trigger the lost-power callback'
 assert 'POWER_REPAIRS' in domain_source and 'processPowerRepairs(server)' in domain_source
-assert 'new PowerRepair(firstTick, 20)' in domain_source
-assert '"power grant " + playerId + " " + power + " " + PIRATE_POWER_SOURCE' in domain_source, \
-    'Connector transfer recovery must non-destructively restore Pirate powers from the standard origin source'
+assert 'new PowerRepair(firstTick, 120)' in domain_source
+assert '"power grant @s " + power + " " + PIRATE_POWER_SOURCE' in domain_source, \
+    'Connector transfer recovery must target the live player and restore powers from the standard origin source'
+assert 'player.createCommandSourceStack()' in domain_source
+assert 'playerId = player.getStringUUID()' in domain_source
+assert 'raw UUID is not a reliable' in domain_source
 for pirate_power in origin['powers']:
     assert f'"{pirate_power}"' in domain_source, f'Transfer repair omits {pirate_power}'
 assert domain_source.count('schedulePowerRepair(') >= 3, \
@@ -112,6 +115,12 @@ assert 'onPlayerChangedDimension' in domain_source, \
     'Power repair must run on the actual Forge dimension-change event'
 assert 'PIRATE_POWER_SOURCE' in domain_source and 'origins", "origin' in domain_source, \
     'Power repair must use the standard Origins origin source'
+assert 'onDomainBlockBreak' in domain_source and 'onDomainBlockPlace' in domain_source
+assert 'onDomainFluidPlace' in domain_source and 'onDomainExplosion' in domain_source
+assert 'getAffectedBlocks().clear()' in domain_source, 'Domain explosions must not damage blocks'
+assert 'CBC_TIMED_FUZE' in domain_source and 'FuzeTimer' in domain_source
+assert 'ClipContext.Fluid.ANY' in domain_source, 'CBC rounds must acquire reliable fluid-surface impact points'
+assert 'Always run the idempotent arena build' in domain_source, 'Existing damaged arenas must be repaired on restart'
 assert 'CBC_BARRAGE_PROJECTILE_TYPES' in domain_source, \
     'Optional Create Big Cannons barrage types are missing'
 assert 'setBarrageEffects(volleyShot % 5 == 0, true)' in domain_source, \
@@ -160,13 +169,15 @@ assert 'boolean sandyRing' in domain_source, 'Complete circular sand arena is mi
 assert 'innerRadiusSquared' in domain_source, 'Circular barrier shell is missing'
 projectile_source = (root / 'src/main/java/com/jamesrenrold/elijah/FlintlockBall.java').read_text()
 assert 'Server-driven tracer particles' in projectile_source, 'Cannonball tracer visibility regressed'
-assert 'closest.distanceToSqr(impact) <= 0.64D' in projectile_source, 'Cannon crossing check is missing'
+assert 'closest.distanceToSqr(impact) <= 4.0D' in projectile_source, 'Cannon crossing check is missing'
 assert 'isCannonball() && hit.getType() == HitResult.Type.BLOCK' in projectile_source, \
     'Domain cannonballs must phase through blocks to their recorded target point'
 assert 'setBarrageEffects(boolean visualTracer, boolean explosionSound)' in projectile_source, \
     'High-volume domain barrage must throttle cosmetic packets'
 assert 'ParticleTypes.LARGE_SMOKE' in projectile_source and 'ParticleTypes.POOF' in projectile_source, \
     'Batched blast cloud regressed'
+assert 'getZ(), 3, blastRadius * 0.30D' in projectile_source
+assert 'double strength = 0.22D' in projectile_source
 assert '.updateInterval(2)' in command_source, 'Projectile network synchronization is not throttled'
 assert 'if (player.isFallFlying())' in command_source, 'Flying flintlock boost is missing'
 assert 'forward.scale(strength * 0.50D)' in command_source
