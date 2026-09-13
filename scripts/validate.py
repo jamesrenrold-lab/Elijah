@@ -86,13 +86,13 @@ assert 'cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F)' in 
     'Sky barrage speed regressed'
 assert 'power remove @s' not in domain_source, \
     'Domain cleanup must never use the broad power-removal command'
-assert 'STATEFUL_POWER_RESETS' in domain_source and 'power revoke @s ' in domain_source, \
-    'Only the three stale active powers may be source-scoped refreshed'
+assert 'POWER_BRIDGE_SOURCE' in domain_source and 'power has @s ' in domain_source, \
+    'Transfer recovery must use a non-destructive bridge only for missing powers'
 assert 'POWER_REPAIRS' in domain_source and 'processPowerRepairs(server)' in domain_source
 assert 'new PowerRepair(firstTick, 12)' in domain_source
-assert 'statefulPowersRefreshed' in domain_source and 'readyForCommands' in domain_source and 'power revoke @s ' in domain_source
-assert '"power grant @s " + power + " " + PIRATE_POWER_SOURCE' in domain_source, \
-    'Connector transfer recovery must target the live player and restore powers from the standard origin source'
+assert 'readyForCommands' in domain_source and 'clearPowerBridge' in domain_source
+assert '"power has @s " + power' in domain_source and 'POWER_BRIDGE_SOURCE' in domain_source, \
+    'Connector transfer recovery must preserve existing instances and bridge only missing powers'
 assert 'player.createCommandSourceStack()' in domain_source
 assert 'playerId = player.getStringUUID()' in domain_source
 assert 'raw UUID is not a reliable' in domain_source
