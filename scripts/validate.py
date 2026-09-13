@@ -87,9 +87,9 @@ assert 'cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F)' in 
 assert 'POWER_RESETS' not in domain_source and 'power remove' not in domain_source, \
     'Domain cleanup must never revoke a power or trigger the lost-power callback'
 assert 'POWER_REPAIRS' in domain_source and 'processPowerRepairs(server)' in domain_source
-assert 'new PowerRepair(firstTick, 6)' in domain_source
-assert '"power grant " + playerId + " " + power + " elijah:pirate"' in domain_source, \
-    'Connector transfer recovery must non-destructively restore Pirate powers'
+assert 'new PowerRepair(firstTick, 20)' in domain_source
+assert '"power grant " + playerId + " " + power + " " + PIRATE_POWER_SOURCE' in domain_source, \
+    'Connector transfer recovery must non-destructively restore Pirate powers from the standard origin source'
 for pirate_power in origin['powers']:
     assert f'"{pirate_power}"' in domain_source, f'Transfer repair omits {pirate_power}'
 assert domain_source.count('schedulePowerRepair(') >= 3, \
@@ -108,6 +108,16 @@ assert 'moveEntity(target, domain, WATER_SPAWN_X, WATER_SPAWN_Y' in domain_sourc
 assert 'player.teleportTo(domain, BEACH_SPAWN_X, BEACH_SPAWN_Y' in domain_source, \
     'Caster must begin on the raised sand arena'
 assert 'shouldSuppressLifecycleUnload' in domain_source, 'Connector dimension-change guard is missing'
+assert 'onPlayerChangedDimension' in domain_source, \
+    'Power repair must run on the actual Forge dimension-change event'
+assert 'PIRATE_POWER_SOURCE' in domain_source and 'origins", "origin' in domain_source, \
+    'Power repair must use the standard Origins origin source'
+assert 'CBC_BARRAGE_PROJECTILE_TYPES' in domain_source, \
+    'Optional Create Big Cannons barrage types are missing'
+assert 'setBarrageEffects(volleyShot % 5 == 0, true)' in domain_source, \
+    'Every custom shell must get its own impact explosion sound'
+assert 'FIREWORK_ROCKET_BLAST' not in domain_source, \
+    'The shared volley boom must be removed'
 assert 'restoreTarget(session, server)' in domain_source, 'Guaranteed target restoration is missing'
 assert 'buildLagoonStairs(level)' in domain_source, 'Lagoon access ramp is missing'
 assert 'buildMirroredLagoonStairs(level)' in domain_source, 'Circular arena needs its mirrored ramp'

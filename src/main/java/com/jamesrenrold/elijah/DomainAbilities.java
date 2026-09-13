@@ -632,32 +632,35 @@ public final class DomainAbilities {
     private static void spawnCreateBigCannonProjectile(ServerLevel domain, ServerPlayer owner,
                                                         ResourceLocation projectileId,
                                                         Vec3 origin, Vec3 aim) {
-        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(projectileId).orElse(null);
-        if (type == null) return;
-        Entity projectile = type.create(domain);
-        if (projectile == null) return;
+        Entity projectile = null;
+        try {
+            EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getOptional(projectileId).orElse(null);
+            if (type == null) return;
+            projectile = type.create(domain);
+            if (projectile == null) return;
 
-        Vec3 direction = aim.subtract(origin).normalize();
-        float yaw = (float) (Math.atan2(direction.x, direction.z) * 180.0D / Math.PI);
-        float pitch = (float) (Math.atan2(direction.y, direction.horizontalDistance())
-                * 180.0D / Math.PI);
-        projectile.moveTo(origin.x, origin.y, origin.z, yaw, pitch);
-        projectile.setDeltaMovement(direction.scale(5.0D));
-        projectile.setNoGravity(true);
-        if (projectile instanceof Projectile ballistic) ballistic.setOwner(owner);
+            Vec3 direction = aim.subtract(origin).normalize();
+            float yaw = (float) (Math.atan2(direction.x, direction.z) * 180.0D / Math.PI);
+            float pitch = (float) (Math.atan2(direction.y, direction.horizontalDistance())
+                    * 180.0D / Math.PI);
+            projectile.moveTo(origin.x, origin.y, origin.z, yaw, pitch);
+            projectile.setDeltaMovement(direction.scale(5.0D));
+            projectile.setNoGravity(true);
+            if (projectile instanceof Projectile ballistic) ballistic.setOwner(owner);
 
-        Item fuze = BuiltInRegistries.ITEM.getOptional(CBC_IMPACT_FUZE).orElse(null);
-        if (fuze != null) {
-            try {
-                Method setFuze = projectile.getClass().getMethod("setFuze", ItemStack.class);
-                setFuze.invoke(projectile, new ItemStack(fuze));
-            } catch (ReflectiveOperationException error) {
-                LOGGER.warn("Could not install the CBC impact fuze on {}", projectileId, error);
+            Item fuze = BuiltInRegistries.ITEM.getOptional(CBC_IMPACT_FUZE).orElse(null);
+            if (fuze == null) {
+                LOGGER.warn("CBC impact fuze is unavailable; skipping {}", projectileId);
                 projectile.discard();
                 return;
             }
+            Method setFuze = projectile.getClass().getMethod("setFuze", ItemStack.class);
+            setFuze.invoke(projectile, new ItemStack(fuze));
+            if (!domain.addFreshEntity(projectile)) projectile.discard();
+        } catch (Throwable error) {
+            if (projectile != null && !projectile.isRemoved()) projectile.discard();
+            LOGGER.warn("Could not launch optional CBC projectile {}", projectileId, error);
         }
-        if (!domain.addFreshEntity(projectile)) projectile.discard();
     }
 
     /** Finds the top solid block at an arena coordinate for terrain impacts. */
