@@ -101,8 +101,10 @@ public final class DomainAbilities {
     private static final double BEACH_SPAWN_Y = 67.0D;
     private static final UUID DOMAIN_SPEED_ID = UUID.fromString("c01c5046-3b27-49c5-9384-95f1f1cdb5db");
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
-    private static final ResourceLocation POWER_BRIDGE_SOURCE = new ResourceLocation("elijah", "domain_bridge");
-    private static final String LIFECYCLE_POWER = "elijah:pouch_lifecycle";
+    private static final ResourceLocation PIRATE_POWER_SOURCE = new ResourceLocation("origins", "origin");
+    // Clean up bridge grants left by 0.3.16 when this version takes over.
+    private static final ResourceLocation LEGACY_POWER_BRIDGE_SOURCE =
+            new ResourceLocation("elijah", "domain_bridge");
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
@@ -203,9 +205,9 @@ public final class DomainAbilities {
         }
 
         guardLifecycle(player, 200L);
-        // Install the repair guard before the transfer can fire Connector's
-        // origin-lost callback synchronously.
-        schedulePowerRepair(player, serverTime + 1L);
+        // The powers are intentionally stripped after the session exists,
+        // rather than being reconciled during the transfer itself.
+        POWER_REPAIRS.remove(player.getUUID());
         player.teleportTo(domain, BEACH_SPAWN_X, BEACH_SPAWN_Y, 0.0D, playerYaw, playerPitch);
         if (player.level() != domain) {
             ServerLevel targetReturnLevel = server.getLevel(targetOrigin);
@@ -226,6 +228,10 @@ public final class DomainAbilities {
                 targetOrigin, targetPosition, targetYaw, targetPitch,
                 targetWasPersistent, serverTime + DOMAIN_TICKS);
         SESSIONS.put(player.getUUID(), session);
+        // Connector cannot keep detaching powers that are deliberately absent.
+        // The lifecycle callback is suppressed by the active session, so the
+        // pouch and Java-owned Cursed Form/domain effects are preserved.
+        stripPiratePowers(player);
         applyDomainBuffs(player);
         domain.playSound(null, player.blockPosition(), SoundEvents.AMBIENT_UNDERWATER_ENTER,
                 SoundSource.PLAYERS, 1.2F, 0.7F);
@@ -245,23 +251,10 @@ public final class DomainAbilities {
         }
     }
 
-    private static void schedulePowerRepair(ServerPlayer player, long firstTick) {
-        // Keep the guard alive across the transfer, but only reconcile for a
-        // few seconds after the completed event. A minute-long command loop can
-        // itself interfere with active/stateful powers.
+    private static void schedulePowerRestore(ServerPlayer player, long firstTick) {
+        // Keep the return-transfer guard alive, but restore only after the
+        // completed event so no command races Connector's component sync.
         POWER_REPAIRS.put(player.getUUID(), new PowerRepair(firstTick, 12));
-    }
-
-    private static void markPowerRepairReady(ServerPlayer player, long firstTick) {
-        PowerRepair repair = POWER_REPAIRS.get(player.getUUID());
-        if (repair == null) {
-            repair = new PowerRepair(firstTick, 12);
-            POWER_REPAIRS.put(player.getUUID(), repair);
-        }
-        if (!repair.readyForCommands) {
-            repair.readyForCommands = true;
-            repair.nextTick = firstTick;
-        }
     }
 
     private static void processPowerRepairs(MinecraftServer server) {
@@ -289,20 +282,11 @@ public final class DomainAbilities {
                     .withSuppressedOutput().withPermission(4);
             String playerId = player.getStringUUID();
             try {
-                // Keep a separate source for transfer recovery, but only add a
-                // power when Apoli confirms that the type is actually absent.
-                // This is critical: Apoli creates a new Power instance when a
-                // new source is added, so granting blindly would reset live
-                // resource/cooldown state and break unrelated powers.
-                for (String power : PIRATE_POWERS) {
-                    if (LIFECYCLE_POWER.equals(power)) continue;
-                    int present = server.getCommands().performPrefixedCommand(source,
-                            "power has @s " + power);
-                    if (present == 0) {
-                        server.getCommands().performPrefixedCommand(source,
-                                "power grant @s " + power + " " + POWER_BRIDGE_SOURCE);
-                    }
-                }
+                // The domain deliberately removed these powers on entry.
+                // Restore them from the normal Origin source after return.
+                // Repeated grant calls are safe once the source is present:
+                // Apoli returns 0 rather than recreating the live instance.
+                restorePiratePowers(player, server, source);
             } catch (Throwable error) {
                 LOGGER.error("Could not restore Pirate powers after dimension transfer for {}", playerId, error);
                 message(player, "Pirate power transfer repair failed; please send the latest log.");
@@ -370,9 +354,8 @@ public final class DomainAbilities {
     }
 
     /**
-     * Removes only the transfer bridge source during a genuine Origin loss.
-     * The lifecycle power is intentionally excluded so this cannot recurse
-     * through its own lost callback.
+     * Removes legacy 0.3.16 bridge grants during a genuine Origin loss.
+     * The current domain flow does not create bridge grants.
      */
     public static void clearPowerBridge(ServerPlayer player) {
         MinecraftServer server = player.getServer();
@@ -380,9 +363,33 @@ public final class DomainAbilities {
         CommandSourceStack source = player.createCommandSourceStack()
                 .withSuppressedOutput().withPermission(4);
         for (String power : PIRATE_POWERS) {
-            if (LIFECYCLE_POWER.equals(power)) continue;
+            if ("elijah:pouch_lifecycle".equals(power)) continue;
             server.getCommands().performPrefixedCommand(source,
-                    "power revoke @s " + power + " " + POWER_BRIDGE_SOURCE);
+                    "power revoke @s " + power + " " + LEGACY_POWER_BRIDGE_SOURCE);
+        }
+    }
+
+    private static void stripPiratePowers(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        if (server == null) return;
+        CommandSourceStack source = player.createCommandSourceStack()
+                .withSuppressedOutput().withPermission(4);
+        for (String power : PIRATE_POWERS) {
+            server.getCommands().performPrefixedCommand(source,
+                    "power revoke @s " + power + " " + PIRATE_POWER_SOURCE);
+            // Remove any bridge left by 0.3.16 as well.
+            if (!"elijah:pouch_lifecycle".equals(power)) {
+                server.getCommands().performPrefixedCommand(source,
+                        "power revoke @s " + power + " " + LEGACY_POWER_BRIDGE_SOURCE);
+            }
+        }
+    }
+
+    private static void restorePiratePowers(ServerPlayer player, MinecraftServer server,
+                                            CommandSourceStack source) {
+        for (String power : PIRATE_POWERS) {
+            server.getCommands().performPrefixedCommand(source,
+                    "power grant @s " + power + " " + PIRATE_POWER_SOURCE);
         }
     }
 
@@ -406,9 +413,14 @@ public final class DomainAbilities {
         if (server == null) return;
         long now = server.overworld().getGameTime();
         guardLifecycle(player, 200L);
-        // Forge fires this after Connector has completed the dimension transfer.
-        // Do not run power commands from the pre-transfer callback.
-        markPowerRepairReady(player, now + 2L);
+        if (!DOMAIN_DIMENSION.equals(event.getFrom())) return;
+        // Return repair is intentionally performed only after the real
+        // dimension-change event, when Connector has finished its transfer.
+        PowerRepair repair = POWER_REPAIRS.get(player.getUUID());
+        if (repair != null) {
+            repair.readyForCommands = true;
+            repair.nextTick = now + 2L;
+        }
     }
 
     /**
@@ -960,8 +972,8 @@ public final class DomainAbilities {
                 removeDomainBuffs(owner);
                 if (owner.isAlive()) {
                     guardLifecycle(owner, 200L);
-                    // The repair must exist before return transfer callbacks.
-                    schedulePowerRepair(owner, now + 1L);
+                    // The restore must exist before return transfer callbacks.
+                    schedulePowerRestore(owner, now + 1L);
                     teleportPlayerBack(owner, server, session);
                     message(owner, "Drowned Domain closed (" + reason + "). Cooldown: 5s.");
                 }
