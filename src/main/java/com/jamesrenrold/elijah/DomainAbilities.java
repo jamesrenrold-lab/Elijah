@@ -246,7 +246,7 @@ public final class DomainAbilities {
         }
     }
 
-undefined    private static void schedulePowerRepair(ServerPlayer player, long firstTick) {
+    private static void schedulePowerRepair(ServerPlayer player, long firstTick) {
         // Keep the guard alive across the transfer, but only reconcile for a
         // few seconds after the completed event. A minute-long command loop can
         // itself interfere with active/stateful powers.
