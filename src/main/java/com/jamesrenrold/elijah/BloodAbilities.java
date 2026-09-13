@@ -111,8 +111,6 @@ public final class BloodAbilities {
         player.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, OVERDRIVE_TICKS, 0, false, true, true));
         player.addEffect(new MobEffectInstance(MobEffects.DARKNESS, OVERDRIVE_TICKS, 0, false, true, true));
         player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, OVERDRIVE_TICKS, 0, false, true, true));
-        player.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, OVERDRIVE_TICKS, 1, false, true, true));
-        player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, OVERDRIVE_TICKS, 0, false, true, true));
         message(player, "Curse overflow — the hunger takes hold!");
         return 1;
     }

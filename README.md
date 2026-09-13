@@ -3,12 +3,12 @@
 A pirate Origin built for Forge 47.4.4+ with Fabric Origins 1.10.x through Connector.
 The JAR includes the Origin data, powder-pouch screen, flintlock renderer, Dirty Tactics, undead crewmates and pirate passives.
 
-**Updating from an earlier release:** remove the old Elijah JAR and install 0.3.1 on the client and server. Do not keep two Elijah versions installed. Existing pouch contents are preserved.
+**Updating from an earlier release:** remove the old Elijah JAR and install 0.3.7 on the client and server. Do not keep two Elijah versions installed. Existing pouch contents are preserved.
 
 ## Install
 
 1. Download the `Elijah-Pirate-1.20.1` artifact from the latest successful GitHub Actions build and unzip it.
-2. Put `elijah-pirate-0.3.1.jar` in your Minecraft instance's `mods` folder.
+2. Put `elijah-pirate-0.3.7.jar` in your Minecraft instance's `mods` folder.
 3. On multiplayer, install that same JAR on the server and every player's client.
 4. Keep your existing Forge / Connector / Fabric Origins / Even More Origins Keybinds setup installed. Restart Minecraft and the server.
 5. Select **Elijah — The Powder Corsair**. An operator can select it for a player with:
@@ -36,7 +36,7 @@ Passives activate automatically and have no keybind.
 
 - **Primary Active Power — Dirty Tactics:** arms your next successful melee hit. That target takes **3 flat bonus damage**, gets **Slowness III for 2 seconds**, and emits the **skeleton death** sound. The **18-second server cooldown starts when the hit lands**. Missing, shooting the flintlock, or hitting a shield does not consume the charge. One target per activation; no charge stacking. Dying or changing Origin clears a primed charge; relogs and respawns do not reset an active cooldown.
 
-- **Cursed Form:** toggle it on to gain **20 Curse** immediately plus 10% lifesteal, movement speed, and attack speed. It remains active until deliberately toggled off, gaining **1 Curse per second**; while off, Curse drains by **1 every 4 seconds** (0.25 per second). Toggling off begins a **20-second cooldown**. At 100 Curse the meter is consumed and triggers a **25-second overfill** with Blindness, Darkness, Strength, Weakness II, Slowness I, **50% lifesteal**, and health degeneration clamped so it cannot kill the player. Blood abilities are locked during overfill. Afterwards, **Exsanguinated** lasts 30 seconds with no natural regeneration, -25% movement speed, -30% attack speed and -20% attack damage.
+- **Cursed Form:** toggle it on to gain **20 Curse** immediately plus 10% lifesteal, movement speed, and attack speed. It remains active until deliberately toggled off, gaining **1 Curse per second**; while off, Curse drains by **1 every 4 seconds** (0.25 per second). Toggling off begins a **20-second cooldown**. At 100 Curse the meter is consumed and triggers a **25-second overfill** with Blindness, Darkness, Strength, and **50% lifesteal** (no Slowness or Weakness), and health degeneration clamped so it cannot kill the player. Blood abilities are locked during overfill. Afterwards, **Exsanguinated** lasts 30 seconds with no natural regeneration, -25% movement speed, -30% attack speed and -20% attack damage.
 
 - **Quaternary Active Power — Call of the Drowned Crew:** starts with **four** resource charges. Each press spends **one** charge and summons **one** undead crewmate, never a whole group. Each crewmate wears the exact supplied 64×64 golden-and-red [Undead Pirate Captain skin](https://www.minecraftskins.com/skin/21355492/undead-pirate-captain/), follows the nearest valid mob you most recently attacked or that most recently attacked you, and keeps moving forward while attempting swings inside **1 block**. Damage still requires the intentionally close **0.5-block** range. It lasts **30 seconds** and one charge returns every **60 seconds**, with the bone/sailor resource bar showing the current charges. Each crewmate snapshots **80% of the summoner's current max health and attack damage** and uses **2.5 attack speed** (about an 8-tick attack interval). Epic Fight's optional biped mob patch supplies sword/tachi animations; without Epic Fight, a vanilla combat goal provides the same pressure-and-hit behavior. Crewmates are summon-only entities and drop **no loot or equipment** when they die.
 
