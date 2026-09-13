@@ -86,20 +86,23 @@ assert 'cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F)' in 
     'Sky barrage speed regressed'
 assert 'power remove @s' not in domain_source, \
     'Domain cleanup must never use the broad power-removal command'
-assert 'POWER_BRIDGE_SOURCE' in domain_source and 'power has @s ' in domain_source, \
-    'Transfer recovery must use a non-destructive bridge only for missing powers'
+assert 'stripPiratePowers(player)' in domain_source, \
+    'Domain must intentionally remove Pirate powers during the session'
+assert 'restorePiratePowers(player, server, source)' in domain_source, \
+    'Domain must restore Pirate powers after return'
 assert 'POWER_REPAIRS' in domain_source and 'processPowerRepairs(server)' in domain_source
 assert 'new PowerRepair(firstTick, 12)' in domain_source
-assert 'readyForCommands' in domain_source and 'clearPowerBridge' in domain_source
-assert '"power has @s " + power' in domain_source and 'POWER_BRIDGE_SOURCE' in domain_source, \
-    'Connector transfer recovery must preserve existing instances and bridge only missing powers'
+assert 'readyForCommands' in domain_source and 'schedulePowerRestore' in domain_source
+assert '"power revoke @s " + power + " " + PIRATE_POWER_SOURCE' in domain_source
+assert '"power grant @s " + power + " " + PIRATE_POWER_SOURCE' in domain_source, \
+    'Return repair must restore powers from the normal Origin source'
 assert 'player.createCommandSourceStack()' in domain_source
 assert 'playerId = player.getStringUUID()' in domain_source
 assert 'raw UUID is not a reliable' in domain_source
 for pirate_power in origin['powers']:
     assert f'"{pirate_power}"' in domain_source, f'Transfer repair omits {pirate_power}'
-assert domain_source.count('schedulePowerRepair(') >= 2 and 'markPowerRepairReady' in domain_source, \
-    'Power repair guard must be installed before both transfers and released after the event'
+assert domain_source.count('schedulePowerRestore(') >= 1 and 'PlayerChangedDimensionEvent' in domain_source, \
+    'Power restore must be scheduled before return and released after the event'
 assert 'WATER_SPAWN_Y = 63.2D' in domain_source, 'Lagoon spawn height regressed'
 assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
 assert 'changeDimension(destination, directTeleporter)' in domain_source, \
@@ -121,8 +124,8 @@ assert 'player.teleportTo(domain, BEACH_SPAWN_X, BEACH_SPAWN_Y' in domain_source
 assert 'shouldSuppressLifecycleUnload' in domain_source, 'Connector dimension-change guard is missing'
 assert 'onPlayerChangedDimension' in domain_source, \
     'Power repair must run on the actual Forge dimension-change event'
-assert 'POWER_BRIDGE_SOURCE' in domain_source and 'elijah", "domain_bridge' in domain_source, \
-    'Power repair must use a separate persistent bridge source'
+assert 'PIRATE_POWER_SOURCE' in domain_source and 'origins", "origin' in domain_source, \
+    'Power restore must use the standard Origins origin source'
 assert 'onDomainBlockBreak' in domain_source and 'onDomainBlockPlace' in domain_source
 assert 'onDomainFluidPlace' in domain_source and 'onDomainExplosion' in domain_source
 assert 'getAffectedBlocks().clear()' in domain_source, 'Domain explosions must not damage blocks'
