@@ -84,9 +84,16 @@ assert 'volleyShot < CANNONBALLS_PER_VOLLEY' in domain_source
 assert 'fireCannonBarrage(session, owner, target)' in domain_source
 assert 'cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F)' in domain_source, \
     'Sky barrage speed regressed'
-assert 'POWER_RESETS' not in domain_source and 'power remove' not in domain_source \
-       and 'power grant' not in domain_source, \
-    'Domain cleanup must never mutate Origins powers or trigger the lost-power callback'
+assert 'POWER_RESETS' not in domain_source and 'power remove' not in domain_source, \
+    'Domain cleanup must never revoke a power or trigger the lost-power callback'
+assert 'POWER_REPAIRS' in domain_source and 'processPowerRepairs(server)' in domain_source
+assert 'new PowerRepair(firstTick, 6)' in domain_source
+assert '"power grant " + playerId + " " + power + " elijah:pirate"' in domain_source, \
+    'Connector transfer recovery must non-destructively restore Pirate powers'
+for pirate_power in origin['powers']:
+    assert f'"{pirate_power}"' in domain_source, f'Transfer repair omits {pirate_power}'
+assert domain_source.count('schedulePowerRepair(') >= 3, \
+    'Power repair must run after both entry and return teleports'
 assert 'WATER_SPAWN_Y = 63.2D' in domain_source, 'Lagoon spawn height regressed'
 assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
 assert 'changeDimension(destination, directTeleporter)' in domain_source, \

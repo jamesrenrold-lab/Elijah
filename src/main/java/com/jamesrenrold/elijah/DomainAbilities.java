@@ -77,7 +77,16 @@ public final class DomainAbilities {
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
+    private static final Map<UUID, PowerRepair> POWER_REPAIRS = new HashMap<>();
     private static final Set<UUID> PENDING_ACTIVATIONS = new HashSet<>();
+    private static final List<String> PIRATE_POWERS = List.of(
+            "elijah:dirty_tactics", "elijah:flintlock", "elijah:powder_pouch",
+            "elijah:undead_crew", "elijah:crew_resource", "elijah:crew_recharge",
+            "elijah:blood_resource", "elijah:blood_active_window", "elijah:blood_charge_gain",
+            "elijah:blood_charge_decay", "elijah:blood_overflow", "elijah:blood_rush",
+            "elijah:blood_hunt", "elijah:blood_wings", "elijah:drowned_domain",
+            "elijah:wisdom_of_the_sea", "elijah:land_legs", "elijah:pirate_frailty",
+            "elijah:flintlock_fall_resistance", "elijah:pouch_lifecycle");
     private static final BlockPos ARENA_MARKER = new BlockPos(0, 61, 0);
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
     private static boolean arenaReady;
@@ -174,6 +183,7 @@ public final class DomainAbilities {
             message(player, "The caster could not enter the domain; the target was returned.");
             return;
         }
+        schedulePowerRepair(player, serverTime + 2L);
         movedTarget.setDeltaMovement(Vec3.ZERO);
         movedTarget.hurtMarked = true;
         forceTargetAggro(movedTarget, player);
@@ -198,6 +208,50 @@ public final class DomainAbilities {
                     && now - session.startedAt > 40L;
             if (session.ending || owner == null || !owner.isAlive() || now >= session.endAt || abandoned) {
                 finishSession(session, server, true, "stale session recovered");
+            }
+        }
+    }
+
+    /**
+     * Connector can briefly detach the complete origin source while a player
+     * changes dimensions. Re-granting the declared Pirate powers from their
+     * original source is idempotent and does not invoke action_on_callback's
+     * lost action. Repeating the repair covers both sides of Connector's
+     * delayed component synchronization without ever revoking a power.
+     */
+    private static void schedulePowerRepair(ServerPlayer player, long firstTick) {
+        POWER_REPAIRS.put(player.getUUID(), new PowerRepair(firstTick, 6));
+    }
+
+    private static void processPowerRepairs(MinecraftServer server) {
+        if (POWER_REPAIRS.isEmpty()) return;
+        long now = server.overworld().getGameTime();
+        for (Map.Entry<UUID, PowerRepair> entry : new ArrayList<>(POWER_REPAIRS.entrySet())) {
+            PowerRepair repair = entry.getValue();
+            if (repair.nextTick > now) continue;
+            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+            if (player == null) {
+                POWER_REPAIRS.remove(entry.getKey());
+                continue;
+            }
+            CommandSourceStack source = server.createCommandSourceStack().withSuppressedOutput().withPermission(4);
+            String playerId = player.getStringUUID();
+            try {
+                for (String power : PIRATE_POWERS) {
+                    server.getCommands().performPrefixedCommand(source,
+                            "power grant " + playerId + " " + power + " elijah:pirate");
+                }
+            } catch (Throwable error) {
+                LOGGER.error("Could not restore Pirate powers after dimension transfer for {}", playerId, error);
+                message(player, "Pirate power transfer repair failed; please send the latest log.");
+                POWER_REPAIRS.remove(entry.getKey());
+                continue;
+            }
+            repair.attemptsRemaining--;
+            if (repair.attemptsRemaining <= 0) {
+                POWER_REPAIRS.remove(entry.getKey());
+            } else {
+                repair.nextTick = now + 10L;
             }
         }
     }
@@ -262,6 +316,7 @@ public final class DomainAbilities {
         SESSIONS.clear();
         COOLDOWNS.clear();
         LIFECYCLE_GUARDS.clear();
+        POWER_REPAIRS.clear();
         PENDING_ACTIVATIONS.clear();
         arenaReady = false;
         ServerLevel domain = event.getServer().getLevel(DOMAIN_DIMENSION);
@@ -273,6 +328,7 @@ public final class DomainAbilities {
         if (event.phase != TickEvent.Phase.END) return;
         MinecraftServer server = event.getServer();
         if (server == null) return;
+        processPowerRepairs(server);
         if (!PENDING_ACTIVATIONS.isEmpty()) {
             List<UUID> pending = new ArrayList<>(PENDING_ACTIVATIONS);
             PENDING_ACTIVATIONS.removeAll(pending);
@@ -553,6 +609,7 @@ public final class DomainAbilities {
                 if (owner.isAlive()) {
                     guardLifecycle(owner, 60L);
                     teleportPlayerBack(owner, server, session);
+                    schedulePowerRepair(owner, now + 2L);
                     message(owner, "Drowned Domain closed (" + reason + "). Cooldown: 5s.");
                 }
             }
@@ -1111,6 +1168,16 @@ public final class DomainAbilities {
             this.startedAt = endAt - DOMAIN_TICKS;
             this.endAt = endAt;
             this.lastCannonball = this.startedAt;
+        }
+    }
+
+    private static final class PowerRepair {
+        private long nextTick;
+        private int attemptsRemaining;
+
+        private PowerRepair(long nextTick, int attemptsRemaining) {
+            this.nextTick = nextTick;
+            this.attemptsRemaining = attemptsRemaining;
         }
     }
 }
