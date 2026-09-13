@@ -132,7 +132,8 @@ assert 'CBC_BARRAGE_PROJECTILE_TYPES' in domain_source, \
 assert 'setBarrageEffects(volleyShot % 5 == 0, true)' in domain_source, \
     'Every custom shell must get its own impact explosion sound'
 assert 'CBC_BARRAGE_VOLLEY_PERIOD = 1' in domain_source, \
-    'Native CBC shell effects must be throttled to a readable cadence'
+    'Native CBC shell cadence must remain at two rounds per second'
+assert 'smoke_shell' not in domain_source, 'CBC smoke-shell ammunition must be disabled'
 assert 'FIREWORK_ROCKET_BLAST' not in domain_source, \
     'The shared volley boom must be removed'
 assert 'restoreTarget(session, server)' in domain_source, 'Guaranteed target restoration is missing'
@@ -176,15 +177,14 @@ assert 'Blocks.DIAMOND_BLOCK' in domain_source, 'Circular arena migration marker
 assert 'boolean sandyRing' in domain_source, 'Complete circular sand arena is missing'
 assert 'innerRadiusSquared' in domain_source, 'Circular barrier shell is missing'
 projectile_source = (root / 'src/main/java/com/jamesrenrold/elijah/FlintlockBall.java').read_text()
-assert 'Server-driven tracer particles' in projectile_source, 'Cannonball tracer visibility regressed'
+assert 'ParticleTypes.SMOKE' not in projectile_source, 'Cannonball smoke particles must be disabled'
 assert 'closest.distanceToSqr(impact) <= 4.0D' in projectile_source, 'Cannon crossing check is missing'
 assert 'isCannonball() && hit.getType() == HitResult.Type.BLOCK' in projectile_source, \
     'Domain cannonballs must phase through blocks to their recorded target point'
 assert 'setBarrageEffects(boolean visualTracer, boolean explosionSound)' in projectile_source, \
     'High-volume domain barrage must throttle cosmetic packets'
-assert 'ParticleTypes.SMOKE' in projectile_source and 'ParticleTypes.LARGE_SMOKE' not in projectile_source \
-    and 'ParticleTypes.POOF' not in projectile_source, 'Blast particle cloud must stay minimal'
-assert 'getZ(), 1,' in projectile_source and '0.0D, 0.0D, 0.0D' in projectile_source
+assert 'ParticleTypes.SMOKE' not in projectile_source and 'ParticleTypes.LARGE_SMOKE' not in projectile_source \
+    and 'ParticleTypes.POOF' not in projectile_source, 'Cannonball smoke/particle cloud must stay disabled'
 assert 'double strength = 0.08D' in projectile_source
 assert '.updateInterval(2)' in command_source, 'Projectile network synchronization is not throttled'
 assert 'if (player.isFallFlying())' in command_source, 'Flying flintlock boost is missing'
