@@ -131,7 +131,7 @@ assert 'CBC_BARRAGE_PROJECTILE_TYPES' in domain_source, \
     'Optional Create Big Cannons barrage types are missing'
 assert 'setBarrageEffects(volleyShot % 5 == 0, true)' in domain_source, \
     'Every custom shell must get its own impact explosion sound'
-assert 'CBC_BARRAGE_VOLLEY_PERIOD = 4' in domain_source, \
+assert 'CBC_BARRAGE_VOLLEY_PERIOD = 1' in domain_source, \
     'Native CBC shell effects must be throttled to a readable cadence'
 assert 'FIREWORK_ROCKET_BLAST' not in domain_source, \
     'The shared volley boom must be removed'
