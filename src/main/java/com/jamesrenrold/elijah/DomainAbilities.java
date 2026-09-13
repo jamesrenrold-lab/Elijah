@@ -205,6 +205,9 @@ public final class DomainAbilities {
         }
 
         guardLifecycle(player, 200L);
+        // Install the repair guard before the transfer can fire Connector's
+        // origin-lost callback synchronously.
+        schedulePowerRepair(player, serverTime + 1L);
         player.teleportTo(domain, BEACH_SPAWN_X, BEACH_SPAWN_Y, 0.0D, playerYaw, playerPitch);
         if (player.level() != domain) {
             ServerLevel targetReturnLevel = server.getLevel(targetOrigin);
@@ -216,7 +219,6 @@ public final class DomainAbilities {
             message(player, "The caster could not enter the domain; the target was returned.");
             return;
         }
-        schedulePowerRepair(player, serverTime + 2L);
         movedTarget.setDeltaMovement(Vec3.ZERO);
         movedTarget.hurtMarked = true;
         forceTargetAggro(movedTarget, player);
@@ -936,8 +938,9 @@ public final class DomainAbilities {
                 removeDomainBuffs(owner);
                 if (owner.isAlive()) {
                     guardLifecycle(owner, 200L);
+                    // The repair must exist before return transfer callbacks.
+                    schedulePowerRepair(owner, now + 1L);
                     teleportPlayerBack(owner, server, session);
-                    schedulePowerRepair(owner, now + 2L);
                     message(owner, "Drowned Domain closed (" + reason + "). Cooldown: 5s.");
                 }
             }
