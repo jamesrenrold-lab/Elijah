@@ -708,7 +708,9 @@ public final class DomainAbilities {
             float pitch = (float) (Math.atan2(direction.y, direction.horizontalDistance())
                     * 180.0D / Math.PI);
             projectile.moveTo(origin.x, origin.y, origin.z, yaw, pitch);
-            projectile.setDeltaMovement(direction.scale(3.0D));
+            // Keep a water-bound round inside the two-block lagoon long enough for
+            // the server-side fluid watcher to arm its impact detonation.
+            projectile.setDeltaMovement(direction.scale(1.2D));
             projectile.setNoGravity(true);
             if (projectile instanceof Projectile ballistic) ballistic.setOwner(owner);
 
