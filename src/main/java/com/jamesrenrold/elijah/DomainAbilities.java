@@ -18,6 +18,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.level.Explosion;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -43,6 +44,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.util.ITeleporter;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ExplosionEvent;
@@ -53,6 +55,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import org.joml.Vector3f;
 import org.slf4j.Logger;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -99,10 +102,13 @@ public final class DomainAbilities {
     private static final UUID DOMAIN_SPEED_ID = UUID.fromString("c01c5046-3b27-49c5-9384-95f1f1cdb5db");
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
     private static final ResourceLocation PIRATE_POWER_SOURCE = new ResourceLocation("origins", "origin");
+    private static final ResourceLocation PIRATE_ORIGIN = new ResourceLocation("elijah", "pirate");
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
     private static final Map<UUID, PowerRepair> POWER_REPAIRS = new HashMap<>();
+    private static final Map<UUID, Float> CBC_PROJECTILE_DAMAGE = new HashMap<>();
+    private static final Map<UUID, PendingCbcDamage> CBC_EXPLOSION_DAMAGE = new HashMap<>();
     private static final Set<UUID> PENDING_ACTIVATIONS = new HashSet<>();
     private static final List<String> PIRATE_POWERS = List.of(
             "elijah:dirty_tactics", "elijah:flintlock", "elijah:powder_pouch",
@@ -269,15 +275,20 @@ public final class DomainAbilities {
                     .withSuppressedOutput().withPermission(4);
             String playerId = player.getStringUUID();
             try {
+                if (!repair.originRebuilt) {
+                    // Re-selecting the same Origin forces Connector to rebuild
+                    // the complete power component instead of merely granting
+                    // IDs that may still point at stale power instances.
+                    server.getCommands().performPrefixedCommand(source,
+                            "origin set @s " + PIRATE_POWER_SOURCE + " " + PIRATE_ORIGIN);
+                    repair.originRebuilt = true;
+                }
                 for (String power : PIRATE_POWERS) {
                     server.getCommands().performPrefixedCommand(source,
                             "power grant @s " + power + " " + PIRATE_POWER_SOURCE);
                 }
-                // Grant is intentionally idempotent, but Connector can leave
-                // these three ActiveSelfPower instances stale: their action
-                // callback/cooldown object survives while the Origin source is
-                // reattached. Rebuild only the affected instances, scoped to
-                // the standard source so unrelated powers remain untouched.
+                // These three active powers also get a source-scoped rebuild
+                // in case Connector reapplies its component after origin set.
                 if (!repair.statefulPowersRefreshed) {
                     for (String power : STATEFUL_POWER_RESETS) {
                         server.getCommands().performPrefixedCommand(source,
@@ -433,6 +444,8 @@ public final class DomainAbilities {
         COOLDOWNS.clear();
         LIFECYCLE_GUARDS.clear();
         POWER_REPAIRS.clear();
+        CBC_PROJECTILE_DAMAGE.clear();
+        CBC_EXPLOSION_DAMAGE.clear();
         PENDING_ACTIVATIONS.clear();
         arenaReady = false;
         ServerLevel domain = event.getServer().getLevel(DOMAIN_DIMENSION);
@@ -1399,9 +1412,20 @@ public final class DomainAbilities {
         }
     }
 
+    private static final class PendingCbcDamage {
+        private final float amount;
+        private final long expiresAt;
+
+        private PendingCbcDamage(float amount, long expiresAt) {
+            this.amount = amount;
+            this.expiresAt = expiresAt;
+        }
+    }
+
     private static final class PowerRepair {
         private long nextTick;
         private int attemptsRemaining;
+        private boolean originRebuilt;
         private boolean statefulPowersRefreshed;
 
         private PowerRepair(long nextTick, int attemptsRemaining) {
