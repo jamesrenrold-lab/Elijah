@@ -332,6 +332,9 @@ public final class ElijahPirate {
         // changing dimensions. Do not interpret that transition callback as a
         // genuine Origin change or it immediately tears down the domain.
         if (DomainAbilities.shouldSuppressLifecycleUnload(player)) return 0;
+        // Remove only the separate dimension-repair source on a genuine
+        // Origin loss; transfer callbacks are returned above.
+        DomainAbilities.clearPowerBridge(player);
         DomainAbilities.clearTransient(player);
         BloodAbilities.clearTransient(player);
         if (player.containerMenu instanceof PowderMenu) player.closeContainer();
