@@ -440,6 +440,25 @@ public final class DomainAbilities {
         return accessor instanceof Level level && DOMAIN_DIMENSION.equals(level.dimension());
     }
 
+    /**
+     * Connector can briefly rebuild the Origins component during a dimension
+     * transfer. Restore only powers that are actually missing; never grant an
+     * already-present power, because Apoli would replace its live instance.
+     */
+    private static void ensurePiratePowers(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        if (server == null) return;
+        CommandSourceStack source = player.createCommandSourceStack()
+                .withSuppressedOutput().withPermission(4);
+        for (String power : PIRATE_POWERS) {
+            if (server.getCommands().performPrefixedCommand(source,
+                    "power has @s " + power) <= 0) {
+                server.getCommands().performPrefixedCommand(source,
+                        "power grant @s " + power + " origins:origin");
+            }
+        }
+    }
+
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
         SESSIONS.clear();
@@ -459,6 +478,11 @@ public final class DomainAbilities {
         if (event.phase != TickEvent.Phase.END) return;
         MinecraftServer server = event.getServer();
         if (server == null) return;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (SESSIONS.containsKey(player.getUUID()) || LIFECYCLE_GUARDS.containsKey(player.getUUID())) {
+                ensurePiratePowers(player);
+            }
+        }
         ElijahPirate.processDeferredLifecycleUnloads(server);
         detonateCbcWaterImpacts(server);
         if (!PENDING_ACTIVATIONS.isEmpty()) {
