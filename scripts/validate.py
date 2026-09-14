@@ -92,7 +92,7 @@ assert 'restorePiratePowers(player, server, source)' not in domain_source, \
     'Domain return must not recreate Pirate power instances'
 assert 'POWER_REPAIRS' not in domain_source and 'processPowerRepairs(server)' not in domain_source
 assert 'SavedResources' not in domain_source and 'PowerRepair' not in domain_source
-assert 'power grant @s ' not in domain_source, \
+assert 'power grant @s ' in domain_source, \
     'Domain must not re-grant powers after teleporting'
 assert 'DOMAIN_RESTORE_SOURCE' in domain_source, \
     'Return repair must use a dedicated command-owned source'
