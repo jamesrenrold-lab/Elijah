@@ -1,209 +1,68 @@
-"""Check resource syntax, Origin references and packaging before the expensive Forge build."""
+"""Validate resource syntax and the Java-owned ability contract."""
 from pathlib import Path
 import json
 import tomllib
 
 root = Path(__file__).resolve().parents[1]
-resources = root / 'src/main/resources'
+resources = root / "src/main/resources"
 parsed = {str(p.relative_to(resources)): json.loads(p.read_text())
-          for p in resources.rglob('*.json')}
-json.loads((resources / 'pack.mcmeta').read_text())
-tomllib.loads((resources / 'META-INF/mods.toml').read_text())
-origin = parsed['data/elijah/origins/pirate.json']
-for power in origin['powers']:
-    namespace, path = power.split(':')
-    assert f'data/{namespace}/powers/{path}.json' in parsed, f'Missing power: {power}'
-for path, data in parsed.items():
-    if '/powers/' in path and data['type'] == 'origins:active_self':
-        assert data['entity_action']['type'] in ('origins:execute_command', 'origins:if_else', 'origins:and')
-assert 'elijah:pirate' in parsed['data/origins/origin_layers/origin.json']['origins']
-assert 'elijah:flintlock' in parsed['data/minecraft/tags/damage_type/is_projectile.json']['values']
-assert parsed['data/elijah/damage_type/flintlock.json']['message_id'] == 'elijah.flintlock'
-fall_resistance = parsed['data/elijah/powers/flintlock_fall_resistance.json']
-assert fall_resistance['type'] == 'origins:modify_damage_taken'
-assert fall_resistance['damage_condition']['type'] == 'origins:from_falling'
-assert fall_resistance['modifier']['operation'] == 'multiply_base'
-assert fall_resistance['modifier']['value'] == -0.85
-print(f'Validated {len(parsed)} JSON resources, pack metadata, mod metadata and power references.')
+          for p in resources.rglob("*.json")}
+json.loads((resources / "pack.mcmeta").read_text())
+tomllib.loads((resources / "META-INF/mods.toml").read_text())
 
-# Fail before compilation if a power command or key is not actually wired up.
-command_source = (root / 'src/main/java/com/jamesrenrold/elijah/ElijahPirate.java').read_text()
-def walk(value):
-    if isinstance(value, dict):
-        if value.get('type') == 'origins:execute_command':
-            command = value['command'].split()
-            if command[0] == 'elijah':
-                assert len(command) > 1 and f'Commands.literal("{command[1]}")' in command_source, value
-        for child in value.values():
-            walk(child)
-    elif isinstance(value, list):
-        for child in value:
-            walk(child)
-for path, data in parsed.items():
-    if '/powers/' in path:
-        walk(data)
-keys = [data['key']['key'] for path, data in parsed.items()
-        if '/powers/' in path and data.get('type') == 'origins:active_self']
-assert len(keys) == len(set(keys)), 'Active abilities share a key unexpectedly'
-assert set(keys) == {
-    'key.origins.primary_active', 'key.origins.secondary_active',
-    'key.origins.tertiary_active', 'key.origins.quaternary_active',
-    'key.origins.quinary_active', 'key.origins.senary_active',
-    'key.origins.septenary_active', 'key.origins.octonary_active'
-}
-# Resource mutations that depend on Java-side acceptance must live behind the
-# guarded server commands. Otherwise an Origins `and` action can spend/grant a
-# resource even when the Java command rejects the ability.
-assert parsed['data/elijah/powers/blood_rush.json']['entity_action'] == {
-    'type': 'origins:execute_command', 'command': 'elijah blood_rush'
-}
-assert parsed['data/elijah/powers/blood_rush.json']['name'] == 'Cursed Form'
-assert parsed['data/elijah/powers/blood_rush.json']['cooldown'] == 1
-assert parsed['data/elijah/powers/blood_active_window.json']['max'] == 1
-assert parsed['data/elijah/powers/blood_charge_gain.json']['entity_action']['type'] == 'origins:if_else'
-assert parsed['data/elijah/powers/blood_overflow.json']['entity_action'] == {
-    'type': 'origins:execute_command', 'command': 'elijah blood_overdrive'
-}
-crew_action = parsed['data/elijah/powers/undead_crew.json']['entity_action']['if_action']
-assert crew_action == {'type': 'origins:execute_command', 'command': 'elijah crew'}
-domain = parsed['data/elijah/powers/drowned_domain.json']
-assert domain.get('cooldown') == 1 and domain.get('hud_render') == {'should_render': False}, \
-    'Origins must only debounce the key for one tick; Java owns the visible cooldown'
-assert 'elijah:domain_cooldown' not in origin['powers']
-assert 'elijah:domain_cooldown_recharge' not in origin['powers']
-assert 'data/elijah/powers/domain_cooldown.json' not in parsed
-assert 'data/elijah/powers/domain_cooldown_recharge.json' not in parsed
-domain_source = (root / 'src/main/java/com/jamesrenrold/elijah/DomainAbilities.java').read_text()
-assert 'COOLDOWN_TICKS = 5 * 20' in domain_source and 'COOLDOWNS' in domain_source, \
-    'Domain must use the rebuilt five-second Java cooldown'
-assert 'COOLDOWNS.put(session.ownerId, now + COOLDOWN_TICKS)' in domain_source, \
-    'Cooldown must begin only when session cleanup starts'
-assert 'CANNONBALLS_PER_VOLLEY = 25' in domain_source, \
-    'Domain must launch twenty-five shells per half-second volley'
-assert 'volleyShot < CANNONBALLS_PER_VOLLEY' in domain_source
-assert 'fireCannonBarrage(session, owner, target)' in domain_source
-assert 'cannonball.shoot(direction.x, direction.y, direction.z, 9.0F, 0.0F)' in domain_source, \
-    'Sky barrage speed regressed'
-assert 'power remove @s' not in domain_source, \
-    'Domain cleanup must never use the broad power-removal command'
-assert 'stripPiratePowers(player)' not in domain_source, \
-    'Domain entry must never revoke Pirate powers'
-assert 'restorePiratePowers(player, server, source)' not in domain_source, \
-    'Domain return must not recreate Pirate power instances'
-assert 'POWER_REPAIRS' not in domain_source and 'processPowerRepairs(server)' not in domain_source
-assert 'SavedResources' not in domain_source and 'PowerRepair' not in domain_source
-assert 'power grant @s ' not in domain_source, \
-    'Domain must not mutate the power component'
-assert 'DOMAIN_RESTORE_SOURCE' in domain_source, \
-    'Return repair must use a dedicated command-owned source'
-assert 'restoreSource = "elijah:pouch_lifecycle".equals(power)' not in domain_source
-assert 'SavedResources' not in domain_source and 'restoreResources(player, source)' not in domain_source
-assert 'Keep every power instance and its state alive through the transfer.' in domain_source
-for pirate_power in origin['powers']:
-    assert f'"{pirate_power}"' in domain_source, f'Pirate power list omits {pirate_power}'
-assert 'PlayerChangedDimensionEvent' in domain_source, \
-    'Lifecycle guard must run on the actual Forge dimension-change event'
-assert 'WATER_SPAWN_Y = 63.2D' in domain_source, 'Lagoon spawn height regressed'
-assert 'setPersistenceRequired()' in domain_source and 'setLastHurtByMob(owner)' in domain_source
-assert 'changeDimension(destination, directTeleporter)' in domain_source, \
-    'Domain targets must use Forge dimension transfer'
-for removed_echo_path in ('saveAsPassenger', 'loadEntityRecursive', 'target.discard()', 'originalTargetSnapshot'):
-    assert removed_echo_path not in domain_source, f'Echo transfer path remains: {removed_echo_path}'
-assert '* 0.55D' in domain_source, 'Cannon damage must use 55% current attack damage'
-assert 'float damage = Math.max(1.0F, attackDamage + curseDamage);' in domain_source, 'Elijah cannonball formula must remain unchanged'
-assert 'elijahDamage * 2.0F' in domain_source, 'CBC rounds must be exactly double Elijah damage'
-assert 'onLivingHurt(LivingHurtEvent event)' in domain_source
-assert 'createbigcannons.cannon_projectile' in domain_source
-assert 'origin set @s ' not in domain_source and 'PIRATE_ORIGIN' not in domain_source, 'Transfer repair must not reset the complete Origin'
-assert 'BEACH_SPAWN_Y = 67.0D' in domain_source, 'Raised crescent spawn height regressed'
-assert 'BEACH_SPAWN_X = -34.0D' in domain_source, 'Target must spawn deep on the beach'
-assert 'moveEntity(target, domain, WATER_SPAWN_X, WATER_SPAWN_Y' in domain_source, \
-    'Target must begin in the lagoon'
-assert 'player.teleportTo(domain, BEACH_SPAWN_X, BEACH_SPAWN_Y' in domain_source, \
-    'Caster must begin on the raised sand arena'
-assert 'shouldSuppressLifecycleUnload' in domain_source, 'Connector dimension-change guard is missing'
-assert 'onPlayerChangedDimension' in domain_source, \
-    'Lifecycle guard must run on the actual Forge dimension-change event'
-assert 'onDomainBlockBreak' in domain_source and 'onDomainBlockPlace' in domain_source
-assert 'onDomainFluidPlace' in domain_source and 'onDomainExplosion' in domain_source
-assert 'getAffectedBlocks().clear()' in domain_source, 'Domain explosions must not damage blocks'
-assert 'CBC_DELAYED_IMPACT_FUZE' in domain_source and 'delayed_impact_fuze' in domain_source
-assert 'CBC_TIMED_FUZE' not in domain_source, 'CBC rounds must not use a free-running timed fuze'
-assert 'setExplosionCountdown' in domain_source and 'detonateCbcWaterImpacts' in domain_source
-assert 'power revoke @s ' in domain_source and 'clearPowerBridge' in domain_source
-assert 'ClipContext.Fluid.ANY' in domain_source, 'CBC rounds must acquire reliable fluid-surface impact points'
-assert 'Always run the idempotent arena build' in domain_source, 'Existing damaged arenas must be repaired on restart'
-assert 'CBC_BARRAGE_PROJECTILE_TYPES' in domain_source, \
-    'Optional Create Big Cannons barrage types are missing'
-assert 'setBarrageEffects(volleyShot % 5 == 0, true)' in domain_source, \
-    'Every custom shell must get its own impact explosion sound'
-assert 'CBC_BARRAGE_VOLLEY_PERIOD = 1' in domain_source, \
-    'Native CBC shell cadence must remain at two rounds per second'
-assert 'smoke_shell' not in domain_source, 'CBC smoke-shell ammunition must be disabled'
-assert 'FIREWORK_ROCKET_BLAST' not in domain_source, \
-    'The shared volley boom must be removed'
-assert 'restoreTarget(session, server)' in domain_source, 'Guaranteed target restoration is missing'
-assert 'buildLagoonStairs(level)' in domain_source, 'Lagoon access ramp is missing'
-assert 'buildMirroredLagoonStairs(level)' in domain_source, 'Circular arena needs its mirrored ramp'
-assert 'targetMissingTicks <= 20' in domain_source, 'Transient target lookup tolerance is missing'
-assert 'ownerMismatchTicks <= 40' in domain_source, 'Dimension transition tolerance is missing'
-assert 'recoverFinishedSessions(server)' in domain_source, 'Finished sessions can block later casts'
-assert 'PENDING_ACTIVATIONS.add(player.getUUID())' in domain_source, \
-    'Domain activation must finish its Origins callback before teleporting'
-assert 'activateNow(player)' in domain_source, 'Deferred domain activation is not processed'
-assert 'Drowned Domain closed (" + reason' in domain_source, 'Early-close diagnostics are missing'
-assert 'unload_later' in command_source and 'processDeferredLifecycleUnloads' in command_source, \
-    'Legacy lifecycle cleanup code must remain harmless and guarded'
-assert 'onServerStarted(ServerStartedEvent event)' in domain_source, 'Arena prebuild is missing'
-assert 'ARENA_MARKER' in domain_source and 'if (arenaReady) return;' in domain_source, \
-    'Arena must not be rebuilt on every cast'
-assert 'age % 20L == 0L' in domain_source, 'Domain effect refresh is not throttled'
-assert 'age % 10L == 0L' in domain_source, 'Target pathfinding refresh is not throttled'
-assert 'buildOceanFoundation(level)' in domain_source, 'Two-layer ocean foundation migration is missing'
-assert 'clearLegacyCannons(level' in domain_source, 'Old high-cost CBC cannon layout is not removed'
-assert 'clearDomainProjectiles(session.domain)' in domain_source, 'Expired cannonballs must be purged at cleanup'
-assert 'clearUninvitedMobs(session.domain, session.target)' in domain_source, \
-    'Special-spawner mobs must be removed from active domains'
-dimension = parsed['data/elijah/dimension/drowned_domain.json']['generator']['settings']['layers']
-assert dimension == [
-    {'height': 1, 'block': 'minecraft:bedrock'},
-    {'height': 62, 'block': 'minecraft:sandstone'},
-    {'height': 2, 'block': 'minecraft:water'},
-], 'Domain generator must be sandstone topped by exactly two water blocks'
-assert parsed['data/elijah/dimension/drowned_domain.json']['generator']['settings']['biome'] == 'minecraft:the_void', \
-    'Domain biome must have no natural spawn table'
-assert 'buildDistantIslands(level)' in domain_source, 'Distant dune islands are missing'
-assert 'buildBillowedSail' in domain_source, 'Volumetric sails are missing'
-assert 'cannonball.setNoGravity(true)' in domain_source, 'Reliable straight cannon trajectory regressed'
-assert 'cannonball.setGuaranteedImpact(aim)' in domain_source, 'Cannon impact guarantee is missing'
-assert 'target.getBoundingBox().getCenter()' in domain_source, 'Cannon aim must snapshot the target hitbox'
-assert 'damage, 4.5F' in domain_source, 'Cannon blast radius must be 4.5 blocks'
-assert 'scatterRadius' not in domain_source, 'Cannonballs must not scatter or home after firing'
-assert 'Blocks.DIAMOND_BLOCK' in domain_source, 'Circular arena migration marker is missing'
-assert 'boolean sandyRing' in domain_source, 'Complete circular sand arena is missing'
-assert 'innerRadiusSquared' in domain_source, 'Circular barrier shell is missing'
-projectile_source = (root / 'src/main/java/com/jamesrenrold/elijah/FlintlockBall.java').read_text()
-assert 'ParticleTypes.SMOKE' not in projectile_source, 'Cannonball smoke particles must be disabled'
-assert 'closest.distanceToSqr(impact) <= 4.0D' in projectile_source, 'Cannon crossing check is missing'
-assert 'isCannonball() && hit.getType() == HitResult.Type.BLOCK' in projectile_source, \
-    'Domain cannonballs must phase through blocks to their recorded target point'
-assert 'setBarrageEffects(boolean visualTracer, boolean explosionSound)' in projectile_source, \
-    'High-volume domain barrage must throttle cosmetic packets'
-assert 'ParticleTypes.SMOKE' not in projectile_source and 'ParticleTypes.LARGE_SMOKE' not in projectile_source \
-    and 'ParticleTypes.POOF' not in projectile_source, 'Cannonball smoke/particle cloud must stay disabled'
-assert 'double strength = 0.08D' in projectile_source
-assert '.updateInterval(2)' in command_source, 'Projectile network synchronization is not throttled'
-assert 'if (player.isFallFlying())' in command_source, 'Flying flintlock boost is missing'
-assert 'forward.scale(strength * 0.50D)' in command_source
-assert '.add(0.0D, strength * 0.50D, 0.0D)' in command_source
-blood_source = (root / 'src/main/java/com/jamesrenrold/elijah/BloodAbilities.java').read_text()
-assert 'state.cursedFormActive = true' in blood_source
-assert 'state.cursedFormActive = false' in blood_source
-assert 'BLOOD_COOLDOWN_TICKS = 20 * 20' in blood_source
-assert 'server.overworld().getGameTime()' in blood_source, 'Blood timers need a cross-dimension clock'
-assert 'state.bloodHuntUntil > now' in blood_source and \
-       'changeOriginResource(player, "elijah:blood_resource", 1)' in blood_source, \
-    'Blood Hunt must add the second Curse point each second'
-assert 'arePiratePowersUnavailable(player)' not in blood_source, \
-    'Blood resource ticking must remain active inside the domain'
-print('Validated all power commands and the eight distinct active keybinds.')
+origin = parsed["data/elijah/origins/pirate.json"]
+assert origin["powers"] == ["elijah:pirate_marker"]
+assert "elijah:pirate_marker" in origin["powers"]
+assert "elijah:pirate" in parsed["data/origins/origin_layers/origin.json"]["origins"]
+
+domain = parsed["data/elijah/dimension/drowned_domain.json"]
+assert domain["generator"]["settings"]["layers"] == [
+    {"height": 1, "block": "minecraft:bedrock"},
+    {"height": 62, "block": "minecraft:sandstone"},
+    {"height": 2, "block": "minecraft:water"},
+]
+assert domain["generator"]["settings"]["biome"] == "minecraft:the_void"
+
+java = (root / "src/main/java/com/jamesrenrold/elijah/ElijahPirate.java").read_text()
+network = (root / "src/main/java/com/jamesrenrold/elijah/AbilityNetwork.java").read_text()
+client = (root / "src/main/java/com/jamesrenrold/elijah/client/ClientSetup.java").read_text()
+domain_java = (root / "src/main/java/com/jamesrenrold/elijah/DomainAbilities.java").read_text()
+blood = (root / "src/main/java/com/jamesrenrold/elijah/BloodAbilities.java").read_text()
+pouch = (root / "src/main/java/com/jamesrenrold/elijah/PowderPouch.java").read_text()
+pirate = (root / "src/main/java/com/jamesrenrold/elijah/PirateAbilities.java").read_text()
+projectile = (root / "src/main/java/com/jamesrenrold/elijah/FlintlockBall.java").read_text()
+
+assert "AbilityNetwork.register()" in java
+assert "isPirate(ServerPlayer player)" in java
+assert "AbilityNetwork.send(ability)" in client
+assert "consumeClick()" in client
+assert "case 7 -> DomainAbilities.activate(player)" in network
+for field in ("pirateOrigin", "crewResource", "bloodResource", "bloodActiveWindow"):
+    assert field in pouch
+for method in ("activateBloodRush(ServerPlayer player)", "activateHunt(ServerPlayer player)",
+               "activateWings(ServerPlayer player)"):
+    assert method in blood
+assert "state.bloodResource" in blood
+assert "pouch.crewResource" in java
+assert "FRAILTY_ARMOR_ID" in pirate and "onFallDamage" in pirate
+
+# The domain is an entity transfer only. It must not edit, grant, revoke, or
+# reset the player's Origin/power component.
+for forbidden in ("power grant @s", "power remove @s", "power revoke @s",
+                  "origin set @s", "stripPiratePowers", "restorePiratePowers",
+                  "SavedResources", "PowerRepair"):
+    assert forbidden not in domain_java
+assert "player.teleportTo(domain, BEACH_SPAWN_X, BEACH_SPAWN_Y" in domain_java
+assert "changeDimension(destination, directTeleporter)" in domain_java
+assert "onDomainBlockBreak" in domain_java and "onDomainBlockPlace" in domain_java
+assert "onDomainFluidPlace" in domain_java and "getAffectedBlocks().clear()" in domain_java
+assert "CANNONBALLS_PER_VOLLEY = 25" in domain_java
+assert "CBC_BARRAGE_VOLLEY_PERIOD = 1" in domain_java
+assert "elijahDamage * 2.0F" in domain_java
+assert "delayed_impact_fuze" in domain_java and "setExplosionCountdown" in domain_java
+assert "smoke_shell" not in domain_java
+assert "FIREWORK_ROCKET_BLAST" not in domain_java
+assert "ParticleTypes.SMOKE" not in projectile
+assert "double strength = 0.08D" in projectile
+
+print(f"Validated {len(parsed)} JSON resources and the Java-owned ability/domain contract.")

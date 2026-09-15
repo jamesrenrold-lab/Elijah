@@ -3,12 +3,12 @@
 A pirate Origin built for Forge 47.4.4+ with Fabric Origins 1.10.x through Connector.
 The JAR includes the Origin data, powder-pouch screen, flintlock renderer, Dirty Tactics, undead crewmates and pirate passives.
 
-**Updating from an earlier release:** remove the old Elijah JAR and install 0.3.19 on the client and server. Do not keep two Elijah versions installed. Existing pouch contents are preserved.
+**Updating from an earlier release:** remove the old Elijah JAR and install 0.4.0 on the client and server. Do not keep two Elijah versions installed. Existing pouch contents are preserved.
 
 ## Install
 
 1. Download the `Elijah-Pirate-1.20.1` artifact from the latest successful GitHub Actions build and unzip it.
-2. Put `elijah-pirate-0.3.19.jar` in your Minecraft instance's `mods` folder.
+2. Put `elijah-pirate-0.4.0.jar` in your Minecraft instance's `mods` folder.
 3. On multiplayer, install that same JAR on the server and every player's client.
 4. Keep your existing Forge / Connector / Fabric Origins / Even More Origins Keybinds setup installed. Restart Minecraft and the server.
 5. Select **Elijah — The Powder Corsair**. An operator can select it for a player with:
@@ -40,7 +40,7 @@ Passives activate automatically and have no keybind.
 
 - **Quaternary Active Power — Call of the Drowned Crew:** starts with **four** resource charges. Each press spends **one** charge and summons **one** undead crewmate, never a whole group. Each crewmate wears the exact supplied 64×64 golden-and-red [Undead Pirate Captain skin](https://www.minecraftskins.com/skin/21355492/undead-pirate-captain/), follows the nearest valid mob you most recently attacked or that most recently attacked you, and keeps moving forward while attempting swings inside **1 block**. Damage still requires the intentionally close **0.5-block** range. It lasts **30 seconds** and one charge returns every **60 seconds**, with the bone/sailor resource bar showing the current charges. Each crewmate snapshots **80% of the summoner's current max health and attack damage** and uses **2.5 attack speed** (about an 8-tick attack interval). Epic Fight's optional biped mob patch supplies sword/tachi animations; without Epic Fight, a vanilla combat goal provides the same pressure-and-hit behavior. Crewmates are summon-only entities and drop **no loot or equipment** when they die.
 
-Bind **Primary Active Power**, **Secondary Active Power**, **Tertiary Active Power** and **Quaternary Active Power** in Minecraft's Controls menu. The Powder Pouch uses `key.origins.tertiary_active`, and the crew uses `key.origins.quaternary_active`; both are the first added bindings from your existing [Even More Origins Keybinds](https://www.curseforge.com/minecraft/mc-mods/even-more-origins-keybinds) mod.
+The eight active abilities are now handled by Elijah's Java server state and a small client-to-server key bridge. The bridge first uses the existing `key.origins.*_active` mappings, preserving configured Origins/Connector controls even if the Origin power component is rebuilt during a dimension transfer. If a slot is not provided by the installed keybind setup, bind Elijah's matching fallback entry in Minecraft's Controls menu (`category.elijah`).
 
 - **Octonary Active Power — Drowned Domain:** pulls the hostile mob you are directly looking at (up to 40 blocks away) into a separate, always-day dimension for **40 seconds**. Origins performs only a one-tick key debounce; deferred activation completes before dimension transfer, and the authoritative Java cooldown is **5 seconds after the domain closes**. All Pirate powers remain registered, stateful and usable inside the domain; no power is revoked, re-granted, or replaced during entry or return. A lifecycle guard prevents Connector's dimension callbacks from treating the transfer as a genuine Origin loss, so the pouch, Cursed Form, resources and domain key stay functional. When Create Big Cannons is installed, every volley launches one real HE, AP or shrapnel shell in rotation with a delayed-impact fuze, for two native CBC rounds per second and no smoke rounds; it detonates only after a terrain/entity hit or controlled water contact, and its explosion cannot harm the caster. Forge's standard `ITeleporter` path moves the real mob between dimensions. The caster begins at X=-34 on the raised circular sand arena while the target starts inside the two-block-deep lagoon. The dimension uses the spawn-free Void biome and additionally purges special-spawner arrivals while preserving the transferred target and undead crew. Four flagship-scale three-mast galleons remain broadside-on beyond the arena wall. After five seconds, **25 fast cannonballs rain from high overhead every half-second**; the optional native CBC ammunition rotates every half-second at two rounds per second; its built-in blast wave and screen effect remain throttled to one round per volley. Five shells snapshot the target's exact hitbox center; the other twenty continuously sweep a low-repetition pattern across the entire arena. Every shell phases through blocks and flies to its recorded point without homing. Each **4.5-block Elijah blast** deals **55% of the caster's current attack damage + 1.5 damage per completed 10% Curse**. Native CBC rounds deal exactly **2×** that Elijah amount. The caster gains **+50% movement speed**, Dolphin's Grace III, Regeneration II, and **+50% lifesteal**. While Blood Hunt and Cursed Form are both active, Curse rises at **2 points per second** instead of 1.
 
@@ -52,7 +52,7 @@ Bind **Primary Active Power**, **Secondary Active Power**, **Tertiary Active Pow
 | Land Legs | **-5% movement speed outside water**, removed as soon as the water condition updates (once per tick). |
 | Pirate Frailty | **-15% total armor** and **-4 maximum health points (2 hearts)** at all times. |
 
-With otherwise vanilla stats, maximum health is 16 points / 8 hearts. Armor and speed penalties multiply the total value, so equipment bonuses are included. Attribute modifiers belong to the Origin and are removed when it is lost. The XP bonus applies to positive XP-point gains, not direct level adjustments or XP removal; XP spent repairing equipment is not player XP gained. Ten separate 1-point gains still award 13 points in total.
+With otherwise vanilla stats, maximum health is 16 points / 8 hearts. Armor and speed penalties multiply the total value, so equipment bonuses are included. The Java-owned pirate state is preserved through dimension changes and is cleared only when the player changes away from the Pirate origin. The XP bonus applies to positive XP-point gains, not direct level adjustments or XP removal; XP spent repairing equipment is not player XP gained. Ten separate 1-point gains still award 13 points in total.
 
 The 11-damage value is the maximum powder component; spell-power and physical-attack scaling are added on top of it.
 
@@ -83,7 +83,7 @@ Defaults:
 | `attackSpeed` | 2.5 |
 | `goldenHonshuItem` | `dungeons_and_combat:golden_honshu` |
 
-The nine-item firing-chamber capacity, four-slot reserve with 64 per slot, and five-item generator cap are fixed. Damage, recoil and crewmate stats are calculated on the server. Crew resources are an Origins resource, so they sync to the client and render with the standard Origins/Apoli resource-bar sheet. The flintlock cooldown and combat state persist through relogs and respawns.
+The nine-item firing-chamber capacity, four-slot reserve with 64 per slot, and five-item generator cap are fixed. Damage, recoil and crewmate stats are calculated on the server. Crew and Curse resources are Java-owned in the pouch capability, so Connector cannot reset them during a dimension change. The flintlock cooldown and combat state persist through relogs and respawns.
 
 ## Building and development
 
@@ -91,6 +91,6 @@ GitHub Actions installs Java 17 and Gradle 8.8, uses Gradle caching, runs data v
 
 To build locally with Java 17 and Gradle 8.8 installed: `gradle build`. The installable JAR is in `build/libs/`.
 
-Operator-only diagnostic commands: `/elijah pouch`, `/elijah fire`, `/elijah dirty_tactics`, `/elijah crew`, `/elijah unload`. The hidden `/elijah sea_on` and `/elijah sea_off` commands are managed by the Wisdom of the Sea lifecycle callbacks. Origins executes these internally through its power actions, so ordinary players do not need operator permissions to use their Origin. As in the other command-based Origins, Apoli's `executeCommand` permission level must remain at its default of 2 or higher.
+Operator-only diagnostic commands: `/elijah pouch`, `/elijah fire`, `/elijah dirty_tactics`, `/elijah crew`, `/elijah unload`. Ordinary players use the key bridge and do not need operator permissions.
 
 Compile success verifies the Forge API integration, not in-game behavior in the complete modpack. The first gameplay check should cover the slot limit, firing at 1 and 9 powder, recoil, effects, and survival respawn, Dirty Tactics on a melee hit, and passive stats after switching Origin.

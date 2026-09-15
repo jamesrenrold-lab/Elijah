@@ -51,7 +51,11 @@ public final class BloodAbilities {
             new DustParticleOptions(new Vector3f(0.95F, 0.02F, 0.02F), 0.65F);
 
     public static int activateBloodRush(CommandSourceStack source) throws CommandSyntaxException {
-        ServerPlayer player = source.getPlayerOrException();
+        return activateBloodRush(source.getPlayerOrException());
+    }
+
+    public static int activateBloodRush(ServerPlayer player) {
+        if (!ElijahPirate.isPirate(player)) return 0;
         if (!player.isAlive() || player.isSpectator() || isHuntActive(player)) return 0;
         PowderPouch state = pouch(player);
         if (state == null) return 0;
@@ -60,7 +64,7 @@ public final class BloodAbilities {
             state.cursedFormActive = false;
             state.bloodBuffUntil = 0L;
             state.bloodCooldownUntil = now + BLOOD_COOLDOWN_TICKS;
-            ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 0);
+            state.bloodActiveWindow = false;
             removeRushModifiers(player);
             message(player, "Cursed Form released — cooldown: 20s");
             return 1;
@@ -77,15 +81,19 @@ public final class BloodAbilities {
         state.cursedFormActive = true;
         state.bloodBuffUntil = 0L;
         state.bloodCooldownUntil = 0L;
-        ElijahPirate.changeOriginResource(player, "elijah:blood_resource", 20);
-        ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 1);
+        state.bloodResource = Math.min(100, state.bloodResource + 20);
+        state.bloodActiveWindow = true;
         ensureBloodModifiers(player);
         message(player, "Cursed Form active — +20 Curse");
         return 1;
     }
 
     public static int triggerOverdrive(CommandSourceStack source) throws CommandSyntaxException {
-        ServerPlayer player = source.getPlayerOrException();
+        return triggerOverdrive(source.getPlayerOrException());
+    }
+
+    public static int triggerOverdrive(ServerPlayer player) {
+        if (!ElijahPirate.isPirate(player)) return 0;
         if (!player.isAlive() || player.isSpectator()) return 0;
         PowderPouch state = pouch(player);
         if (state == null) return 0;
@@ -99,8 +107,8 @@ public final class BloodAbilities {
         state.bloodExhaustedUntil = 0L;
         state.bloodLastDegenerationTick = now;
         state.bloodLastEnemyHitTick = now;
-        ElijahPirate.setOriginResource(player, "elijah:blood_resource", 0);
-        ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 0);
+        state.bloodResource = 0;
+        state.bloodActiveWindow = false;
         AttributeInstance rushLifeSteal = lifeStealAttribute(player);
         if (rushLifeSteal != null) rushLifeSteal.removeModifier(BLOOD_LIFESTEAL_ID);
         AttributeInstance rushSpeed = player.getAttribute(Attributes.MOVEMENT_SPEED);
@@ -116,7 +124,11 @@ public final class BloodAbilities {
     }
 
     public static int activateHunt(CommandSourceStack source) throws CommandSyntaxException {
-        ServerPlayer player = source.getPlayerOrException();
+        return activateHunt(source.getPlayerOrException());
+    }
+
+    public static int activateHunt(ServerPlayer player) {
+        if (!ElijahPirate.isPirate(player)) return 0;
         if (!requireBuff(player)) return 0;
         PowderPouch state = pouch(player);
         if (state == null || isHuntActive(player)) return 0;
@@ -131,7 +143,11 @@ public final class BloodAbilities {
     }
 
     public static int activateWings(CommandSourceStack source) throws CommandSyntaxException {
-        ServerPlayer player = source.getPlayerOrException();
+        return activateWings(source.getPlayerOrException());
+    }
+
+    public static int activateWings(ServerPlayer player) {
+        if (!ElijahPirate.isPirate(player)) return 0;
         if (!requireBuff(player)) return 0;
         PowderPouch state = pouch(player);
         if (state == null || isFlightActive(player)) return 0;
@@ -173,6 +189,8 @@ public final class BloodAbilities {
         state.bloodLastEnemyHitTick = 0L;
         state.bloodLastDegenerationTick = 0L;
         state.bloodAllowLifestealUntil = 0L;
+        state.bloodResource = 0;
+        state.bloodActiveWindow = false;
         removeBloodModifiers(player);
         removeOwnedEffect(player, MobEffects.BLINDNESS, 0, OVERDRIVE_TICKS + 5);
         removeOwnedEffect(player, MobEffects.DARKNESS, 0, OVERDRIVE_TICKS + 5);
@@ -278,30 +296,34 @@ public final class BloodAbilities {
     public static void onServerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)) return;
         PowderPouch state = pouch(player);
-        if (state == null) return;
+        if (state == null || !ElijahPirate.isPirate(player)) return;
         long now = serverTime(player);
 
         if (state.cursedFormActive && state.bloodOverdriveUntil <= now) {
             ensureBloodModifiers(player);
-            if (player.tickCount % 2 == 0) spawnEyeParticle(player);
-            // Connector can reconstruct Origins powers while crossing a
-            // dimension. Reassert the small data-driven toggle periodically
-            // so Curse growth always resumes after entering the domain.
-            if (player.tickCount % 20 == 0) {
-                ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 1);
-                // The ordinary Origins timer grants +1 Curse each second.
-                // Blood Hunt contributes one additional point on the same
-                // cadence, doubling growth to +2 per second while hunting.
-                if (state.bloodHuntUntil > now) {
-                    ElijahPirate.changeOriginResource(player, "elijah:blood_resource", 1);
-                }
+            state.bloodActiveWindow = true;
+            if (state.nextBloodGrowthTick <= 0L) state.nextBloodGrowthTick = now + 20L;
+            if (now >= state.nextBloodGrowthTick) {
+                state.bloodResource = Math.min(100, state.bloodResource + 1
+                        + (state.bloodHuntUntil > now ? 1 : 0));
+                state.nextBloodGrowthTick = now + 20L;
             }
+            if (player.tickCount % 2 == 0) spawnEyeParticle(player);
         } else {
             removeRushModifiers(player);
-            if (player.tickCount % 20 == 0) {
-                ElijahPirate.setOriginResource(player, "elijah:blood_active_window", 0);
-            }
+            state.bloodActiveWindow = false;
+            state.nextBloodGrowthTick = 0L;
+            if (state.bloodResource > 0) {
+                if (state.nextBloodDecayTick <= 0L) state.nextBloodDecayTick = now + 80L;
+                if (now >= state.nextBloodDecayTick) {
+                    state.bloodResource = Math.max(0, state.bloodResource - 1);
+                    state.nextBloodDecayTick = now + 80L;
+                }
+            } else state.nextBloodDecayTick = 0L;
         }
+
+        if (state.bloodResource >= 100 && state.bloodOverdriveUntil <= now
+                && state.bloodExhaustedUntil <= now) triggerOverdrive(player);
 
         if (state.bloodHuntUntil > now) ensureHuntLifeSteal(player);
         else {

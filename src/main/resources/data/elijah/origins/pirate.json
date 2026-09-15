@@ -7,24 +7,6 @@
   "impact": 2,
   "order": 30,
   "powers": [
-    "elijah:dirty_tactics",
-    "elijah:flintlock",
-    "elijah:powder_pouch",
-    "elijah:undead_crew",
-    "elijah:crew_resource",
-    "elijah:crew_recharge",
-    "elijah:blood_resource",
-    "elijah:blood_active_window",
-    "elijah:blood_charge_gain",
-    "elijah:blood_charge_decay",
-    "elijah:blood_overflow",
-    "elijah:blood_rush",
-    "elijah:blood_hunt",
-    "elijah:blood_wings",
-    "elijah:drowned_domain",
-    "elijah:wisdom_of_the_sea",
-    "elijah:land_legs",
-    "elijah:pirate_frailty",
-    "elijah:flintlock_fall_resistance"
+    "elijah:pirate_marker"
   ]
 }

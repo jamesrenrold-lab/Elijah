@@ -36,6 +36,7 @@ import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -77,10 +78,36 @@ public final class ElijahPirate {
         bus.addListener(this::entityAttributes);
         bus.addListener(this::registerCapabilities);
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, PirateConfig.SPEC);
+        AbilityNetwork.register();
         MinecraftForge.EVENT_BUS.addGenericListener(Entity.class, this::attach);
         MinecraftForge.EVENT_BUS.addListener(this::clonePlayer);
         MinecraftForge.EVENT_BUS.addListener(this::dropPowder);
         MinecraftForge.EVENT_BUS.addListener(this::commands);
+        MinecraftForge.EVENT_BUS.addListener(ElijahPirate::detectPirateOrigin);
+    }
+
+    /** A durable Java-side marker; it is deliberately not an Origins power. */
+    public static boolean isPirate(ServerPlayer player) {
+        return player.getCapability(PowderPouch.CAPABILITY)
+                .map(pouch -> pouch.pirateOrigin)
+                .orElse(false);
+    }
+
+    @SubscribeEvent
+    public static void detectPirateOrigin(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)
+                || player.tickCount % 20 != 0) return;
+        player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch -> {
+            if (pouch.pirateOrigin) return;
+            if (player.getServer() == null) return;
+            int result = player.getServer().getCommands().performPrefixedCommand(
+                    player.createCommandSourceStack().withPermission(4).withSuppressedOutput(),
+                    "power has @s elijah:pirate_marker");
+            if (result > 0) {
+                pouch.pirateOrigin = true;
+                pouch.wisdomOfTheSea = true;
+            }
+        });
     }
 
     private void registerCapabilities(RegisterCapabilitiesEvent event) {
@@ -174,7 +201,11 @@ public final class ElijahPirate {
     }
 
     private int openPouch(CommandSourceStack source) throws CommandSyntaxException {
-        ServerPlayer player = source.getPlayerOrException();
+        return openPouch(source.getPlayerOrException());
+    }
+
+    public static int openPouch(ServerPlayer player) {
+        if (!isPirate(player)) return 0;
         if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
         player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch ->
                 NetworkHooks.openScreen(player, new SimpleMenuProvider(
@@ -184,7 +215,11 @@ public final class ElijahPirate {
     }
 
     private int fire(CommandSourceStack source) throws CommandSyntaxException {
-        ServerPlayer player = source.getPlayerOrException();
+        return fire(source.getPlayerOrException());
+    }
+
+    public static int fire(ServerPlayer player) {
+        if (!isPirate(player)) return 0;
         if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
         PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
         if (pouch == null) return 0;
@@ -248,9 +283,19 @@ public final class ElijahPirate {
     }
 
     private int summonCrew(CommandSourceStack source) throws CommandSyntaxException {
-        ServerPlayer player = source.getPlayerOrException();
+        return summonCrew(source.getPlayerOrException());
+    }
+
+    public static int summonCrew(ServerPlayer player) {
+        if (!isPirate(player)) return 0;
         if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
         ServerLevel level = player.serverLevel();
+        PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
+        if (pouch == null || pouch.crewResource <= 0) {
+            player.displayClientMessage(Component.literal("No crew resource is ready.")
+                    .withStyle(ChatFormatting.GOLD), true);
+            return 0;
+        }
         int max = PirateConfig.CREW_MAX_COUNT.get();
         int current = level.getEntitiesOfClass(UndeadCrewmate.class, player.getBoundingBox().inflate(64.0D),
                 crew -> player.getUUID().equals(crew.getOwnerId()) && crew.isAlive()).size();
@@ -298,29 +343,11 @@ public final class ElijahPirate {
         crew.setCustomNameVisible(false);
         if (!level.addFreshEntity(crew)) return 0;
         if (target != null && target.isAlive()) crew.setTarget(target);
-        changeOriginResource(player, "elijah:crew_resource", -1);
+        pouch.crewResource = Math.max(0, pouch.crewResource - 1);
         level.playSound(null, player.blockPosition(), SoundEvents.ZOMBIE_AMBIENT, SoundSource.PLAYERS, 0.8F, 0.65F);
         player.displayClientMessage(Component.literal("The undead crew answers the call! (1)")
                 .withStyle(ChatFormatting.GOLD), true);
         return 1;
-    }
-
-    static int changeOriginResource(ServerPlayer player, String resource, int amount) {
-        return player.getServer().getCommands().performPrefixedCommand(
-                player.createCommandSourceStack().withPermission(2).withSuppressedOutput(),
-                "resource change @s " + resource + " " + amount);
-    }
-
-    static int setOriginResource(ServerPlayer player, String resource, int value) {
-        return player.getServer().getCommands().performPrefixedCommand(
-                player.createCommandSourceStack().withPermission(2).withSuppressedOutput(),
-                "resource set @s " + resource + " " + value);
-    }
-
-    static int getOriginResource(ServerPlayer player, String resource) {
-        return player.getServer().getCommands().performPrefixedCommand(
-                player.createCommandSourceStack().withPermission(2).withSuppressedOutput(),
-                "resource get @s " + resource);
     }
 
     private int scheduleUnload(CommandSourceStack source) throws CommandSyntaxException {
@@ -389,7 +416,6 @@ public final class ElijahPirate {
     private static void unloadNow(ServerPlayer player) {
         // Remove only the separate dimension-repair source on a genuine
         // Origin loss; transfer callbacks are returned above.
-        DomainAbilities.clearPowerBridge(player);
         DomainAbilities.clearTransient(player);
         BloodAbilities.clearTransient(player);
         if (player.containerMenu instanceof PowderMenu) player.closeContainer();

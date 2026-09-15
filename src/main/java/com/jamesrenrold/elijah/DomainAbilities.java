@@ -101,27 +101,12 @@ public final class DomainAbilities {
     private static final double BEACH_SPAWN_Y = 67.0D;
     private static final UUID DOMAIN_SPEED_ID = UUID.fromString("c01c5046-3b27-49c5-9384-95f1f1cdb5db");
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
-    // Cleanup sources used by older builds; the current domain never changes
-    // the live Apoli power component at all.
-    private static final ResourceLocation DOMAIN_RESTORE_SOURCE =
-            new ResourceLocation("elijah", "domain_restore");
-    // Clean up bridge grants left by 0.3.16 when this version takes over.
-    private static final ResourceLocation LEGACY_POWER_BRIDGE_SOURCE =
-            new ResourceLocation("elijah", "domain_bridge");
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
     private static final Map<UUID, Float> CBC_PROJECTILE_DAMAGE = new HashMap<>();
     private static final Map<UUID, PendingCbcDamage> CBC_EXPLOSION_DAMAGE = new HashMap<>();
     private static final Set<UUID> PENDING_ACTIVATIONS = new HashSet<>();
-    private static final List<String> PIRATE_POWERS = List.of(
-            "elijah:dirty_tactics", "elijah:flintlock", "elijah:powder_pouch",
-            "elijah:undead_crew", "elijah:crew_resource", "elijah:crew_recharge",
-            "elijah:blood_resource", "elijah:blood_active_window", "elijah:blood_charge_gain",
-            "elijah:blood_charge_decay", "elijah:blood_overflow", "elijah:blood_rush",
-            "elijah:blood_hunt", "elijah:blood_wings", "elijah:drowned_domain",
-            "elijah:wisdom_of_the_sea", "elijah:land_legs", "elijah:pirate_frailty",
-            "elijah:flintlock_fall_resistance", "elijah:pouch_lifecycle");
     private static final BlockPos ARENA_MARKER = new BlockPos(0, 61, 0);
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
     private static boolean arenaReady;
@@ -129,7 +114,11 @@ public final class DomainAbilities {
     private DomainAbilities() {}
 
     public static int activate(CommandSourceStack source) throws CommandSyntaxException {
-        ServerPlayer player = source.getPlayerOrException();
+        return activate(source.getPlayerOrException());
+    }
+
+    public static int activate(ServerPlayer player) {
+        if (!ElijahPirate.isPirate(player)) return 0;
         if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
         if (player.getServer() == null) return 0;
 
@@ -300,24 +289,6 @@ public final class DomainAbilities {
         if (server.overworld().getGameTime() <= until) return true;
         LIFECYCLE_GUARDS.remove(player.getUUID());
         return false;
-    }
-
-    /**
-     * Removes legacy 0.3.16 bridge grants during a genuine Origin loss.
-     * The current domain flow does not create bridge grants.
-     */
-    public static void clearPowerBridge(ServerPlayer player) {
-        MinecraftServer server = player.getServer();
-        if (server == null) return;
-        CommandSourceStack source = player.createCommandSourceStack()
-                .withSuppressedOutput().withPermission(4);
-        for (String power : PIRATE_POWERS) {
-            if ("elijah:pouch_lifecycle".equals(power)) continue;
-            server.getCommands().performPrefixedCommand(source,
-                    "power revoke @s " + power + " " + LEGACY_POWER_BRIDGE_SOURCE);
-            server.getCommands().performPrefixedCommand(source,
-                    "power revoke @s " + power + " " + DOMAIN_RESTORE_SOURCE);
-        }
     }
 
     /** Ends a session when Origins removes the power or the player unloads it. */
@@ -621,8 +592,9 @@ public final class DomainAbilities {
 
     private static void fireCannonBarrage(Session session, ServerPlayer owner, LivingEntity target) {
         int volleyNumber = session.cannonIndex / CANNONBALLS_PER_VOLLEY;
-        int curse = ElijahPirate.getOriginResource(owner, "elijah:blood_resource");
-        curse = Math.max(0, Math.min(100, curse));
+        int curse = owner.getCapability(PowderPouch.CAPABILITY)
+                .map(pouch -> Math.max(0, Math.min(100, pouch.bloodResource)))
+                .orElse(0);
         float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.55D);
         float curseDamage = (curse / 10) * 1.5F;
         // Elijah cannonballs deal double the normal calculated barrage damage.

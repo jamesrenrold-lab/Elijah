@@ -58,6 +58,14 @@ public final class PowderPouch extends ItemStackHandler {
     public long bloodLastEnemyHitTick;
     public long bloodAllowLifestealUntil;
     public long nextGeneratorTick;
+    /** All ability ownership/state is Java-side and survives dimension transfers. */
+    public boolean pirateOrigin;
+    public int crewResource = 4;
+    public int bloodResource;
+    public boolean bloodActiveWindow;
+    public long nextCrewRechargeTick;
+    public long nextBloodGrowthTick;
+    public long nextBloodDecayTick;
 
     public PowderPouch() { super(TOTAL_SLOTS); }
 
@@ -100,7 +108,17 @@ public final class PowderPouch extends ItemStackHandler {
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)) return;
         player.getCapability(CAPABILITY).ifPresent(pouch -> {
-            if (pouch.tickGenerator(player.serverLevel().getGameTime())
+            if (!pouch.pirateOrigin) return;
+            long now = player.serverLevel().getServer().overworld().getGameTime();
+            boolean changed = pouch.tickGenerator(player.serverLevel().getGameTime());
+            if (pouch.nextCrewRechargeTick <= 0L) {
+                pouch.nextCrewRechargeTick = now + 1200L;
+            } else if (now >= pouch.nextCrewRechargeTick) {
+                pouch.crewResource = Math.min(4, pouch.crewResource + 1);
+                pouch.nextCrewRechargeTick = now + 1200L;
+                changed = true;
+            }
+            if (changed
                     && player.containerMenu instanceof PowderMenu menu) {
                 // The generator is a capability slot rather than a vanilla
                 // inventory slot; explicitly broadcast it so the client sees
@@ -150,6 +168,13 @@ public final class PowderPouch extends ItemStackHandler {
         tag.putLong("BloodLastDegenerationTick", bloodLastDegenerationTick);
         tag.putLong("BloodLastEnemyHitTick", bloodLastEnemyHitTick);
         tag.putLong("NextGeneratorTick", nextGeneratorTick);
+        tag.putBoolean("PirateOrigin", pirateOrigin);
+        tag.putInt("CrewResource", crewResource);
+        tag.putInt("BloodResource", bloodResource);
+        tag.putBoolean("BloodActiveWindow", bloodActiveWindow);
+        tag.putLong("NextCrewRechargeTick", nextCrewRechargeTick);
+        tag.putLong("NextBloodGrowthTick", nextBloodGrowthTick);
+        tag.putLong("NextBloodDecayTick", nextBloodDecayTick);
         return tag;
     }
 
@@ -174,6 +199,14 @@ public final class PowderPouch extends ItemStackHandler {
         bloodLastDegenerationTick = tag.getLong("BloodLastDegenerationTick");
         bloodLastEnemyHitTick = tag.getLong("BloodLastEnemyHitTick");
         nextGeneratorTick = tag.getLong("NextGeneratorTick");
+        pirateOrigin = tag.getBoolean("PirateOrigin");
+        crewResource = Math.max(0, Math.min(4, tag.contains("CrewResource", Tag.TAG_INT)
+                ? tag.getInt("CrewResource") : 4));
+        bloodResource = Math.max(0, Math.min(100, tag.getInt("BloodResource")));
+        bloodActiveWindow = tag.getBoolean("BloodActiveWindow");
+        nextCrewRechargeTick = tag.getLong("NextCrewRechargeTick");
+        nextBloodGrowthTick = tag.getLong("NextBloodGrowthTick");
+        nextBloodDecayTick = tag.getLong("NextBloodDecayTick");
         // Do not call ItemStackHandler.deserializeNBT here: Forge resizes its internal
         // list to the serialized Size field. Read entries manually so both the old
         // one-slot pouch and the previous 10-slot pouch migrate safely.

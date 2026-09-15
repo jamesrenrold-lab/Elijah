@@ -1,0 +1,12 @@
+{
+  "type": "origins:resource",
+  "name": "Pirate marker",
+  "description": "Internal marker used to identify the Pirate origin.",
+  "hidden": true,
+  "min": 0,
+  "max": 1,
+  "start_value": 1,
+  "hud_render": {
+    "should_render": false
+  }
+}
