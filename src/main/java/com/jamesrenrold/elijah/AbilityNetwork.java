@@ -8,6 +8,7 @@ import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 import java.util.Optional;
@@ -60,7 +61,8 @@ public final class AbilityNetwork {
                     remaining(state.bloodExhaustedUntil, now),
                     DomainAbilities.activeRemaining(player),
                     DomainAbilities.cooldownRemaining(player),
-                    remaining(state.nextCrewRechargeTick, now)), player);
+                    remaining(state.nextCrewRechargeTick, now)),
+                    PacketDistributor.PLAYER.with(() -> player));
         });
     }
 
