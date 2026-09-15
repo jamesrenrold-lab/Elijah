@@ -36,7 +36,9 @@ import java.util.UUID;
 public final class BloodAbilities {
     private static final int BLOOD_COOLDOWN_TICKS = 20 * 20;
     private static final int HUNT_TICKS = 15 * 20;
+    private static final int HUNT_COOLDOWN_TICKS = 15 * 20;
     private static final int FLIGHT_TICKS = 20 * 20;
+    private static final int FLIGHT_COOLDOWN_TICKS = 20 * 20;
     private static final int OVERDRIVE_TICKS = 25 * 20;
     private static final int EXHAUSTED_TICKS = 30 * 20;
     private static final UUID BLOOD_SPEED_ID = UUID.fromString("75c9a1d0-8840-4a6b-b3d9-8fa4c3f88a11");
@@ -133,7 +135,13 @@ public final class BloodAbilities {
         PowderPouch state = pouch(player);
         if (state == null || isHuntActive(player)) return 0;
         long now = serverTime(player);
+        if (now < state.bloodHuntCooldownUntil) {
+            long seconds = (state.bloodHuntCooldownUntil - now + 19L) / 20L;
+            message(player, "Blood Hunt cooldown: " + seconds + "s");
+            return 0;
+        }
         state.bloodHuntUntil = now + HUNT_TICKS;
+        state.bloodHuntCooldownUntil = now + HUNT_COOLDOWN_TICKS;
         state.bloodLastDegenerationTick = now;
         state.bloodLastEnemyHitTick = now;
         state.bloodLockedTarget = null;
@@ -152,7 +160,13 @@ public final class BloodAbilities {
         PowderPouch state = pouch(player);
         if (state == null || isFlightActive(player)) return 0;
         long now = serverTime(player);
+        if (now < state.bloodFlightCooldownUntil) {
+            long seconds = (state.bloodFlightCooldownUntil - now + 19L) / 20L;
+            message(player, "Blood Wings cooldown: " + seconds + "s");
+            return 0;
+        }
         state.bloodFlightUntil = now + FLIGHT_TICKS;
+        state.bloodFlightCooldownUntil = now + FLIGHT_COOLDOWN_TICKS;
         state.bloodFlightWasMayFly = false;
         // Start the vanilla fall-flying state directly. No Elytra item is
         // inserted; the temporary power simply supplies the gliding state.
@@ -184,7 +198,9 @@ public final class BloodAbilities {
         state.cursedFormActive = false;
         state.bloodBuffUntil = 0L;
         state.bloodCooldownUntil = 0L;
+        state.bloodHuntCooldownUntil = 0L;
         state.bloodOverdriveUntil = 0L;
+        state.bloodFlightCooldownUntil = 0L;
         state.bloodExhaustedUntil = 0L;
         state.bloodLastEnemyHitTick = 0L;
         state.bloodLastDegenerationTick = 0L;

@@ -3,10 +3,14 @@ package com.jamesrenrold.elijah;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /** The client-to-server bridge for Java-owned pirate abilities. */
@@ -20,10 +24,49 @@ public final class AbilityNetwork {
     public static void register() {
         CHANNEL.registerMessage(nextId++, AbilityPacket.class,
                 AbilityPacket::encode, AbilityPacket::decode, AbilityPacket::handle);
+        CHANNEL.registerMessage(nextId++, ClientStatePacket.class,
+                ClientStatePacket::encode, ClientStatePacket::decode, ClientStatePacket::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
 
     public static void send(int ability) {
         CHANNEL.sendToServer(new AbilityPacket(ability));
+    }
+
+    /** Sends display-only state. The server remains the only authority for abilities. */
+    public static void syncState(ServerPlayer player) {
+        player.getCapability(PowderPouch.CAPABILITY).ifPresent(state -> {
+            long now = player.getServer() == null
+                    ? player.serverLevel().getGameTime()
+                    : player.getServer().overworld().getGameTime();
+            CHANNEL.sendTo(new ClientStatePacket(
+                    state.pirateOrigin,
+                    state.bloodResource,
+                    state.crewResource,
+                    state.cursedFormActive,
+                    state.bloodHuntUntil > now,
+                    state.bloodFlightUntil > now,
+                    state.bloodOverdriveUntil > now,
+                    state.bloodExhaustedUntil > now,
+                    state.dirtyTacticsArmed,
+                    remaining(state.dirtyTacticsReadyAt, now),
+                    remaining(state.nextShotTick, now),
+                    remaining(state.bloodCooldownUntil, now),
+                    remaining(state.bloodHuntUntil, now),
+                    remaining(state.bloodHuntCooldownUntil, now),
+                    remaining(state.bloodFlightUntil, now),
+                    remaining(state.bloodFlightCooldownUntil, now),
+                    remaining(state.bloodOverdriveUntil, now),
+                    remaining(state.bloodExhaustedUntil, now),
+                    DomainAbilities.activeRemaining(player),
+                    DomainAbilities.cooldownRemaining(player),
+                    remaining(state.nextCrewRechargeTick, now)), player);
+        });
+    }
+
+    private static int remaining(long until, long now) {
+        long value = until - now;
+        return Math.max(0, (int) Math.min(Integer.MAX_VALUE, value));
     }
 
     private record AbilityPacket(int ability) {
@@ -41,6 +84,80 @@ public final class AbilityNetwork {
                 ServerPlayer player = context.getSender();
                 if (player != null) dispatch(player, packet.ability);
             });
+            context.setPacketHandled(true);
+        }
+    }
+
+    private record ClientStatePacket(
+            boolean pirate,
+            int bloodResource,
+            int crewResource,
+            boolean cursedFormActive,
+            boolean huntActive,
+            boolean flightActive,
+            boolean overdriveActive,
+            boolean exhaustedActive,
+            boolean dirtyTacticsArmed,
+            int dirtyCooldown,
+            int shotCooldown,
+            int cursedCooldown,
+            int huntRemaining,
+            int huntCooldown,
+            int flightRemaining,
+            int flightCooldown,
+            int overdriveRemaining,
+            int exhaustedRemaining,
+            int domainRemaining,
+            int domainCooldown,
+            int crewRecharge) {
+        private void encode(FriendlyByteBuf buffer) {
+            buffer.writeBoolean(pirate);
+            buffer.writeVarInt(bloodResource);
+            buffer.writeVarInt(crewResource);
+            buffer.writeBoolean(cursedFormActive);
+            buffer.writeBoolean(huntActive);
+            buffer.writeBoolean(flightActive);
+            buffer.writeBoolean(overdriveActive);
+            buffer.writeBoolean(exhaustedActive);
+            buffer.writeBoolean(dirtyTacticsArmed);
+            buffer.writeVarInt(dirtyCooldown);
+            buffer.writeVarInt(shotCooldown);
+            buffer.writeVarInt(cursedCooldown);
+            buffer.writeVarInt(huntRemaining);
+            buffer.writeVarInt(huntCooldown);
+            buffer.writeVarInt(flightRemaining);
+            buffer.writeVarInt(flightCooldown);
+            buffer.writeVarInt(overdriveRemaining);
+            buffer.writeVarInt(exhaustedRemaining);
+            buffer.writeVarInt(domainRemaining);
+            buffer.writeVarInt(domainCooldown);
+            buffer.writeVarInt(crewRecharge);
+        }
+
+        private static ClientStatePacket decode(FriendlyByteBuf buffer) {
+            return new ClientStatePacket(
+                    buffer.readBoolean(), buffer.readVarInt(), buffer.readVarInt(),
+                    buffer.readBoolean(), buffer.readBoolean(), buffer.readBoolean(),
+                    buffer.readBoolean(), buffer.readBoolean(), buffer.readBoolean(),
+                    buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(),
+                    buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(),
+                    buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(),
+                    buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt());
+        }
+
+        private static void handle(ClientStatePacket packet,
+                                   Supplier<NetworkEvent.Context> contextSupplier) {
+            NetworkEvent.Context context = contextSupplier.get();
+            context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () ->
+                    () -> com.jamesrenrold.elijah.client.ClientHudState.apply(
+                            packet.pirate, packet.bloodResource, packet.crewResource,
+                            packet.cursedFormActive, packet.huntActive, packet.flightActive,
+                            packet.overdriveActive, packet.exhaustedActive,
+                            packet.dirtyTacticsArmed, packet.dirtyCooldown, packet.shotCooldown,
+                            packet.cursedCooldown, packet.huntRemaining, packet.huntCooldown,
+                            packet.flightRemaining, packet.flightCooldown, packet.overdriveRemaining,
+                            packet.exhaustedRemaining, packet.domainRemaining,
+                            packet.domainCooldown, packet.crewRecharge)));
             context.setPacketHandled(true);
         }
     }

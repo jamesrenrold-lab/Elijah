@@ -49,8 +49,10 @@ public final class PowderPouch extends ItemStackHandler {
     public long bloodBuffUntil;
     public long bloodCooldownUntil;
     public long bloodHuntUntil;
+    public long bloodHuntCooldownUntil;
     public UUID bloodLockedTarget;
     public long bloodFlightUntil;
+    public long bloodFlightCooldownUntil;
     public boolean bloodFlightWasMayFly;
     public long bloodOverdriveUntil;
     public long bloodExhaustedUntil;
@@ -160,8 +162,10 @@ public final class PowderPouch extends ItemStackHandler {
         tag.putLong("BloodBuffUntil", bloodBuffUntil);
         tag.putLong("BloodCooldownUntil", bloodCooldownUntil);
         tag.putLong("BloodHuntUntil", bloodHuntUntil);
+        tag.putLong("BloodHuntCooldownUntil", bloodHuntCooldownUntil);
         if (bloodLockedTarget != null) tag.putUUID("BloodLockedTarget", bloodLockedTarget);
         tag.putLong("BloodFlightUntil", bloodFlightUntil);
+        tag.putLong("BloodFlightCooldownUntil", bloodFlightCooldownUntil);
         tag.putBoolean("BloodFlightWasMayFly", bloodFlightWasMayFly);
         tag.putLong("BloodOverdriveUntil", bloodOverdriveUntil);
         tag.putLong("BloodExhaustedUntil", bloodExhaustedUntil);
@@ -191,8 +195,10 @@ public final class PowderPouch extends ItemStackHandler {
         bloodBuffUntil = tag.getLong("BloodBuffUntil");
         bloodCooldownUntil = tag.getLong("BloodCooldownUntil");
         bloodHuntUntil = tag.getLong("BloodHuntUntil");
+        bloodHuntCooldownUntil = tag.getLong("BloodHuntCooldownUntil");
         bloodLockedTarget = tag.hasUUID("BloodLockedTarget") ? tag.getUUID("BloodLockedTarget") : null;
         bloodFlightUntil = tag.getLong("BloodFlightUntil");
+        bloodFlightCooldownUntil = tag.getLong("BloodFlightCooldownUntil");
         bloodFlightWasMayFly = tag.getBoolean("BloodFlightWasMayFly");
         bloodOverdriveUntil = tag.getLong("BloodOverdriveUntil");
         bloodExhaustedUntil = tag.getLong("BloodExhaustedUntil");

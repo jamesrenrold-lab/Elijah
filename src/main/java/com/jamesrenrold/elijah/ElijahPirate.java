@@ -85,6 +85,7 @@ public final class ElijahPirate {
         MinecraftForge.EVENT_BUS.addListener(this::dropPowder);
         MinecraftForge.EVENT_BUS.addListener(this::commands);
         MinecraftForge.EVENT_BUS.addListener(ElijahPirate::detectPirateOrigin);
+        MinecraftForge.EVENT_BUS.addListener(ElijahPirate::syncHudState);
     }
 
     /** A durable Java-side marker; it is deliberately not an Origins power. */
@@ -109,6 +110,13 @@ public final class ElijahPirate {
                 pouch.wisdomOfTheSea = true;
             }
         });
+    }
+
+    /** Sends display-only state often enough for smooth timers without making the HUD authoritative. */
+    public static void syncHudState(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)
+                || player.tickCount % 5 != 0) return;
+        AbilityNetwork.syncState(player);
     }
 
     private void registerCapabilities(RegisterCapabilitiesEvent event) {
@@ -139,8 +147,10 @@ public final class ElijahPirate {
                             current.bloodBuffUntil = 0L;
                             current.bloodCooldownUntil = 0L;
                             current.bloodHuntUntil = 0L;
+                            current.bloodHuntCooldownUntil = 0L;
                             current.bloodLockedTarget = null;
                             current.bloodFlightUntil = 0L;
+                            current.bloodFlightCooldownUntil = 0L;
                             current.bloodFlightWasMayFly = false;
                             current.bloodOverdriveUntil = 0L;
                             current.bloodExhaustedUntil = 0L;

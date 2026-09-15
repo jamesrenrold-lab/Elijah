@@ -52,7 +52,12 @@ public final class ClientSetup {
         if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
-        if (player == null || minecraft.screen != null) return;
+        if (player == null) {
+            ClientHudState.reset();
+            return;
+        }
+        ClientHudState.tick();
+        if (minecraft.screen != null) return;
         for (int ability = 0; ability < ORIGIN_KEYS.length; ability++) {
             KeyMapping mapping = findMapping(minecraft.options, ORIGIN_KEYS[ability]);
             if (mapping == null) mapping = FALLBACK_MAPPINGS[ability];

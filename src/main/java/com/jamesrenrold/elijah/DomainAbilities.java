@@ -229,6 +229,24 @@ public final class DomainAbilities {
         message(player, "Drowned Domain cooldown begins when the domain closes: 5s.");
     }
 
+    /** Remaining domain duration for the HUD; gameplay never reads client HUD state. */
+    public static int activeRemaining(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        if (server == null) return 0;
+        Session session = SESSIONS.get(player.getUUID());
+        if (session == null) return 0;
+        return Math.max(0, (int) (session.endAt - server.overworld().getGameTime()));
+    }
+
+    /** Remaining domain cooldown for the HUD; the server map remains authoritative. */
+    public static int cooldownRemaining(ServerPlayer player) {
+        MinecraftServer server = player.getServer();
+        if (server == null) return 0;
+        long remaining = COOLDOWNS.getOrDefault(player.getUUID(), 0L)
+                - server.overworld().getGameTime();
+        return Math.max(0, (int) Math.min(Integer.MAX_VALUE, remaining));
+    }
+
     private static void recoverFinishedSessions(MinecraftServer server) {
         long now = server.overworld().getGameTime();
         for (Session session : new ArrayList<>(SESSIONS.values())) {
