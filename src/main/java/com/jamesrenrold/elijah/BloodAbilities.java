@@ -191,31 +191,6 @@ public final class BloodAbilities {
         return state != null && state.bloodFlightUntil > serverTime(player);
     }
 
-    public static void clearTransient(ServerPlayer player) {
-        PowderPouch state = pouch(player);
-        if (state == null) return;
-        endHunt(player, state);
-        endFlight(player, state);
-        state.cursedFormActive = false;
-        state.bloodBuffUntil = 0L;
-        state.bloodCooldownUntil = 0L;
-        state.bloodHuntCooldownUntil = 0L;
-        state.bloodOverdriveUntil = 0L;
-        state.bloodFlightCooldownUntil = 0L;
-        state.bloodExhaustedUntil = 0L;
-        state.bloodLastEnemyHitTick = 0L;
-        state.bloodLastDegenerationTick = 0L;
-        state.bloodAllowLifestealUntil = 0L;
-        state.bloodResource = 0;
-        state.bloodActiveWindow = false;
-        removeBloodModifiers(player);
-        removeOwnedEffect(player, MobEffects.BLINDNESS, 0, OVERDRIVE_TICKS + 5);
-        removeOwnedEffect(player, MobEffects.DARKNESS, 0, OVERDRIVE_TICKS + 5);
-        removeOwnedEffect(player, MobEffects.DAMAGE_BOOST, 0, OVERDRIVE_TICKS + 5);
-        removeOwnedEffect(player, MobEffects.WEAKNESS, 1, OVERDRIVE_TICKS + 5);
-        removeOwnedEffect(player, MobEffects.MOVEMENT_SLOWDOWN, 0, OVERDRIVE_TICKS + 5);
-    }
-
     private static boolean requireBuff(ServerPlayer player) {
         if (!player.isAlive() || player.isSpectator() || isHuntActive(player)) return false;
         PowderPouch state = pouch(player);

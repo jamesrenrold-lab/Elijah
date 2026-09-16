@@ -45,7 +45,6 @@ import net.minecraftforge.common.util.ITeleporter;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ExplosionEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
@@ -103,7 +102,6 @@ public final class DomainAbilities {
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
-    private static final Map<UUID, Long> LIFECYCLE_GUARDS = new HashMap<>();
     private static final Map<UUID, Float> CBC_PROJECTILE_DAMAGE = new HashMap<>();
     private static final Map<UUID, PendingCbcDamage> CBC_EXPLOSION_DAMAGE = new HashMap<>();
     private static final Set<UUID> PENDING_ACTIVATIONS = new HashSet<>();
@@ -195,7 +193,6 @@ public final class DomainAbilities {
             return;
         }
 
-        guardLifecycle(player, 200L);
         // Keep every power instance and its state alive through the transfer.
         // In particular, do not revoke/re-grant powers here: Apoli creates a
         // new live instance when a source is re-added, which breaks powers
@@ -220,8 +217,8 @@ public final class DomainAbilities {
                 targetOrigin, targetPosition, targetYaw, targetPitch,
                 targetWasPersistent, serverTime + DOMAIN_TICKS);
         SESSIONS.put(player.getUUID(), session);
-        // The lifecycle callback is suppressed by the active session, while
-        // the original powers remain usable inside the domain.
+        // There is no Origin lifecycle cleanup path here. The domain only
+        // transfers entities and applies/removes its own temporary buffs.
         applyDomainBuffs(player);
         domain.playSound(null, player.blockPosition(), SoundEvents.AMBIENT_UNDERWATER_ENTER,
                 SoundSource.PLAYERS, 1.2F, 0.7F);
@@ -285,56 +282,6 @@ public final class DomainAbilities {
         living.setDeltaMovement(Vec3.ZERO);
         if (persistenceRequired && living instanceof Mob mob) mob.setPersistenceRequired();
         return living;
-    }
-
-    private static void guardLifecycle(ServerPlayer player, long ticks) {
-        MinecraftServer server = player.getServer();
-        if (server != null) {
-            LIFECYCLE_GUARDS.put(player.getUUID(), server.overworld().getGameTime() + ticks);
-        }
-    }
-
-    /** True only during the short Connector power-removal window around a domain teleport. */
-    public static boolean shouldSuppressLifecycleUnload(ServerPlayer player) {
-        MinecraftServer server = player.getServer();
-        if (server == null) return false;
-        Session active = SESSIONS.get(player.getUUID());
-        if (active != null && !active.ending) return true;
-        // A dimension-change callback can arrive after the player has already
-        // left the old level. Protect the transfer window from unload cleanup.
-        Long until = LIFECYCLE_GUARDS.get(player.getUUID());
-        if (until == null) return false;
-        if (server.overworld().getGameTime() <= until) return true;
-        LIFECYCLE_GUARDS.remove(player.getUUID());
-        return false;
-    }
-
-    /** Ends a session when Origins removes the power or the player unloads it. */
-    public static void clearTransient(ServerPlayer player) {
-        Session session = SESSIONS.get(player.getUUID());
-        if (session != null) finishSession(session, player.getServer(), true, "Origin removed");
-        removeDomainBuffs(player);
-    }
-
-    /** Called by the delayed lifecycle callback; a real Origin loss still cleans up. */
-    public static boolean pirateLifecyclePowerStillPresent(ServerPlayer player) {
-        MinecraftServer server = player.getServer();
-        if (server == null) return false;
-        CommandSourceStack source = player.createCommandSourceStack()
-                .withSuppressedOutput().withPermission(4);
-        return server.getCommands().performPrefixedCommand(source,
-                "power has @s elijah:pouch_lifecycle") > 0;
-    }
-
-    /** Keep lifecycle cleanup from treating a domain transfer as Origin loss. */
-    @SubscribeEvent
-    public static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        if (!DOMAIN_DIMENSION.equals(event.getFrom())
-                && !DOMAIN_DIMENSION.equals(player.level().dimension())) return;
-        MinecraftServer server = player.getServer();
-        if (server == null) return;
-        guardLifecycle(player, 200L);
     }
 
     /**
@@ -433,11 +380,9 @@ public final class DomainAbilities {
     public static void onServerStarted(ServerStartedEvent event) {
         SESSIONS.clear();
         COOLDOWNS.clear();
-        LIFECYCLE_GUARDS.clear();
         CBC_PROJECTILE_DAMAGE.clear();
         CBC_EXPLOSION_DAMAGE.clear();
         PENDING_ACTIVATIONS.clear();
-        ElijahPirate.clearDeferredLifecycleUnloads();
         arenaReady = false;
         ServerLevel domain = event.getServer().getLevel(DOMAIN_DIMENSION);
         if (domain != null) buildArena(domain);
@@ -448,7 +393,6 @@ public final class DomainAbilities {
         if (event.phase != TickEvent.Phase.END) return;
         MinecraftServer server = event.getServer();
         if (server == null) return;
-        ElijahPirate.processDeferredLifecycleUnloads(server);
         detonateCbcWaterImpacts(server);
         if (!PENDING_ACTIVATIONS.isEmpty()) {
             List<UUID> pending = new ArrayList<>(PENDING_ACTIVATIONS);
@@ -886,7 +830,6 @@ public final class DomainAbilities {
             if (owner != null) {
                 removeDomainBuffs(owner);
                 if (owner.isAlive()) {
-                    guardLifecycle(owner, 200L);
                     teleportPlayerBack(owner, server, session);
                     message(owner, "Drowned Domain closed (" + reason + "). Cooldown: 5s.");
                 }
