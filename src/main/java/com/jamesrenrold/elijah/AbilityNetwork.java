@@ -40,7 +40,7 @@ public final class AbilityNetwork {
             long now = player.getServer() == null
                     ? player.serverLevel().getGameTime()
                     : player.getServer().overworld().getGameTime();
-            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ClientStatePacket(
+            CHANNEL.sendTo(new ClientStatePacket(
                     state.pirateOrigin,
                     state.bloodResource,
                     state.crewResource,
@@ -61,7 +61,8 @@ public final class AbilityNetwork {
                     remaining(state.bloodExhaustedUntil, now),
                     DomainAbilities.activeRemaining(player),
                     DomainAbilities.cooldownRemaining(player),
-                    remaining(state.nextCrewRechargeTick, now)));
+                    remaining(state.nextCrewRechargeTick, now)),
+                    PacketDistributor.PLAYER.with(() -> player));
         });
     }
 

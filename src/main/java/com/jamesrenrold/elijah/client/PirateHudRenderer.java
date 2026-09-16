@@ -28,8 +28,8 @@ public final class PirateHudRenderer {
         if (minecraft.player == null || minecraft.screen != null || !ClientHudState.shouldRender()) return;
 
         GuiGraphics gui = event.getGuiGraphics();
-        int x = 7;
-        int y = 7;
+        int x = minecraft.getWindow().getGuiScaledWidth() - PANEL_WIDTH - 7;
+        int y = minecraft.getWindow().getGuiScaledHeight() - PANEL_HEIGHT - 8;
         gui.fill(x, y, x + PANEL_WIDTH, y + PANEL_HEIGHT, 0xA8000000);
         gui.fill(x, y, x + PANEL_WIDTH, y + 1, GOLD);
         gui.fill(x, y + PANEL_HEIGHT - 1, x + PANEL_WIDTH, y + PANEL_HEIGHT, 0xFF5A4212);

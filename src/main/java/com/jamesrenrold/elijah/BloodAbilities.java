@@ -58,7 +58,7 @@ public final class BloodAbilities {
 
     public static int activateBloodRush(ServerPlayer player) {
         if (!ElijahPirate.isPirate(player)) return 0;
-        if (!player.isAlive() || player.isSpectator() || isHuntActive(player)) return 0;
+        if (!player.isAlive() || player.isSpectator()) return 0;
         PowderPouch state = pouch(player);
         if (state == null) return 0;
         long now = serverTime(player);
@@ -71,6 +71,7 @@ public final class BloodAbilities {
             message(player, "Cursed Form released — cooldown: 20s");
             return 1;
         }
+        if (isHuntActive(player)) return 0;
         if (state.bloodOverdriveUntil > now || state.bloodExhaustedUntil > now) {
             message(player, "Cursed Form is locked while your body recovers.");
             return 0;
