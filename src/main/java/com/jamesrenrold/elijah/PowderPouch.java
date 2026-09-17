@@ -79,6 +79,14 @@ public final class PowderPouch extends ItemStackHandler {
 
     public PowderPouch() { super(TOTAL_SLOTS); }
 
+    /** Hydrates state before an input packet can run immediately after transfer. */
+    public static void hydratePersistentState(ServerPlayer player, PowderPouch pouch) {
+        if (pouch.persistentHydrated) return;
+        CompoundTag saved = player.getPersistentData().getCompound(PERSISTENT_STATE);
+        if (!saved.isEmpty()) pouch.deserializeNBT(saved.copy());
+        pouch.persistentHydrated = true;
+    }
+
     @Override
     public boolean isItemValid(int slot, ItemStack stack) {
         return slot >= CHAMBER_SLOT && slot < GENERATOR_SLOT && stack.is(Items.GUNPOWDER);
@@ -123,11 +131,7 @@ public final class PowderPouch extends ItemStackHandler {
             // Java ownership marker is intentionally independent of Origins'
             // power instances.
             if (!ElijahPirate.isPirate(player)) return;
-            if (!pouch.persistentHydrated) {
-                CompoundTag saved = player.getPersistentData().getCompound(PERSISTENT_STATE);
-                if (!saved.isEmpty()) pouch.deserializeNBT(saved.copy());
-                pouch.persistentHydrated = true;
-            }
+            hydratePersistentState(player, pouch);
             long now = player.serverLevel().getServer().overworld().getGameTime();
             boolean changed = pouch.tickGenerator(player.serverLevel().getGameTime());
             if (pouch.nextCrewRechargeTick <= 0L) {

@@ -100,6 +100,7 @@ public final class ElijahPirate {
                 pouch.pirateOrigin = true;
                 KNOWN_PIRATES.add(player.getUUID());
                 player.getPersistentData().putBoolean(PERSISTENT_PIRATE, true);
+                PowderPouch.hydratePersistentState(player, pouch);
                 return true;
             }
             return persistentOwner || KNOWN_PIRATES.contains(player.getUUID());
@@ -180,6 +181,8 @@ public final class ElijahPirate {
                         // pre-death toggle/resource state on the next tick.
                         current.persistentHydrated = true;
                         event.getEntity().getPersistentData().put("ElijahPouchState", current.serializeNBT());
+                        event.getEntity().getPersistentData().putBoolean(PERSISTENT_PIRATE,
+                                old.getPersistentData().getBoolean(PERSISTENT_PIRATE) || current.pirateOrigin);
                     }));
         } finally {
             old.invalidateCaps();
