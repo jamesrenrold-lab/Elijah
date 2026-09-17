@@ -68,6 +68,11 @@ public final class PowderPouch extends ItemStackHandler {
     public long nextCrewRechargeTick;
     public long nextBloodGrowthTick;
     public long nextBloodDecayTick;
+    /** Input guards are deliberately not serialized; they only collapse duplicate packets in one press. */
+    public long lastBloodToggleTick = Long.MIN_VALUE;
+    public long lastCrewActivationTick = Long.MIN_VALUE;
+    public long lastAbilityPacketTick = Long.MIN_VALUE;
+    public int lastAbilityPacket = -1;
 
     public PowderPouch() { super(TOTAL_SLOTS); }
 
@@ -110,7 +115,11 @@ public final class PowderPouch extends ItemStackHandler {
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)) return;
         player.getCapability(CAPABILITY).ifPresent(pouch -> {
-            if (!pouch.pirateOrigin) return;
+            // Re-assert ownership before ticking. Connector can briefly expose
+            // a fresh capability wrapper during a dimension transfer; the
+            // Java ownership marker is intentionally independent of Origins'
+            // power instances.
+            if (!ElijahPirate.isPirate(player)) return;
             long now = player.serverLevel().getServer().overworld().getGameTime();
             boolean changed = pouch.tickGenerator(player.serverLevel().getGameTime());
             if (pouch.nextCrewRechargeTick <= 0L) {

@@ -380,6 +380,7 @@ public final class DomainAbilities {
     public static void onServerStarted(ServerStartedEvent event) {
         SESSIONS.clear();
         COOLDOWNS.clear();
+        ElijahPirate.clearKnownPirates();
         CBC_PROJECTILE_DAMAGE.clear();
         CBC_EXPLOSION_DAMAGE.clear();
         PENDING_ACTIVATIONS.clear();

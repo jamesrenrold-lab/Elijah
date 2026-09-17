@@ -164,7 +164,19 @@ public final class AbilityNetwork {
     }
 
     private static void dispatch(ServerPlayer player, int ability) {
+        if (ability < 0 || ability > 7) return;
         if (!ElijahPirate.isPirate(player)) return;
+        PowderPouch state = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
+        if (state == null) return;
+        long now = player.getServer() == null
+                ? player.serverLevel().getGameTime()
+                : player.getServer().overworld().getGameTime();
+        // One physical key press can be observed by both Connector/Origins
+        // and this bridge, or arrive as two queued packets. Collapse only
+        // the same ability within three server ticks.
+        if (state.lastAbilityPacket == ability && state.lastAbilityPacketTick > now - 3L) return;
+        state.lastAbilityPacket = ability;
+        state.lastAbilityPacketTick = now;
         switch (ability) {
             case 0 -> PirateAbilities.armDirtyTactics(player);
             case 1 -> ElijahPirate.fire(player);

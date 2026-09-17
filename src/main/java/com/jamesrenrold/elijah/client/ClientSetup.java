@@ -62,7 +62,10 @@ public final class ClientSetup {
             KeyMapping mapping = findMapping(minecraft.options, ORIGIN_KEYS[ability]);
             if (mapping == null) mapping = FALLBACK_MAPPINGS[ability];
             if (mapping == null) continue;
-            while (mapping.consumeClick()) com.jamesrenrold.elijah.AbilityNetwork.send(ability);
+            // Send at most one packet per physical press. The server also
+            // deduplicates packets, but dropping queued repeats here prevents
+            // a held/repeated key from spending two crew charges.
+            if (mapping.consumeClick()) com.jamesrenrold.elijah.AbilityNetwork.send(ability);
         }
     }
 

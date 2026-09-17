@@ -62,7 +62,9 @@ public final class BloodAbilities {
         PowderPouch state = pouch(player);
         if (state == null) return 0;
         long now = serverTime(player);
+        if (state.lastBloodToggleTick > now - 3L) return 0;
         if (state.cursedFormActive) {
+            state.lastBloodToggleTick = now;
             state.cursedFormActive = false;
             state.bloodBuffUntil = 0L;
             state.bloodCooldownUntil = now + BLOOD_COOLDOWN_TICKS;
@@ -81,6 +83,7 @@ public final class BloodAbilities {
             message(player, "Cursed Form cooldown: " + seconds + "s");
             return 0;
         }
+        state.lastBloodToggleTick = now;
         state.cursedFormActive = true;
         state.bloodBuffUntil = 0L;
         state.bloodCooldownUntil = 0L;

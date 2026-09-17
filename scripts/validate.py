@@ -36,6 +36,7 @@ assert "AbilityNetwork.register()" in java
 assert "isPirate(ServerPlayer player)" in java
 assert "AbilityNetwork.send(ability)" in client
 assert "consumeClick()" in client
+assert "if (mapping.consumeClick())" in client
 assert "case 7 -> DomainAbilities.activate(player)" in network
 assert not (resources / "data/elijah/powers/pouch_lifecycle.json").exists()
 assert "unload_later" not in java and "clearTransient" not in domain_java and "clearTransient" not in blood

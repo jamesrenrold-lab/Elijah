@@ -50,6 +50,8 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.Set;
 
 @Mod(ElijahPirate.MOD_ID)
 public final class ElijahPirate {
@@ -68,6 +70,7 @@ public final class ElijahPirate {
             "undead_crewmate", () -> EntityType.Builder.<UndeadCrewmate>of(UndeadCrewmate::new, MobCategory.MONSTER)
                     .sized(0.6F, 1.95F).clientTrackingRange(10).updateInterval(3)
                     .build(MOD_ID + ":undead_crewmate"));
+    private static final Set<UUID> KNOWN_PIRATES = new HashSet<>();
 
     public ElijahPirate() {
         IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
@@ -87,23 +90,34 @@ public final class ElijahPirate {
 
     /** A durable Java-side marker; it is deliberately not an Origins power. */
     public static boolean isPirate(ServerPlayer player) {
-        return player.getCapability(PowderPouch.CAPABILITY)
-                .map(pouch -> pouch.pirateOrigin)
-                .orElse(false);
+        return player.getCapability(PowderPouch.CAPABILITY).map(pouch -> {
+            if (pouch.pirateOrigin || KNOWN_PIRATES.contains(player.getUUID())) {
+                // Connector can briefly expose a fresh capability wrapper
+                // during dimension travel. Re-assert Java ownership before
+                // evaluating any ability packet.
+                pouch.pirateOrigin = true;
+                KNOWN_PIRATES.add(player.getUUID());
+                return true;
+            }
+            return false;
+        }).orElse(false);
     }
+
+    public static void clearKnownPirates() { KNOWN_PIRATES.clear(); }
 
     @SubscribeEvent
     public static void detectPirateOrigin(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)
                 || player.tickCount % 20 != 0) return;
         player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch -> {
-            if (pouch.pirateOrigin) return;
+            if (isPirate(player)) return;
             if (player.getServer() == null) return;
             int result = player.getServer().getCommands().performPrefixedCommand(
                     player.createCommandSourceStack().withPermission(4).withSuppressedOutput(),
                     "power has @s elijah:pirate_marker");
             if (result > 0) {
                 pouch.pirateOrigin = true;
+                KNOWN_PIRATES.add(player.getUUID());
                 pouch.wisdomOfTheSea = true;
             }
         });
@@ -297,11 +311,13 @@ public final class ElijahPirate {
         if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
         ServerLevel level = player.serverLevel();
         PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
+        long now = level.getServer().overworld().getGameTime();
         if (pouch == null || pouch.crewResource <= 0) {
             player.displayClientMessage(Component.literal("No crew resource is ready.")
                     .withStyle(ChatFormatting.GOLD), true);
             return 0;
         }
+        if (pouch.lastCrewActivationTick > now - 3L) return 0;
         int max = PirateConfig.CREW_MAX_COUNT.get();
         int current = level.getEntitiesOfClass(UndeadCrewmate.class, player.getBoundingBox().inflate(64.0D),
                 crew -> player.getUUID().equals(crew.getOwnerId()) && crew.isAlive()).size();
@@ -348,6 +364,7 @@ public final class ElijahPirate {
         crew.setCustomName(Component.translatable("entity.elijah.undead_crewmate"));
         crew.setCustomNameVisible(false);
         if (!level.addFreshEntity(crew)) return 0;
+        pouch.lastCrewActivationTick = now;
         if (target != null && target.isAlive()) crew.setTarget(target);
         pouch.crewResource = Math.max(0, pouch.crewResource - 1);
         level.playSound(null, player.blockPosition(), SoundEvents.ZOMBIE_AMBIENT, SoundSource.PLAYERS, 0.8F, 0.65F);
