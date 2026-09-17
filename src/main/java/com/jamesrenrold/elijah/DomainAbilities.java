@@ -154,8 +154,7 @@ public final class DomainAbilities {
         }
         COOLDOWNS.remove(player.getUUID());
 
-        PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
-        if (pouch == null) return;
+        PowderPouch pouch = ElijahPirate.state(player);
         LivingEntity target = findTarget(player);
         if (target == null) {
             message(player, "Drowned Domain: look directly at a nearby hostile target.");
@@ -555,9 +554,7 @@ public final class DomainAbilities {
 
     private static void fireCannonBarrage(Session session, ServerPlayer owner, LivingEntity target) {
         int volleyNumber = session.cannonIndex / CANNONBALLS_PER_VOLLEY;
-        int curse = owner.getCapability(PowderPouch.CAPABILITY)
-                .map(pouch -> Math.max(0, Math.min(100, pouch.bloodResource)))
-                .orElse(0);
+        int curse = Math.max(0, Math.min(100, ElijahPirate.state(owner).bloodResource));
         float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.55D);
         float curseDamage = (curse / 10) * 1.5F;
         // Elijah cannonballs deal double the normal calculated barrage damage.

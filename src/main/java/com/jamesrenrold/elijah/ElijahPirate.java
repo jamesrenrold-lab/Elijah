@@ -31,8 +31,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
-import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -49,9 +47,11 @@ import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
-import java.util.UUID;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @Mod(ElijahPirate.MOD_ID)
 public final class ElijahPirate {
@@ -71,6 +71,8 @@ public final class ElijahPirate {
                     .sized(0.6F, 1.95F).clientTrackingRange(10).updateInterval(3)
                     .build(MOD_ID + ":undead_crewmate"));
     private static final Set<UUID> KNOWN_PIRATES = new HashSet<>();
+    private static final Map<UUID, PowderPouch> PLAYER_STATES = new HashMap<>();
+    private static final String PERSISTENT_STATE = "ElijahPouchState";
     private static final String PERSISTENT_PIRATE = "ElijahPirateOwner";
 
     public ElijahPirate() {
@@ -78,54 +80,78 @@ public final class ElijahPirate {
         MENUS.register(bus);
         ENTITIES.register(bus);
         bus.addListener(this::entityAttributes);
-        bus.addListener(this::registerCapabilities);
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, PirateConfig.SPEC);
         AbilityNetwork.register();
-        MinecraftForge.EVENT_BUS.addGenericListener(Entity.class, this::attach);
         MinecraftForge.EVENT_BUS.addListener(this::clonePlayer);
+        MinecraftForge.EVENT_BUS.addListener(this::playerLoggedOut);
         MinecraftForge.EVENT_BUS.addListener(this::dropPowder);
         MinecraftForge.EVENT_BUS.addListener(this::commands);
         MinecraftForge.EVENT_BUS.addListener(ElijahPirate::detectPirateOrigin);
         MinecraftForge.EVENT_BUS.addListener(ElijahPirate::syncHudState);
     }
 
+    /**
+     * Returns the one authoritative Java state object for this player.
+     *
+     * This deliberately is not a Forge capability. Connector can invalidate
+     * player capabilities during a dimension transfer; a UUID-keyed object
+     * backed by PersistentData survives that lifecycle completely.
+     */
+    public static PowderPouch state(ServerPlayer player) {
+        return PLAYER_STATES.computeIfAbsent(player.getUUID(), ignored -> {
+            PowderPouch state = new PowderPouch();
+            CompoundTag saved = player.getPersistentData().getCompound(PERSISTENT_STATE);
+            if (!saved.isEmpty()) state.deserializeNBT(saved.copy());
+            return state;
+        });
+    }
+
+    public static void saveState(ServerPlayer player, PowderPouch state) {
+        player.getPersistentData().put(PERSISTENT_STATE, state.serializeNBT());
+    }
+
     /** A durable Java-side marker; it is deliberately not an Origins power. */
     public static boolean isPirate(ServerPlayer player) {
         boolean persistentOwner = player.getPersistentData().getBoolean(PERSISTENT_PIRATE);
-        return player.getCapability(PowderPouch.CAPABILITY).map(pouch -> {
-            if (pouch.pirateOrigin || persistentOwner || KNOWN_PIRATES.contains(player.getUUID())) {
-                // Connector can briefly expose a fresh capability wrapper
-                // during dimension travel. Re-assert Java ownership before
-                // evaluating any ability packet.
-                pouch.pirateOrigin = true;
-                KNOWN_PIRATES.add(player.getUUID());
-                player.getPersistentData().putBoolean(PERSISTENT_PIRATE, true);
-                PowderPouch.hydratePersistentState(player, pouch);
-                return true;
-            }
-            return persistentOwner || KNOWN_PIRATES.contains(player.getUUID());
-        }).orElse(persistentOwner || KNOWN_PIRATES.contains(player.getUUID()));
+        PowderPouch pouch = state(player);
+        if (pouch.pirateOrigin || persistentOwner || KNOWN_PIRATES.contains(player.getUUID())) {
+            pouch.pirateOrigin = true;
+            KNOWN_PIRATES.add(player.getUUID());
+            player.getPersistentData().putBoolean(PERSISTENT_PIRATE, true);
+            return true;
+        }
+        return false;
     }
 
-    public static void clearKnownPirates() { KNOWN_PIRATES.clear(); }
+    public static void clearKnownPirates() {
+        KNOWN_PIRATES.clear();
+        PLAYER_STATES.clear();
+    }
+
+    private void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            saveState(player, state(player));
+        }
+        PLAYER_STATES.remove(event.getEntity().getUUID());
+        KNOWN_PIRATES.remove(event.getEntity().getUUID());
+    }
 
     @SubscribeEvent
     public static void detectPirateOrigin(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)
                 || player.tickCount % 20 != 0) return;
-        player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch -> {
-            if (isPirate(player)) return;
-            if (player.getServer() == null) return;
-            int result = player.getServer().getCommands().performPrefixedCommand(
-                    player.createCommandSourceStack().withPermission(4).withSuppressedOutput(),
-                    "power has @s elijah:pirate_marker");
-            if (result > 0) {
-                pouch.pirateOrigin = true;
-                KNOWN_PIRATES.add(player.getUUID());
-                player.getPersistentData().putBoolean(PERSISTENT_PIRATE, true);
-                pouch.wisdomOfTheSea = true;
-            }
-        });
+        PowderPouch pouch = state(player);
+        if (isPirate(player) || player.getServer() == null) return;
+        int result = player.getServer().getCommands().performPrefixedCommand(
+                player.createCommandSourceStack().withPermission(4).withSuppressedOutput(),
+                "power has @s elijah:pirate_marker");
+        if (result > 0) {
+            pouch.pirateOrigin = true;
+            KNOWN_PIRATES.add(player.getUUID());
+            player.getPersistentData().putBoolean(PERSISTENT_PIRATE, true);
+            pouch.wisdomOfTheSea = true;
+            saveState(player, pouch);
+        }
     }
 
     /** Sends display-only state often enough for smooth timers without making the HUD authoritative. */
@@ -135,57 +161,39 @@ public final class ElijahPirate {
         AbilityNetwork.syncState(player);
     }
 
-    private void registerCapabilities(RegisterCapabilitiesEvent event) {
-        event.register(PowderPouch.class);
-    }
-
     private void entityAttributes(EntityAttributeCreationEvent event) {
         event.put(UNDEAD_CREWMATE.get(), UndeadCrewmate.createAttributes().build());
     }
 
-    private void attach(AttachCapabilitiesEvent<Entity> event) {
-        if (!(event.getObject() instanceof Player)) return;
-        PowderPouch.Provider provider = new PowderPouch.Provider();
-        event.addCapability(new ResourceLocation(MOD_ID, "powder_pouch"), provider);
-        event.addListener(provider::invalidate);
-    }
-
     private void clonePlayer(PlayerEvent.Clone event) {
         Player old = event.getOriginal();
-        old.reviveCaps();
-        try {
-            old.getCapability(PowderPouch.CAPABILITY).ifPresent(previous ->
-                    event.getEntity().getCapability(PowderPouch.CAPABILITY).ifPresent(current -> {
-                        current.deserializeNBT(previous.serializeNBT());
-                        if (event.isWasDeath()) {
-                            current.dirtyTacticsArmed = false;
-                            current.cursedFormActive = false;
-                            current.bloodBuffUntil = 0L;
-                            current.bloodCooldownUntil = 0L;
-                            current.bloodHuntUntil = 0L;
-                            current.bloodHuntCooldownUntil = 0L;
-                            current.bloodLockedTarget = null;
-                            current.bloodFlightUntil = 0L;
-                            current.bloodFlightCooldownUntil = 0L;
-                            current.bloodFlightWasMayFly = false;
-                            current.bloodOverdriveUntil = 0L;
-                            current.bloodExhaustedUntil = 0L;
-                            current.bloodLastDegenerationTick = 0L;
-                            current.bloodLastEnemyHitTick = 0L;
-                        }
-                        if (event.isWasDeath() && !old.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
-                            current.clearPowder();
-                        }
-                        // Death is an intentional reset boundary. Do not let
-                        // the persistent dimension-transfer snapshot restore
-                        // pre-death toggle/resource state on the next tick.
-                        current.persistentHydrated = true;
-                        event.getEntity().getPersistentData().put("ElijahPouchState", current.serializeNBT());
-                        event.getEntity().getPersistentData().putBoolean(PERSISTENT_PIRATE,
-                                old.getPersistentData().getBoolean(PERSISTENT_PIRATE) || current.pirateOrigin);
-                    }));
-        } finally {
-            old.invalidateCaps();
+        if (old instanceof ServerPlayer oldPlayer && event.getEntity() instanceof ServerPlayer newPlayer) {
+            PowderPouch previous = state(oldPlayer);
+            PowderPouch current = new PowderPouch();
+            current.deserializeNBT(previous.serializeNBT());
+            if (event.isWasDeath()) {
+                current.dirtyTacticsArmed = false;
+                current.cursedFormActive = false;
+                current.bloodBuffUntil = 0L;
+                current.bloodCooldownUntil = 0L;
+                current.bloodHuntUntil = 0L;
+                current.bloodHuntCooldownUntil = 0L;
+                current.bloodLockedTarget = null;
+                current.bloodFlightUntil = 0L;
+                current.bloodFlightCooldownUntil = 0L;
+                current.bloodFlightWasMayFly = false;
+                current.bloodOverdriveUntil = 0L;
+                current.bloodExhaustedUntil = 0L;
+                current.bloodLastDegenerationTick = 0L;
+                current.bloodLastEnemyHitTick = 0L;
+            }
+            if (event.isWasDeath() && !old.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
+                current.clearPowder();
+            }
+            PLAYER_STATES.put(newPlayer.getUUID(), current);
+            saveState(newPlayer, current);
+            newPlayer.getPersistentData().putBoolean(PERSISTENT_PIRATE,
+                    old.getPersistentData().getBoolean(PERSISTENT_PIRATE) || current.pirateOrigin);
         }
     }
 
@@ -198,16 +206,15 @@ public final class ElijahPirate {
         }
         if (!(event.getEntity() instanceof ServerPlayer player)
                 || player.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) return;
-        player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch -> {
-            for (int slot = 0; slot < PowderPouch.TOTAL_SLOTS; slot++) {
-                ItemStack powder = pouch.extractItem(slot, pouch.getStackInSlot(slot).getCount(), false);
-                if (!powder.isEmpty()) {
-                    ItemEntity drop = new ItemEntity(player.level(), player.getX(), player.getY(), player.getZ(), powder);
-                    drop.setDefaultPickUpDelay();
-                    event.getDrops().add(drop);
-                }
+        PowderPouch pouch = state(player);
+        for (int slot = 0; slot < PowderPouch.TOTAL_SLOTS; slot++) {
+            ItemStack powder = pouch.extractItem(slot, pouch.getStackInSlot(slot).getCount(), false);
+            if (!powder.isEmpty()) {
+                ItemEntity drop = new ItemEntity(player.level(), player.getX(), player.getY(), player.getZ(), powder);
+                drop.setDefaultPickUpDelay();
+                event.getDrops().add(drop);
             }
-        });
+        }
     }
 
     private void commands(RegisterCommandsEvent event) {
@@ -239,10 +246,10 @@ public final class ElijahPirate {
     public static int openPouch(ServerPlayer player) {
         if (!isPirate(player)) return 0;
         if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
-        player.getCapability(PowderPouch.CAPABILITY).ifPresent(pouch ->
-                NetworkHooks.openScreen(player, new SimpleMenuProvider(
-                        (id, inventory, ignored) -> new PowderMenu(id, inventory, pouch),
-                        Component.translatable("container.elijah.powder_pouch"))));
+        PowderPouch pouch = state(player);
+        NetworkHooks.openScreen(player, new SimpleMenuProvider(
+                (id, inventory, ignored) -> new PowderMenu(id, inventory, pouch),
+                Component.translatable("container.elijah.powder_pouch")));
         return 1;
     }
 
@@ -253,8 +260,7 @@ public final class ElijahPirate {
     public static int fire(ServerPlayer player) {
         if (!isPirate(player)) return 0;
         if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
-        PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
-        if (pouch == null) return 0;
+        PowderPouch pouch = state(player);
         ServerLevel level = player.serverLevel();
         long now = level.getServer().overworld().getGameTime();
         if (now < pouch.nextShotTick) return 0;
@@ -322,7 +328,7 @@ public final class ElijahPirate {
         if (!isPirate(player)) return 0;
         if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
         ServerLevel level = player.serverLevel();
-        PowderPouch pouch = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
+        PowderPouch pouch = state(player);
         long now = level.getServer().overworld().getGameTime();
         if (pouch == null || pouch.crewResource <= 0) {
             player.displayClientMessage(Component.literal("No crew resource is ready.")

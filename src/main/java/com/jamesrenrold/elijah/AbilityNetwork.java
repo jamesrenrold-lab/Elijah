@@ -36,7 +36,8 @@ public final class AbilityNetwork {
 
     /** Sends display-only state. The server remains the only authority for abilities. */
     public static void syncState(ServerPlayer player) {
-        player.getCapability(PowderPouch.CAPABILITY).ifPresent(state -> {
+        PowderPouch state = ElijahPirate.state(player);
+        if (!ElijahPirate.isPirate(player)) return;
             long now = player.getServer() == null
                     ? player.serverLevel().getGameTime()
                     : player.getServer().overworld().getGameTime();
@@ -62,7 +63,6 @@ public final class AbilityNetwork {
                     DomainAbilities.activeRemaining(player),
                     DomainAbilities.cooldownRemaining(player),
                     remaining(state.nextCrewRechargeTick, now)));
-        });
     }
 
     private static int remaining(long until, long now) {
@@ -166,8 +166,7 @@ public final class AbilityNetwork {
     private static void dispatch(ServerPlayer player, int ability) {
         if (ability < 0 || ability > 7) return;
         if (!ElijahPirate.isPirate(player)) return;
-        PowderPouch state = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
-        if (state == null) return;
+        PowderPouch state = ElijahPirate.state(player);
         long now = player.getServer() == null
                 ? player.serverLevel().getGameTime()
                 : player.getServer().overworld().getGameTime();

@@ -210,7 +210,7 @@ public final class BloodAbilities {
     }
 
     private static PowderPouch pouch(ServerPlayer player) {
-        return player.getCapability(PowderPouch.CAPABILITY).orElse(null);
+        return ElijahPirate.state(player);
     }
 
     /** One authoritative clock keeps timers valid across domain dimension transfers. */

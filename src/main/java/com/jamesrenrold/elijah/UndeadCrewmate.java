@@ -149,15 +149,12 @@ public final class UndeadCrewmate extends Zombie {
         // Prefer the timestamped target captured by the combat events. Vanilla's
         // last-hurt fields can retain an older mob and otherwise make the crew
         // switch away from the target involved in the latest exchange.
-        final UUID[] rememberedId = new UUID[1];
-        final long[] rememberedTick = new long[1];
-        owner.getCapability(PowderPouch.CAPABILITY).ifPresent(state -> {
-            rememberedId[0] = state.lastCombatTarget;
-            rememberedTick[0] = state.lastCombatTargetTick;
-        });
+        PowderPouch state = ElijahPirate.state(owner);
+        UUID rememberedId = state.lastCombatTarget;
+        long rememberedTick = state.lastCombatTargetTick;
         long now = owner.serverLevel().getGameTime();
-        if (rememberedId[0] != null && (rememberedTick[0] <= 0 || now - rememberedTick[0] <= 1200L)) {
-            Entity entity = ((ServerLevel) level()).getEntity(rememberedId[0]);
+        if (rememberedId != null && (rememberedTick <= 0 || now - rememberedTick <= 1200L)) {
+            Entity entity = ((ServerLevel) level()).getEntity(rememberedId);
             if (entity instanceof LivingEntity candidate && isValidTarget(candidate, owner)) return candidate;
         }
 

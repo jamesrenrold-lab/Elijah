@@ -44,8 +44,7 @@ public final class PirateAbilities {
     public static int armDirtyTactics(ServerPlayer player) {
         if (!ElijahPirate.isPirate(player)) return 0;
         if (!player.isAlive() || player.isSpectator() || BloodAbilities.isHuntActive(player)) return 0;
-        PowderPouch state = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
-        if (state == null) return 0;
+        PowderPouch state = ElijahPirate.state(player);
         if (state.dirtyTacticsArmed) {
             message(player, "Dirty Tactics is already ready for your next melee hit.");
             return 0;
@@ -64,10 +63,9 @@ public final class PirateAbilities {
     /** Records the latest mob involved in the pirate's combat, for crew targeting. */
     public static void rememberCombatTarget(ServerPlayer player, LivingEntity target) {
         if (target == null || target == player || target instanceof ServerPlayer) return;
-        player.getCapability(PowderPouch.CAPABILITY).ifPresent(state -> {
-            state.lastCombatTarget = target.getUUID();
-            state.lastCombatTargetTick = player.serverLevel().getGameTime();
-        });
+        PowderPouch state = ElijahPirate.state(player);
+        state.lastCombatTarget = target.getUUID();
+        state.lastCombatTargetTick = player.serverLevel().getGameTime();
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
@@ -94,8 +92,8 @@ public final class PirateAbilities {
         LivingEntity target = event.getEntity();
         if (target == player || !target.isAlive()) return;
         rememberCombatTarget(player, target);
-        PowderPouch state = player.getCapability(PowderPouch.CAPABILITY).orElse(null);
-        if (state == null || !state.dirtyTacticsArmed) return;
+        PowderPouch state = ElijahPirate.state(player);
+        if (!state.dirtyTacticsArmed) return;
         // Consume before applying anything: one target per activation, including sweep attacks.
         state.dirtyTacticsArmed = false;
         state.dirtyTacticsReadyAt = player.serverLevel().getServer().overworld().getGameTime() + DIRTY_COOLDOWN_TICKS;
@@ -149,19 +147,18 @@ public final class PirateAbilities {
 
     public static int setWisdom(CommandSourceStack source, boolean enabled) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        player.getCapability(PowderPouch.CAPABILITY).ifPresent(state -> state.wisdomOfTheSea = enabled);
+        ElijahPirate.state(player).wisdomOfTheSea = enabled;
         return 1;
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onExperience(PlayerXpEvent.XpChange event) {
         if (event.getAmount() <= 0 || !(event.getEntity() instanceof ServerPlayer player)) return;
-        player.getCapability(PowderPouch.CAPABILITY).ifPresent(state -> {
-            if (!state.pirateOrigin) return;
-            ExperienceBonus.Result bonus = ExperienceBonus.apply(event.getAmount(), state.xpBonusRemainder);
-            event.setAmount(bonus.amount());
-            state.xpBonusRemainder = bonus.remainder();
-        });
+        PowderPouch state = ElijahPirate.state(player);
+        if (!state.pirateOrigin) return;
+        ExperienceBonus.Result bonus = ExperienceBonus.apply(event.getAmount(), state.xpBonusRemainder);
+        event.setAmount(bonus.amount());
+        state.xpBonusRemainder = bonus.remainder();
     }
 
     private static void message(ServerPlayer player, String text) {

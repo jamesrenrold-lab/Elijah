@@ -47,9 +47,10 @@ for method in ("activateBloodRush(ServerPlayer player)", "activateHunt(ServerPla
     assert method in blood
 assert "state.bloodResource" in blood
 assert "pouch.crewResource" in java
-assert "ElijahPouchState" in pouch
+assert "ElijahPouchState" in java
 assert "ElijahPirateOwner" in java
-assert "hydratePersistentState" in pouch and "hydratePersistentState(player, pouch)" in java
+assert "PLAYER_STATES" in java and "public static PowderPouch state(ServerPlayer player)" in java
+assert "public static void saveState(ServerPlayer player, PowderPouch state)" in java
 assert "FRAILTY_ARMOR_ID" in pirate and "onFallDamage" in pirate
 
 # Active ability resources are display/keybind wrappers only. Their server
@@ -80,5 +81,12 @@ assert "smoke_shell" not in domain_java
 assert "FIREWORK_ROCKET_BLAST" not in domain_java
 assert "ParticleTypes.SMOKE" not in projectile
 assert "double strength = 0.08D" in projectile
+
+# No ability code may depend on the Forge capability that Connector can
+# invalidate while moving a player between dimensions.
+for java_file in (root / "src/main/java/com/jamesrenrold/elijah").glob("*.java"):
+    text = java_file.read_text()
+    assert "PowderPouch.CAPABILITY" not in text, java_file
+assert "AttachCapabilitiesEvent" not in java
 
 print(f"Validated {len(parsed)} JSON resources and the Java-owned ability/domain contract.")

@@ -1,6 +1,5 @@
 package com.jamesrenrold.elijah;
 
-import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -12,11 +11,6 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import java.util.UUID;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.CapabilityManager;
-import net.minecraftforge.common.capabilities.CapabilityToken;
-import net.minecraftforge.common.capabilities.ICapabilitySerializable;
-import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.items.ItemStackHandler;
 
 /** A dedicated gunpowder inventory; never exposes the player's normal item-handler capability. */
@@ -36,8 +30,6 @@ public final class PowderPouch extends ItemStackHandler {
     /** Kept as an alias for older code/config compatibility. */
     public static final int LIMIT = CHAMBER_LIMIT;
     private static final long GENERATOR_INTERVAL_TICKS = 30L * 20L;
-    public static final Capability<PowderPouch> CAPABILITY =
-            CapabilityManager.get(new CapabilityToken<>() {});
     public long nextShotTick;
     public boolean dirtyTacticsArmed;
     public long dirtyTacticsReadyAt;
@@ -73,19 +65,7 @@ public final class PowderPouch extends ItemStackHandler {
     public long lastCrewActivationTick = Long.MIN_VALUE;
     public long lastAbilityPacketTick = Long.MIN_VALUE;
     public int lastAbilityPacket = -1;
-    /** Prevents a fresh Connector capability wrapper from overwriting state twice. */
-    public transient boolean persistentHydrated;
-    private static final String PERSISTENT_STATE = "ElijahPouchState";
-
     public PowderPouch() { super(TOTAL_SLOTS); }
-
-    /** Hydrates state before an input packet can run immediately after transfer. */
-    public static void hydratePersistentState(ServerPlayer player, PowderPouch pouch) {
-        if (pouch.persistentHydrated) return;
-        CompoundTag saved = player.getPersistentData().getCompound(PERSISTENT_STATE);
-        if (!saved.isEmpty()) pouch.deserializeNBT(saved.copy());
-        pouch.persistentHydrated = true;
-    }
 
     @Override
     public boolean isItemValid(int slot, ItemStack stack) {
@@ -125,34 +105,21 @@ public final class PowderPouch extends ItemStackHandler {
     @SubscribeEvent
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)) return;
-        player.getCapability(CAPABILITY).ifPresent(pouch -> {
-            // Re-assert ownership before ticking. Connector can briefly expose
-            // a fresh capability wrapper during a dimension transfer; the
-            // Java ownership marker is intentionally independent of Origins'
-            // power instances.
-            if (!ElijahPirate.isPirate(player)) return;
-            hydratePersistentState(player, pouch);
-            long now = player.serverLevel().getServer().overworld().getGameTime();
-            boolean changed = pouch.tickGenerator(player.serverLevel().getGameTime());
-            if (pouch.nextCrewRechargeTick <= 0L) {
-                pouch.nextCrewRechargeTick = now + 1200L;
-            } else if (now >= pouch.nextCrewRechargeTick) {
-                pouch.crewResource = Math.min(4, pouch.crewResource + 1);
-                pouch.nextCrewRechargeTick = now + 1200L;
-                changed = true;
-            }
-            if (changed
-                    && player.containerMenu instanceof PowderMenu menu) {
-                // The generator is a capability slot rather than a vanilla
-                // inventory slot; explicitly broadcast it so the client sees
-                // new powder without clicking the output slot.
-                menu.broadcastChanges();
-            }
-            // Keep an independent Java snapshot. This is deliberately outside
-            // Origins/Apoli so Connector dimension transitions cannot replace
-            // the live capability with a zeroed ability state.
-            player.getPersistentData().put(PERSISTENT_STATE, pouch.serializeNBT());
-        });
+        PowderPouch pouch = ElijahPirate.state(player);
+        if (!ElijahPirate.isPirate(player)) return;
+        long now = player.serverLevel().getServer().overworld().getGameTime();
+        boolean changed = pouch.tickGenerator(player.serverLevel().getGameTime());
+        if (pouch.nextCrewRechargeTick <= 0L) {
+            pouch.nextCrewRechargeTick = now + 1200L;
+        } else if (now >= pouch.nextCrewRechargeTick) {
+            pouch.crewResource = Math.min(4, pouch.crewResource + 1);
+            pouch.nextCrewRechargeTick = now + 1200L;
+            changed = true;
+        }
+        if (changed && player.containerMenu instanceof PowderMenu menu) {
+            menu.broadcastChanges();
+        }
+        ElijahPirate.saveState(player, pouch);
     }
 
     private boolean tickGenerator(long now) {
@@ -305,21 +272,4 @@ public final class PowderPouch extends ItemStackHandler {
         }
     }
 
-    public static final class Provider implements ICapabilitySerializable<CompoundTag> {
-        private final PowderPouch pouch = new PowderPouch();
-        private final LazyOptional<PowderPouch> optional = LazyOptional.of(() -> pouch);
-
-        @Override
-        public <T> LazyOptional<T> getCapability(Capability<T> capability, Direction side) {
-            return capability == CAPABILITY ? optional.cast() : LazyOptional.empty();
-        }
-
-        @Override
-        public CompoundTag serializeNBT() { return pouch.serializeNBT(); }
-
-        @Override
-        public void deserializeNBT(CompoundTag tag) { pouch.deserializeNBT(tag); }
-
-        public void invalidate() { optional.invalidate(); }
-    }
 }
