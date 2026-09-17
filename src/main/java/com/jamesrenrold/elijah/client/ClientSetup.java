@@ -31,6 +31,7 @@ public final class ClientSetup {
             "key.elijah.septenary_active", "key.elijah.octonary_active"
     };
     private static final KeyMapping[] FALLBACK_MAPPINGS = new KeyMapping[8];
+    private static final boolean[] KEY_WAS_DOWN = new boolean[8];
 
     @SubscribeEvent
     public static void setup(FMLClientSetupEvent event) {
@@ -54,18 +55,26 @@ public final class ClientSetup {
         LocalPlayer player = minecraft.player;
         if (player == null) {
             ClientHudState.reset();
+            java.util.Arrays.fill(KEY_WAS_DOWN, false);
             return;
         }
         ClientHudState.tick();
-        if (minecraft.screen != null) return;
+        if (minecraft.screen != null) {
+            java.util.Arrays.fill(KEY_WAS_DOWN, false);
+            return;
+        }
         for (int ability = 0; ability < ORIGIN_KEYS.length; ability++) {
             KeyMapping mapping = findMapping(minecraft.options, ORIGIN_KEYS[ability]);
             if (mapping == null) mapping = FALLBACK_MAPPINGS[ability];
-            if (mapping == null) continue;
-            // Send at most one packet per physical press. The server also
-            // deduplicates packets, but dropping queued repeats here prevents
-            // a held/repeated key from spending two crew charges.
-            if (mapping.consumeClick()) com.jamesrenrold.elijah.AbilityNetwork.send(ability);
+            boolean down = mapping != null && mapping.isDown();
+            // Read the physical key state directly instead of consuming the
+            // Origins click queue. Connector can consume that queue while it
+            // rebuilds an Origin during a dimension transfer, which made the
+            // Java abilities appear to stop working after Domain.
+            if (down && !KEY_WAS_DOWN[ability]) {
+                com.jamesrenrold.elijah.AbilityNetwork.send(ability);
+            }
+            KEY_WAS_DOWN[ability] = down;
         }
     }
 

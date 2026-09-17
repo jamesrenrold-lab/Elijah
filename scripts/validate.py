@@ -35,8 +35,8 @@ projectile = (root / "src/main/java/com/jamesrenrold/elijah/FlintlockBall.java")
 assert "AbilityNetwork.register()" in java
 assert "isPirate(ServerPlayer player)" in java
 assert "AbilityNetwork.send(ability)" in client
-assert "consumeClick()" in client
-assert "if (mapping.consumeClick())" in client
+assert "mapping.isDown()" in client
+assert "KEY_WAS_DOWN" in client
 assert "case 7 -> DomainAbilities.activate(player)" in network
 assert not (resources / "data/elijah/powers/pouch_lifecycle.json").exists()
 assert "unload_later" not in java and "clearTransient" not in domain_java and "clearTransient" not in blood
@@ -47,6 +47,8 @@ for method in ("activateBloodRush(ServerPlayer player)", "activateHunt(ServerPla
     assert method in blood
 assert "state.bloodResource" in blood
 assert "pouch.crewResource" in java
+assert "ElijahPouchState" in pouch
+assert "ElijahPirateOwner" in java
 assert "FRAILTY_ARMOR_ID" in pirate and "onFallDamage" in pirate
 
 # The domain is an entity transfer only. It must not edit, grant, revoke, or

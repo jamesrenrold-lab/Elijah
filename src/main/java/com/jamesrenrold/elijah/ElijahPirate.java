@@ -71,6 +71,7 @@ public final class ElijahPirate {
                     .sized(0.6F, 1.95F).clientTrackingRange(10).updateInterval(3)
                     .build(MOD_ID + ":undead_crewmate"));
     private static final Set<UUID> KNOWN_PIRATES = new HashSet<>();
+    private static final String PERSISTENT_PIRATE = "ElijahPirateOwner";
 
     public ElijahPirate() {
         IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
@@ -90,17 +91,19 @@ public final class ElijahPirate {
 
     /** A durable Java-side marker; it is deliberately not an Origins power. */
     public static boolean isPirate(ServerPlayer player) {
+        boolean persistentOwner = player.getPersistentData().getBoolean(PERSISTENT_PIRATE);
         return player.getCapability(PowderPouch.CAPABILITY).map(pouch -> {
-            if (pouch.pirateOrigin || KNOWN_PIRATES.contains(player.getUUID())) {
+            if (pouch.pirateOrigin || persistentOwner || KNOWN_PIRATES.contains(player.getUUID())) {
                 // Connector can briefly expose a fresh capability wrapper
                 // during dimension travel. Re-assert Java ownership before
                 // evaluating any ability packet.
                 pouch.pirateOrigin = true;
                 KNOWN_PIRATES.add(player.getUUID());
+                player.getPersistentData().putBoolean(PERSISTENT_PIRATE, true);
                 return true;
             }
-            return false;
-        }).orElse(false);
+            return persistentOwner || KNOWN_PIRATES.contains(player.getUUID());
+        }).orElse(persistentOwner || KNOWN_PIRATES.contains(player.getUUID()));
     }
 
     public static void clearKnownPirates() { KNOWN_PIRATES.clear(); }
@@ -118,6 +121,7 @@ public final class ElijahPirate {
             if (result > 0) {
                 pouch.pirateOrigin = true;
                 KNOWN_PIRATES.add(player.getUUID());
+                player.getPersistentData().putBoolean(PERSISTENT_PIRATE, true);
                 pouch.wisdomOfTheSea = true;
             }
         });
@@ -171,6 +175,11 @@ public final class ElijahPirate {
                         if (event.isWasDeath() && !old.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) {
                             current.clearPowder();
                         }
+                        // Death is an intentional reset boundary. Do not let
+                        // the persistent dimension-transfer snapshot restore
+                        // pre-death toggle/resource state on the next tick.
+                        current.persistentHydrated = true;
+                        event.getEntity().getPersistentData().put("ElijahPouchState", current.serializeNBT());
                     }));
         } finally {
             old.invalidateCaps();

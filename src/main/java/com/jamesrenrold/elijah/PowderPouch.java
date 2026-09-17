@@ -73,6 +73,9 @@ public final class PowderPouch extends ItemStackHandler {
     public long lastCrewActivationTick = Long.MIN_VALUE;
     public long lastAbilityPacketTick = Long.MIN_VALUE;
     public int lastAbilityPacket = -1;
+    /** Prevents a fresh Connector capability wrapper from overwriting state twice. */
+    public transient boolean persistentHydrated;
+    private static final String PERSISTENT_STATE = "ElijahPouchState";
 
     public PowderPouch() { super(TOTAL_SLOTS); }
 
@@ -120,6 +123,11 @@ public final class PowderPouch extends ItemStackHandler {
             // Java ownership marker is intentionally independent of Origins'
             // power instances.
             if (!ElijahPirate.isPirate(player)) return;
+            if (!pouch.persistentHydrated) {
+                CompoundTag saved = player.getPersistentData().getCompound(PERSISTENT_STATE);
+                if (!saved.isEmpty()) pouch.deserializeNBT(saved.copy());
+                pouch.persistentHydrated = true;
+            }
             long now = player.serverLevel().getServer().overworld().getGameTime();
             boolean changed = pouch.tickGenerator(player.serverLevel().getGameTime());
             if (pouch.nextCrewRechargeTick <= 0L) {
@@ -136,6 +144,10 @@ public final class PowderPouch extends ItemStackHandler {
                 // new powder without clicking the output slot.
                 menu.broadcastChanges();
             }
+            // Keep an independent Java snapshot. This is deliberately outside
+            // Origins/Apoli so Connector dimension transitions cannot replace
+            // the live capability with a zeroed ability state.
+            player.getPersistentData().put(PERSISTENT_STATE, pouch.serializeNBT());
         });
     }
 
