@@ -47,6 +47,11 @@ assert 'getMethod("setTarget", LivingEntity.class)' in domain_java
 assert "sunbeam.moveTo(aim.x, aim.y, aim.z" in domain_java
 assert 'new ResourceLocation("irons_spellbooks", "sunbeam")' in domain_java
 assert "getConstructor(EntityType.class, Level.class)" in domain_java
+assert "MagicData" in domain_java
+assert "TargetEntityCastData" in domain_java
+assert "getPlayerMagicData" in domain_java
+assert "resetAdditionalCastData" in domain_java
+assert 'getField("SUNBEAM_SPELL")' in domain_java
 assert "SUNBEAM_START_TICKS = 12 * 20" in domain_java
 assert "SUNBEAM_DAMAGE_SCALE = 0.75F" in domain_java
 assert "WATER_CANNONBALLS_PER_VOLLEY = 4" in domain_java

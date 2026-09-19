@@ -118,6 +118,8 @@ public final class DomainAbilities {
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
     private static boolean arenaReady;
     private static boolean sunbeamUnavailable;
+    private static boolean sunbeamApiUnavailable;
+    private static boolean sunbeamSpawnWarned;
 
     private DomainAbilities() {}
 
@@ -633,6 +635,14 @@ public final class DomainAbilities {
         try {
             Class<?> sunbeamClass = Class.forName(
                     "io.redspace.ironsspellbooks.entity.spells.sunbeam.SunbeamEntity");
+            // Use Iron's registered spell first. This is the exact path that
+            // installs the native entity's synced data and client renderer.
+            // The entity is relocated immediately after the spell creates it,
+            // so the arena can choose a water-only aim without making a fake
+            // Elijah beam or marker.
+            if (tryNativeSunbeamSpell(domain, owner, target, aim, damage, sunbeamClass)) {
+                return;
+            }
             Object value;
             try {
                 value = sunbeamClass.getConstructor(Level.class).newInstance(domain);
@@ -668,6 +678,74 @@ public final class DomainAbilities {
             }
         } catch (Throwable error) {
             LOGGER.warn("Could not spawn an Iron's Spellbooks sunbeam", error);
+        }
+    }
+
+    private static boolean tryNativeSunbeamSpell(ServerLevel domain, ServerPlayer owner,
+                                                  LivingEntity target, Vec3 aim, float damage,
+                                                  Class<?> sunbeamClass) {
+        if (sunbeamApiUnavailable) return false;
+        try {
+            Class<?> magicDataClass = Class.forName(
+                    "io.redspace.ironsspellbooks.api.magic.MagicData");
+            Class<?> castDataInterface = Class.forName(
+                    "io.redspace.ironsspellbooks.api.spells.ICastData");
+            Class<?> targetCastDataClass = Class.forName(
+                    "io.redspace.ironsspellbooks.api.spells.TargetEntityCastData");
+            Class<?> spellRegistryClass = Class.forName(
+                    "io.redspace.ironsspellbooks.api.registry.SpellRegistry");
+            Class<?> castSourceClass = Class.forName(
+                    "io.redspace.ironsspellbooks.api.spells.CastSource");
+
+            Object magicData = magicDataClass
+                    .getMethod("getPlayerMagicData", LivingEntity.class)
+                    .invoke(null, owner);
+            Object targetCastData = targetCastDataClass
+                    .getConstructor(LivingEntity.class)
+                    .newInstance(target);
+            Object spellHolder = spellRegistryClass.getField("SUNBEAM_SPELL").get(null);
+            Object spell = spellHolder.getClass().getMethod("get").invoke(spellHolder);
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Object commandSource = Enum.valueOf((Class) castSourceClass, "COMMAND");
+
+            Set<UUID> before = new HashSet<>();
+            AABB arena = new AABB(-128.0D, 0.0D, -128.0D, 128.0D, 256.0D, 128.0D);
+            for (Entity entity : domain.getEntitiesOfClass(Entity.class, arena,
+                    entity -> entity.getClass().getName().equals(sunbeamClass.getName()))) {
+                before.add(entity.getUUID());
+            }
+
+            magicDataClass.getMethod("setAdditionalCastData", castDataInterface)
+                    .invoke(magicData, targetCastData);
+            try {
+                Method onCast = spell.getClass().getMethod("onCast", Level.class, int.class,
+                        LivingEntity.class, castSourceClass, magicDataClass);
+                onCast.invoke(spell, domain, 1, owner, commandSource, magicData);
+            } finally {
+                magicDataClass.getMethod("resetAdditionalCastData").invoke(magicData);
+            }
+
+            Entity spawned = domain.getEntitiesOfClass(Entity.class, arena,
+                    entity -> entity.getClass().getName().equals(sunbeamClass.getName())
+                            && !before.contains(entity.getUUID()))
+                    .stream().findFirst().orElse(null);
+            if (spawned == null) {
+                if (!sunbeamSpawnWarned) {
+                    sunbeamSpawnWarned = true;
+                    LOGGER.warn("Iron's native Sunbeam spell cast completed but created no SunbeamEntity");
+                }
+                return false;
+            }
+            sunbeamClass.getMethod("setDamage", float.class).invoke(spawned, damage);
+            spawned.moveTo(aim.x, aim.y, aim.z, 0.0F, 0.0F);
+            return true;
+        } catch (ClassNotFoundException | NoSuchFieldException | NoSuchMethodException error) {
+            sunbeamApiUnavailable = true;
+            LOGGER.warn("Iron's native Sunbeam spell API is unavailable; using direct native entity construction", error);
+            return false;
+        } catch (Throwable error) {
+            LOGGER.warn("Iron's native Sunbeam spell invocation failed; using direct native entity construction", error);
+            return false;
         }
     }
 
