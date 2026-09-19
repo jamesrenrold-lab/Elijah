@@ -2,6 +2,10 @@
   "type": "origins:active_self",
   "name": "Cursed Form",
   "description": "Quinary ability: toggle Cursed Form on to gain 20 Curse immediately, 10% lifesteal, movement speed and attack speed. Curse rises by 1% per second until toggled off, then drains by 0.25% per second. Toggling it off starts a 20-second cooldown. Reaching 100 consumes the meter and triggers the 25-second overfill.",
+  "entity_action": {
+    "type": "origins:execute_command",
+    "command": "elijah blood_rush"
+  },
   "cooldown": 1,
   "hud_render": {
     "should_render": false

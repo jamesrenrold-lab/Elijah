@@ -2,6 +2,10 @@
   "type": "origins:active_self",
   "name": "Drowned Domain",
   "description": "Pull the hostile mob you are directly looking at into a separate, spawn-free island dimension for 48 seconds. It remains persistent and permanently aggressive toward you for the entire domain. You begin on the raised circular sand arena while the target starts inside the two-block-deep lagoon. After five seconds, 25 fast cannonballs rain from the sky every half-second: most strike the sandy outer ring, with only a few entering the lagoon. Native Create Big Cannons rounds are restricted to the outer ring. Twelve seconds after entry, the actual Iron's Spells & Spellbooks Sunbeam spell begins striking water-only positions for 75% of Elijah cannonball damage: 1 cast per second, increasing to 2, 3, 4 and finally 5 casts per second every 3 seconds. Cannonballs phase through terrain, never home, and detonate in a 4.5-block radius. You gain 50% movement speed, powerful swimming, Regeneration II and 50% lifesteal while inside. Requiem begins five seconds after entering the domain and plays through the remainder of the fight. Java owns the visible 5-second cooldown. The domain performs no Origin power cleanup, replacement, revocation, or re-grant during entry or return; all Java-owned Pirate powers remain usable throughout.",
+  "entity_action": {
+    "type": "origins:execute_command",
+    "command": "elijah domain"
+  },
   "cooldown": 1,
   "hud_render": {
     "should_render": false

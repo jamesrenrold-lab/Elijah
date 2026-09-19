@@ -63,15 +63,14 @@ assert "PLAYER_STATES" in java and "public static PowderPouch state(ServerPlayer
 assert "public static void saveState(ServerPlayer player, PowderPouch state)" in java
 assert "FRAILTY_ARMOR_ID" in pirate and "onFallDamage" in pirate
 
-# Active ability resources are display/keybind wrappers only. Their server
-# actions live in the Java packet dispatcher so Connector/Origins cannot run a
-# second, stale command path during a domain transfer.
+# Active ability resources keep their required Apoli entity-action bridge, while
+# the actual gameplay remains authoritative in the Java command handlers.
 for active_name in (
         "blood_hunt.json", "blood_rush.json", "blood_wings.json",
         "drowned_domain.json", "dirty_tactics.json", "flintlock.json",
         "powder_pouch.json", "undead_crew.json"):
     active = parsed[f"data/elijah/powers/{active_name}"]
-    assert "entity_action" not in active
+    assert active.get("entity_action", {}).get("type") == "origins:execute_command"
 
 # The domain is an entity transfer only. It must not edit, grant, revoke, or
 # reset the player's Origin/power component.
