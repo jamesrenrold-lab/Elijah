@@ -492,7 +492,8 @@ public final class DomainAbilities {
                 session.lastSunbeam = now;
                 int rampStep = (int) ((age - SUNBEAM_START_TICKS) / SUNBEAM_RAMP_TICKS);
                 int beamsThisSecond = Math.min(5, 1 + rampStep);
-                fireSunbeamBarrage(session, owner, damageForCannonball(owner), beamsThisSecond);
+                fireSunbeamBarrage(session, owner, session.target,
+                        damageForCannonball(owner), beamsThisSecond);
             }
     }
 
@@ -619,23 +620,28 @@ public final class DomainAbilities {
 
     /** Spawns the actual Iron's Spells & Spellbooks SunbeamEntity. */
     private static void fireSunbeamBarrage(Session session, ServerPlayer owner,
-                                           float cannonballDamage, int count) {
+                                           LivingEntity target, float cannonballDamage, int count) {
         float damage = Math.max(1.0F, cannonballDamage * SUNBEAM_DAMAGE_SCALE);
         for (int i = 0; i < count; i++) {
             Vec3 aim = waterAim(session.domain, session.sunbeamIndex++);
-            spawnSunbeam(session.domain, owner, aim, damage);
+            spawnSunbeam(session.domain, owner, target, aim, damage);
         }
     }
 
-    private static void spawnSunbeam(ServerLevel domain, ServerPlayer owner, Vec3 aim, float damage) {
+    private static void spawnSunbeam(ServerLevel domain, ServerPlayer owner, LivingEntity target,
+                                     Vec3 aim, float damage) {
         try {
             Class<?> sunbeamClass = Class.forName(
                     "io.redspace.ironsspellbooks.entity.spells.sunbeam.SunbeamEntity");
             Object value = sunbeamClass.getConstructor(Level.class).newInstance(domain);
             if (!(value instanceof Entity sunbeam)) return;
             sunbeamClass.getMethod("setOwner", Entity.class).invoke(sunbeam, owner);
+            sunbeamClass.getMethod("setTarget", LivingEntity.class).invoke(sunbeam, target);
             sunbeamClass.getMethod("setDamage", float.class).invoke(sunbeam, damage);
-            sunbeam.setPos(aim.x, aim.y, aim.z);
+            // Match Iron's own spell cast: moveTo establishes the entity's
+            // initial/previous position as well as its live position, which
+            // keeps the client renderer and its ground-relative beam aligned.
+            sunbeam.moveTo(aim.x, aim.y, aim.z, 0.0F, 0.0F);
             if (!domain.addFreshEntity(sunbeam)) {
                 sunbeam.discard();
                 return;
