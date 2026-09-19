@@ -77,7 +77,7 @@ public final class DomainAbilities {
     public static final ResourceKey<Level> DOMAIN_DIMENSION = ResourceKey.create(
             Registries.DIMENSION, new ResourceLocation(ElijahPirate.MOD_ID, "drowned_domain"));
 
-    private static final int DOMAIN_TICKS = 40 * 20;
+    private static final int DOMAIN_TICKS = 48 * 20;
     private static final int COOLDOWN_TICKS = 5 * 20;
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;

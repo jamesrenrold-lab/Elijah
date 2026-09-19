@@ -1,0 +1,10 @@
+{
+  "requiem": {
+    "sounds": [
+      {
+        "name": "elijah:requiem",
+        "stream": true
+      }
+    ]
+  }
+}

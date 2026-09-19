@@ -22,6 +22,9 @@ assert domain["generator"]["settings"]["layers"] == [
     {"height": 2, "block": "minecraft:water"},
 ]
 assert domain["generator"]["settings"]["biome"] == "minecraft:the_void"
+sounds = parsed["assets/elijah/sounds.json"]
+assert sounds["requiem"]["sounds"] == [{"name": "elijah:requiem", "stream": True}]
+assert (resources / "assets/elijah/sounds/requiem.ogg").exists()
 
 java = (root / "src/main/java/com/jamesrenrold/elijah/ElijahPirate.java").read_text()
 network = (root / "src/main/java/com/jamesrenrold/elijah/AbilityNetwork.java").read_text()
@@ -37,6 +40,8 @@ assert "isPirate(ServerPlayer player)" in java
 assert "AbilityNetwork.send(ability)" in client
 assert "mapping.isDown()" in client
 assert "KEY_WAS_DOWN" in client
+assert "DOMAIN_MUSIC_DELAY_TICKS = 5 * 20" in client
+assert "DOMAIN_TICKS = 48 * 20" in domain_java
 assert "case 7 -> DomainAbilities.activate(player)" in network
 assert not (resources / "data/elijah/powers/pouch_lifecycle.json").exists()
 assert "unload_later" not in java and "clearTransient" not in domain_java and "clearTransient" not in blood

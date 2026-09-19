@@ -1,7 +1,10 @@
 package com.jamesrenrold.elijah.client;
 
+import com.jamesrenrold.elijah.DomainAbilities;
 import com.jamesrenrold.elijah.ElijahPirate;
 import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
@@ -32,6 +35,10 @@ public final class ClientSetup {
     };
     private static final KeyMapping[] FALLBACK_MAPPINGS = new KeyMapping[8];
     private static final boolean[] KEY_WAS_DOWN = new boolean[8];
+    private static final int DOMAIN_MUSIC_DELAY_TICKS = 5 * 20;
+    private static boolean wasInDomain;
+    private static int domainMusicDelay;
+    private static SoundInstance domainMusic;
 
     @SubscribeEvent
     public static void setup(FMLClientSetupEvent event) {
@@ -56,9 +63,13 @@ public final class ClientSetup {
         if (player == null) {
             ClientHudState.reset();
             java.util.Arrays.fill(KEY_WAS_DOWN, false);
+            stopDomainMusic(minecraft);
+            wasInDomain = false;
+            domainMusicDelay = 0;
             return;
         }
         ClientHudState.tick();
+        tickDomainMusic(minecraft, player);
         if (minecraft.screen != null) {
             java.util.Arrays.fill(KEY_WAS_DOWN, false);
             return;
@@ -75,6 +86,37 @@ public final class ClientSetup {
                 com.jamesrenrold.elijah.AbilityNetwork.send(ability);
             }
             KEY_WAS_DOWN[ability] = down;
+        }
+    }
+
+    private static void tickDomainMusic(Minecraft minecraft, LocalPlayer player) {
+        boolean inDomain = DomainAbilities.DOMAIN_DIMENSION.equals(player.level().dimension());
+        if (!inDomain) {
+            if (wasInDomain || domainMusic != null) stopDomainMusic(minecraft);
+            wasInDomain = false;
+            domainMusicDelay = 0;
+            return;
+        }
+
+        if (!wasInDomain) {
+            wasInDomain = true;
+            domainMusicDelay = DOMAIN_MUSIC_DELAY_TICKS;
+            stopDomainMusic(minecraft);
+        }
+        if (domainMusicDelay > 0) {
+            domainMusicDelay--;
+            if (domainMusicDelay == 0) {
+                minecraft.getMusicManager().stopPlaying();
+                domainMusic = SimpleSoundInstance.forMusic(ElijahPirate.REQUIEM.get());
+                minecraft.getSoundManager().play(domainMusic);
+            }
+        }
+    }
+
+    private static void stopDomainMusic(Minecraft minecraft) {
+        if (domainMusic != null) {
+            minecraft.getSoundManager().stop(domainMusic);
+            domainMusic = null;
         }
     }
 

@@ -12,6 +12,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.SimpleMenuProvider;
@@ -60,6 +61,11 @@ public final class ElijahPirate {
             DeferredRegister.create(ForgeRegistries.MENU_TYPES, MOD_ID);
     private static final DeferredRegister<EntityType<?>> ENTITIES =
             DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, MOD_ID);
+    private static final DeferredRegister<SoundEvent> SOUNDS =
+            DeferredRegister.create(ForgeRegistries.SOUND_EVENTS, MOD_ID);
+    public static final RegistryObject<SoundEvent> REQUIEM = SOUNDS.register(
+            "requiem", () -> SoundEvent.createVariableRangeEvent(
+                    new ResourceLocation(MOD_ID, "requiem")));
     public static final RegistryObject<MenuType<PowderMenu>> POWDER_MENU = MENUS.register(
             "powder_pouch", () -> new MenuType<>(PowderMenu::new, FeatureFlags.DEFAULT_FLAGS));
     public static final RegistryObject<EntityType<FlintlockBall>> FLINTLOCK_BALL = ENTITIES.register(
@@ -79,6 +85,7 @@ public final class ElijahPirate {
         IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
         MENUS.register(bus);
         ENTITIES.register(bus);
+        SOUNDS.register(bus);
         bus.addListener(this::entityAttributes);
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, PirateConfig.SPEC);
         AbilityNetwork.register();
