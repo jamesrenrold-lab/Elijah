@@ -633,7 +633,16 @@ public final class DomainAbilities {
         try {
             Class<?> sunbeamClass = Class.forName(
                     "io.redspace.ironsspellbooks.entity.spells.sunbeam.SunbeamEntity");
-            Object value = sunbeamClass.getConstructor(Level.class).newInstance(domain);
+            Object value;
+            try {
+                value = sunbeamClass.getConstructor(Level.class).newInstance(domain);
+            } catch (NoSuchMethodException missingLevelConstructor) {
+                EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.get(
+                        new ResourceLocation("irons_spellbooks", "sunbeam"));
+                if (type == null) throw missingLevelConstructor;
+                value = sunbeamClass.getConstructor(EntityType.class, Level.class)
+                        .newInstance(type, domain);
+            }
             if (!(value instanceof Entity sunbeam)) return;
             sunbeamClass.getMethod("setOwner", Entity.class).invoke(sunbeam, owner);
             sunbeamClass.getMethod("setTarget", LivingEntity.class).invoke(sunbeam, target);
