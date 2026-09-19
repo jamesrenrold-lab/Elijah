@@ -19,6 +19,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.level.Explosion;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -82,6 +83,14 @@ public final class DomainAbilities {
     private static final int CANNON_DELAY_TICKS = 5 * 20;
     private static final int CANNON_INTERVAL_TICKS = 10;
     private static final int CANNONBALLS_PER_VOLLEY = 25;
+    private static final int SUNBEAM_START_TICKS = 12 * 20;
+    private static final int SUNBEAM_RAMP_TICKS = 3 * 20;
+    private static final int SUNBEAM_INTERVAL_TICKS = 20;
+    private static final float SUNBEAM_DAMAGE_SCALE = 0.75F;
+    private static final int WATER_CANNONBALLS_PER_VOLLEY = 4;
+    private static final double WATER_TARGET_RADIUS = 22.5D;
+    private static final double OUTER_RING_MIN_RADIUS = 26.0D;
+    private static final double OUTER_RING_MAX_RADIUS = 41.0D;
     // Keep only explosive CBC ammunition: two native rounds per second,
     // rotating through HE, AP and shrapnel shells without smoke rounds.
     private static final int CBC_BARRAGE_VOLLEY_PERIOD = 1;
@@ -108,6 +117,7 @@ public final class DomainAbilities {
     private static final BlockPos ARENA_MARKER = new BlockPos(0, 61, 0);
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
     private static boolean arenaReady;
+    private static boolean sunbeamUnavailable;
 
     private DomainAbilities() {}
 
@@ -477,6 +487,13 @@ public final class DomainAbilities {
                 session.lastCannonball = now;
                 fireCannonBarrage(session, owner, target);
             }
+            if (now >= session.startedAt + SUNBEAM_START_TICKS
+                    && now - session.lastSunbeam >= SUNBEAM_INTERVAL_TICKS) {
+                session.lastSunbeam = now;
+                int rampStep = (int) ((age - SUNBEAM_START_TICKS) / SUNBEAM_RAMP_TICKS);
+                int beamsThisSecond = Math.min(5, 1 + rampStep);
+                fireSunbeamBarrage(session, owner, damageForCannonball(owner), beamsThisSecond);
+            }
     }
 
     private static LivingEntity resolveTarget(Session session) {
@@ -554,30 +571,19 @@ public final class DomainAbilities {
 
     private static void fireCannonBarrage(Session session, ServerPlayer owner, LivingEntity target) {
         int volleyNumber = session.cannonIndex / CANNONBALLS_PER_VOLLEY;
-        int curse = Math.max(0, Math.min(100, ElijahPirate.state(owner).bloodResource));
-        float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.55D);
-        float curseDamage = (curse / 10) * 1.5F;
-        // Elijah cannonballs deal double the normal calculated barrage damage.
-        float damage = Math.max(1.0F, attackDamage + curseDamage);
+        float damage = damageForCannonball(owner);
         Vec3 targetSnapshot = target.getBoundingBox().getCenter();
         for (int volleyShot = 0; volleyShot < CANNONBALLS_PER_VOLLEY; volleyShot++) {
             int shot = session.cannonIndex++;
             Vec3 aim;
-            // Five shells in every volley record the opponent's exact current
-            // position. The other twenty sweep a low-discrepancy pattern over
-            // the full arena so sand, water, and every route are bombarded.
-            if (volleyShot % 5 == 0) {
-                aim = new Vec3(
-                        Math.max(-40.0D, Math.min(40.0D, targetSnapshot.x)),
-                        targetSnapshot.y,
-                        Math.max(-40.0D, Math.min(40.0D, targetSnapshot.z)));
+            // Four of twenty-five shells may enter the lagoon; the other
+            // twenty-one are deliberately confined to the sandy outer ring.
+            if (volleyShot < WATER_CANNONBALLS_PER_VOLLEY) {
+                aim = volleyShot == 0
+                        ? waterCoordinate(session.domain, targetSnapshot.x, targetSnapshot.z)
+                        : waterAim(session.domain, shot);
             } else {
-                double angle = shot * 2.399963229728653D;
-                double normalizedRadius = ((shot * 73L) % 997L) / 996.0D;
-                double radius = 39.0D * Math.sqrt(normalizedRadius);
-                double x = Math.cos(angle) * radius;
-                double z = Math.sin(angle) * radius;
-                aim = findArenaSurface(session.domain, owner, x, z);
+                aim = outerRingAim(session.domain, shot, owner);
             }
 
             double launchAngle = shot * 1.618033988749895D;
@@ -604,6 +610,52 @@ public final class DomainAbilities {
         }
     }
 
+    private static float damageForCannonball(ServerPlayer owner) {
+        int curse = Math.max(0, Math.min(100, ElijahPirate.state(owner).bloodResource));
+        float attackDamage = (float) (owner.getAttributeValue(Attributes.ATTACK_DAMAGE) * 0.55D);
+        float curseDamage = (curse / 10) * 1.5F;
+        return Math.max(1.0F, attackDamage + curseDamage);
+    }
+
+    /** Spawns the actual Iron's Spells & Spellbooks SunbeamEntity. */
+    private static void fireSunbeamBarrage(Session session, ServerPlayer owner,
+                                           float cannonballDamage, int count) {
+        float damage = Math.max(1.0F, cannonballDamage * SUNBEAM_DAMAGE_SCALE);
+        for (int i = 0; i < count; i++) {
+            Vec3 aim = waterAim(session.domain, session.sunbeamIndex++);
+            spawnSunbeam(session.domain, owner, aim, damage);
+        }
+    }
+
+    private static void spawnSunbeam(ServerLevel domain, ServerPlayer owner, Vec3 aim, float damage) {
+        try {
+            Class<?> sunbeamClass = Class.forName(
+                    "io.redspace.ironsspellbooks.entity.spells.sunbeam.SunbeamEntity");
+            Object value = sunbeamClass.getConstructor(Level.class).newInstance(domain);
+            if (!(value instanceof Entity sunbeam)) return;
+            sunbeamClass.getMethod("setOwner", Entity.class).invoke(sunbeam, owner);
+            sunbeamClass.getMethod("setDamage", float.class).invoke(sunbeam, damage);
+            sunbeam.setPos(aim.x, aim.y, aim.z);
+            if (!domain.addFreshEntity(sunbeam)) {
+                sunbeam.discard();
+                return;
+            }
+            SoundEvent windup = BuiltInRegistries.SOUND_EVENT.get(
+                    new ResourceLocation("irons_spellbooks", "entity.sunbeam.windup"));
+            if (windup != null) {
+                domain.playSound(null, aim.x, aim.y, aim.z, windup,
+                        SoundSource.NEUTRAL, 3.5F, 1.0F);
+            }
+        } catch (ClassNotFoundException error) {
+            if (!sunbeamUnavailable) {
+                sunbeamUnavailable = true;
+                LOGGER.warn("Iron's Spells & Spellbooks is unavailable; skipping domain sunbeams");
+            }
+        } catch (Throwable error) {
+            LOGGER.warn("Could not spawn an Iron's Spellbooks sunbeam", error);
+        }
+    }
+
     /**
      * Launches real Create Big Cannons projectile entities when CBC is installed.
      * Reflection keeps Elijah optional: worlds without CBC retain the normal
@@ -612,27 +664,16 @@ public final class DomainAbilities {
     private static void fireCreateBigCannonBarrage(Session session, ServerPlayer owner,
                                                         LivingEntity target, int volleyNumber,
                                                         float elijahDamage) {
-        Vec3 targetSnapshot = target.getBoundingBox().getCenter();
         // Rotate through all four genuine CBC ammunition types. The interval
         // is deliberately sparse because CBC supplies its own shell cloud,
         // blast-wave sound and client screen-shake packet.
         int typeIndex = (volleyNumber / CBC_BARRAGE_VOLLEY_PERIOD)
                 % CBC_BARRAGE_PROJECTILE_TYPES.size();
         ResourceLocation projectileId = CBC_BARRAGE_PROJECTILE_TYPES.get(typeIndex);
-        Vec3 aim;
-        if (typeIndex == 0) {
-            aim = new Vec3(
-                    Math.max(-40.0D, Math.min(40.0D, targetSnapshot.x)),
-                    targetSnapshot.y,
-                    Math.max(-40.0D, Math.min(40.0D, targetSnapshot.z)));
-        } else {
-            int shot = session.cannonIndex + typeIndex;
-            double angle = shot * 2.399963229728653D;
-            double normalizedRadius = ((shot * 73L) % 997L) / 996.0D;
-            double radius = 36.0D * Math.sqrt(normalizedRadius);
-            aim = findArenaSurface(session.domain, owner,
-                    Math.cos(angle) * radius, Math.sin(angle) * radius);
-        }
+        // Native CBC ammunition is restricted to the sand ring; it never
+        // targets the lagoon, including the target snapshot position.
+        int shot = session.cannonIndex + typeIndex;
+        Vec3 aim = outerRingAim(session.domain, shot, owner);
         double launchAngle = (session.cannonIndex + typeIndex) * 1.618033988749895D;
         Vec3 origin = new Vec3(
                 aim.x + Math.cos(launchAngle) * (8.0D + typeIndex),
@@ -772,6 +813,31 @@ public final class DomainAbilities {
         return hit.getType() == HitResult.Type.MISS
                 ? new Vec3(x, 63.0D, z)
                 : hit.getLocation().add(0.0D, 0.06D, 0.0D);
+    }
+
+    private static Vec3 outerRingAim(ServerLevel domain, int shot, ServerPlayer owner) {
+        double angle = shot * 2.399963229728653D;
+        double normalizedRadius = ((shot * 73L) % 997L) / 996.0D;
+        double radius = OUTER_RING_MIN_RADIUS
+                + (OUTER_RING_MAX_RADIUS - OUTER_RING_MIN_RADIUS) * Math.sqrt(normalizedRadius);
+        return findArenaSurface(domain, owner, Math.cos(angle) * radius, Math.sin(angle) * radius);
+    }
+
+    private static Vec3 waterAim(ServerLevel domain, int shot) {
+        double angle = shot * 2.399963229728653D;
+        double normalizedRadius = ((shot * 97L) % 997L) / 996.0D;
+        double radius = WATER_TARGET_RADIUS * Math.sqrt(normalizedRadius);
+        return findArenaSurface(domain, null, Math.cos(angle) * radius, Math.sin(angle) * radius);
+    }
+
+    private static Vec3 waterCoordinate(ServerLevel domain, double x, double z) {
+        double radius = Math.sqrt(x * x + z * z);
+        if (radius > WATER_TARGET_RADIUS) {
+            double scale = WATER_TARGET_RADIUS / radius;
+            x *= scale;
+            z *= scale;
+        }
+        return findArenaSurface(domain, null, x, z);
     }
 
     private static void applyDomainBuffs(ServerPlayer player) {
@@ -1369,7 +1435,9 @@ public final class DomainAbilities {
         private final long startedAt;
         private final long endAt;
         private long lastCannonball;
+        private long lastSunbeam;
         private int cannonIndex;
+        private int sunbeamIndex;
         private int lastDisplayedSecond = -1;
         private int ownerMismatchTicks;
         private int targetMissingTicks;
@@ -1396,6 +1464,7 @@ public final class DomainAbilities {
             this.startedAt = endAt - DOMAIN_TICKS;
             this.endAt = endAt;
             this.lastCannonball = this.startedAt;
+            this.lastSunbeam = this.startedAt;
         }
     }
 

@@ -42,6 +42,11 @@ assert "mapping.isDown()" in client
 assert "KEY_WAS_DOWN" in client
 assert "DOMAIN_MUSIC_DELAY_TICKS = 5 * 20" in client
 assert "DOMAIN_TICKS = 48 * 20" in domain_java
+assert "SunbeamEntity" in domain_java
+assert "SUNBEAM_START_TICKS = 12 * 20" in domain_java
+assert "SUNBEAM_DAMAGE_SCALE = 0.75F" in domain_java
+assert "WATER_CANNONBALLS_PER_VOLLEY = 4" in domain_java
+assert "Native CBC ammunition is restricted to the sand ring" in domain_java
 assert "case 7 -> DomainAbilities.activate(player)" in network
 assert not (resources / "data/elijah/powers/pouch_lifecycle.json").exists()
 assert "unload_later" not in java and "clearTransient" not in domain_java and "clearTransient" not in blood
