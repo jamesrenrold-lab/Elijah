@@ -24,7 +24,6 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -647,17 +646,6 @@ public final class DomainAbilities {
                 sunbeam.discard();
                 return;
             }
-            // Keep the genuine Iron's entity as the authoritative hit, but
-            // provide a lightweight client-visible marker as well. Some
-            // Connector/Forge combinations do not register the optional
-            // Iron's entity renderer even though the server entity exists.
-            for (int i = 0; i < 10; i++) {
-                domain.sendParticles(ParticleTypes.END_ROD,
-                        aim.x, aim.y + 1.5D + i * 2.2D, aim.z,
-                        2, 0.08D, 0.08D, 0.08D, 0.0D);
-            }
-            domain.sendParticles(ParticleTypes.FLAME, aim.x, aim.y + 0.12D, aim.z,
-                    3, 0.18D, 0.04D, 0.18D, 0.0D);
             SoundEvent windup = BuiltInRegistries.SOUND_EVENT.get(
                     new ResourceLocation("irons_spellbooks", "entity.sunbeam.windup"));
             if (windup != null) {
