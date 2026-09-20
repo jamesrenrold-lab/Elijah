@@ -8,6 +8,7 @@ import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.client.event.sound.PlaySoundEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.Mod;
@@ -16,6 +17,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.resources.ResourceLocation;
 import com.mojang.blaze3d.platform.InputConstants;
 import org.lwjgl.glfw.GLFW;
 
@@ -44,6 +46,7 @@ public final class ClientSetup {
     public static void setup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> MenuScreens.register(ElijahPirate.POWDER_MENU.get(), PowderScreen::new));
         MinecraftForge.EVENT_BUS.addListener(ClientSetup::clientTick);
+        MinecraftForge.EVENT_BUS.addListener(ClientSetup::silenceDomainSunbeams);
     }
 
     @SubscribeEvent
@@ -117,6 +120,19 @@ public final class ClientSetup {
         if (domainMusic != null) {
             minecraft.getSoundManager().stop(domainMusic);
             domainMusic = null;
+        }
+    }
+
+    /** Suppress only Iron's native Sunbeam audio while inside Elijah's domain. */
+    public static void silenceDomainSunbeams(PlaySoundEvent event) {
+        if (event.getSound() == null) return;
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null
+                || !DomainAbilities.DOMAIN_DIMENSION.equals(minecraft.level.dimension())) return;
+        ResourceLocation sound = event.getSound().getLocation();
+        if (new ResourceLocation("irons_spellbooks", "entity.sunbeam.windup").equals(sound)
+                || new ResourceLocation("irons_spellbooks", "entity.sunbeam.impact").equals(sound)) {
+            event.setSound(null);
         }
     }
 

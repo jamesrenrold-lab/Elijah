@@ -38,6 +38,8 @@ projectile = (root / "src/main/java/com/jamesrenrold/elijah/FlintlockBall.java")
 assert "AbilityNetwork.register()" in java
 assert "isPirate(ServerPlayer player)" in java
 assert "AbilityNetwork.send(ability)" in client
+assert "silenceDomainSunbeams" in client
+assert "entity.sunbeam.windup" in client and "entity.sunbeam.impact" in client
 assert "mapping.isDown()" in client
 assert "KEY_WAS_DOWN" in client
 assert "DOMAIN_MUSIC_DELAY_TICKS = 5 * 20" in client
