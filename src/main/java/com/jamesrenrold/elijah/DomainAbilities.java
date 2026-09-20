@@ -493,7 +493,9 @@ public final class DomainAbilities {
                     && now - session.lastSunbeam >= SUNBEAM_INTERVAL_TICKS) {
                 session.lastSunbeam = now;
                 int rampStep = (int) ((age - SUNBEAM_START_TICKS) / SUNBEAM_RAMP_TICKS);
-                int beamsThisSecond = Math.min(5, 1 + rampStep);
+                // Keep ramping for the entire domain: one additional native
+                // Sunbeam every three seconds, with no artificial cap.
+                int beamsThisSecond = 1 + rampStep;
                 fireSunbeamBarrage(session, owner, session.target,
                         damageForCannonball(owner), beamsThisSecond);
             }

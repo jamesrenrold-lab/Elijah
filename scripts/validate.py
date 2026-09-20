@@ -55,6 +55,7 @@ assert 'getField("SUNBEAM_SPELL")' in domain_java
 assert "lagoonCoordinate" in domain_java
 assert "SUNBEAM_START_TICKS = 12 * 20" in domain_java
 assert "SUNBEAM_DAMAGE_SCALE = 0.75F" in domain_java
+assert "int beamsThisSecond = 1 + rampStep" in domain_java
 assert "WATER_CANNONBALLS_PER_VOLLEY = 4" in domain_java
 assert "Native CBC ammunition is restricted to the sand ring" in domain_java
 assert "case 7 -> DomainAbilities.activate(player)" in network
