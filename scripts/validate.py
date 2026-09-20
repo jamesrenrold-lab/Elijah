@@ -29,6 +29,7 @@ assert (resources / "assets/elijah/sounds/requiem.ogg").exists()
 java = (root / "src/main/java/com/jamesrenrold/elijah/ElijahPirate.java").read_text()
 network = (root / "src/main/java/com/jamesrenrold/elijah/AbilityNetwork.java").read_text()
 client = (root / "src/main/java/com/jamesrenrold/elijah/client/ClientSetup.java").read_text()
+hud = (root / "src/main/java/com/jamesrenrold/elijah/client/PirateHudRenderer.java").read_text()
 domain_java = (root / "src/main/java/com/jamesrenrold/elijah/DomainAbilities.java").read_text()
 blood = (root / "src/main/java/com/jamesrenrold/elijah/BloodAbilities.java").read_text()
 pouch = (root / "src/main/java/com/jamesrenrold/elijah/PowderPouch.java").read_text()
@@ -40,6 +41,8 @@ assert "isPirate(ServerPlayer player)" in java
 assert "AbilityNetwork.send(ability)" in client
 assert "silenceDomainSunbeams" in client
 assert "entity.sunbeam.windup" in client and "entity.sunbeam.impact" in client
+assert "PANEL_WIDTH = 132" in hud
+assert "int x = 8" in hud
 assert "mapping.isDown()" in client
 assert "KEY_WAS_DOWN" in client
 assert "DOMAIN_MUSIC_DELAY_TICKS = 5 * 20" in client

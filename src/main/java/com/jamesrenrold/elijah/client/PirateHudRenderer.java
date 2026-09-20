@@ -16,9 +16,12 @@ import net.minecraftforge.fml.common.Mod;
 /** Draws the Java-owned resources and timers without feeding anything back into gameplay. */
 @Mod.EventBusSubscriber(modid = ElijahPirate.MOD_ID, value = Dist.CLIENT)
 public final class PirateHudRenderer {
-    private static final int PANEL_SIZE = 154;
-    private static final int CELL_WIDTH = 72;
-    private static final int CELL_HEIGHT = 25;
+    // Compact lower-left layout: two short columns above the hotbar instead
+    // of the large square panel that previously occupied the right side.
+    private static final int PANEL_WIDTH = 132;
+    private static final int PANEL_HEIGHT = 122;
+    private static final int CELL_WIDTH = 62;
+    private static final int CELL_HEIGHT = 18;
     private static final int WHITE = 0xFFF5E7C2;
     private static final int GOLD = 0xFFFFC43D;
     private static final int GOLD_DARK = 0xFF7A4B18;
@@ -35,8 +38,8 @@ public final class PirateHudRenderer {
         if (minecraft.player == null || minecraft.screen != null || !ClientHudState.shouldRender()) return;
 
         GuiGraphics gui = event.getGuiGraphics();
-        int x = minecraft.getWindow().getGuiScaledWidth() - PANEL_SIZE - 6;
-        int y = minecraft.getWindow().getGuiScaledHeight() - PANEL_SIZE - 7;
+        int x = 8;
+        int y = minecraft.getWindow().getGuiScaledHeight() - PANEL_HEIGHT - 8;
 
         drawPanel(gui, minecraft, x, y);
         drawResources(gui, minecraft, x + 6, y + 22);
@@ -44,66 +47,66 @@ public final class PirateHudRenderer {
         int gridY = y + 48;
         drawCell(gui, minecraft, x + 4, gridY,
                 Items.BONE, "Dirty", dirtyStatus(), dirtyColor());
-        drawCell(gui, minecraft, x + 78, gridY,
+        drawCell(gui, minecraft, x + 66, gridY,
                 Items.ENDER_EYE, "Curse", cursedStatus(), cursedColor());
         drawCell(gui, minecraft, x + 4, gridY + CELL_HEIGHT,
                 Items.FLINT_AND_STEEL, "Flint", timerStatus(ClientHudState.shotCooldown()),
                 timerColor(ClientHudState.shotCooldown()));
-        drawCell(gui, minecraft, x + 78, gridY + CELL_HEIGHT,
+        drawCell(gui, minecraft, x + 66, gridY + CELL_HEIGHT,
                 Items.REDSTONE, "Hunt", huntStatus(), huntColor());
         drawCell(gui, minecraft, x + 4, gridY + CELL_HEIGHT * 2,
                 Items.GUNPOWDER, "Pouch", "OPEN", READY);
-        drawCell(gui, minecraft, x + 78, gridY + CELL_HEIGHT * 2,
+        drawCell(gui, minecraft, x + 66, gridY + CELL_HEIGHT * 2,
                 Items.FEATHER, "Wings", wingsStatus(), wingsColor());
         drawCell(gui, minecraft, x + 4, gridY + CELL_HEIGHT * 3,
                 Items.SKELETON_SKULL, "Crew", crewStatus(), crewColor());
-        drawCell(gui, minecraft, x + 78, gridY + CELL_HEIGHT * 3,
+        drawCell(gui, minecraft, x + 66, gridY + CELL_HEIGHT * 3,
                 Items.COMPASS, "Domain", domainStatus(), domainColor());
     }
 
     private static void drawPanel(GuiGraphics gui, Minecraft minecraft, int x, int y) {
         // A dark sea-blue wood-like panel with a gold rail and small corner studs.
-        gui.fill(x, y, x + PANEL_SIZE, y + PANEL_SIZE, GOLD_DARK);
-        gui.fill(x + 2, y + 2, x + PANEL_SIZE - 2, y + PANEL_SIZE - 2, SEA_DARK);
-        gui.fill(x + 4, y + 4, x + PANEL_SIZE - 4, y + PANEL_SIZE - 4, SEA);
-        gui.fill(x + 4, y + 4, x + PANEL_SIZE - 4, y + 5, GOLD);
-        gui.fill(x + 4, y + PANEL_SIZE - 6, x + PANEL_SIZE - 4, y + PANEL_SIZE - 5, GOLD_DARK);
-        gui.fill(x + 5, y + 19, x + PANEL_SIZE - 5, y + 20, 0x663A7D83);
+        gui.fill(x, y, x + PANEL_WIDTH, y + PANEL_HEIGHT, GOLD_DARK);
+        gui.fill(x + 2, y + 2, x + PANEL_WIDTH - 2, y + PANEL_HEIGHT - 2, SEA_DARK);
+        gui.fill(x + 4, y + 4, x + PANEL_WIDTH - 4, y + PANEL_HEIGHT - 4, SEA);
+        gui.fill(x + 4, y + 4, x + PANEL_WIDTH - 4, y + 5, GOLD);
+        gui.fill(x + 4, y + PANEL_HEIGHT - 6, x + PANEL_WIDTH - 4, y + PANEL_HEIGHT - 5, GOLD_DARK);
+        gui.fill(x + 5, y + 18, x + PANEL_WIDTH - 5, y + 19, 0x663A7D83);
         gui.fill(x + 4, y + 4, x + 7, y + 7, GOLD);
-        gui.fill(x + PANEL_SIZE - 7, y + 4, x + PANEL_SIZE - 4, y + 7, GOLD);
-        gui.fill(x + 4, y + PANEL_SIZE - 8, x + 7, y + PANEL_SIZE - 5, GOLD_DARK);
-        gui.fill(x + PANEL_SIZE - 7, y + PANEL_SIZE - 8, x + PANEL_SIZE - 4,
-                y + PANEL_SIZE - 5, GOLD_DARK);
+        gui.fill(x + PANEL_WIDTH - 7, y + 4, x + PANEL_WIDTH - 4, y + 7, GOLD);
+        gui.fill(x + 4, y + PANEL_HEIGHT - 8, x + 7, y + PANEL_HEIGHT - 5, GOLD_DARK);
+        gui.fill(x + PANEL_WIDTH - 7, y + PANEL_HEIGHT - 8, x + PANEL_WIDTH - 4,
+                y + PANEL_HEIGHT - 5, GOLD_DARK);
 
-        gui.renderItem(new ItemStack(Items.SPYGLASS), x + 7, y + 5);
-        gui.drawString(minecraft.font, Component.literal("ELIJAH"), x + 27, y + 6, GOLD, true);
-        gui.drawString(minecraft.font, Component.literal("POWERS"), x + 93, y + 7, MUTED, false);
+        gui.renderItem(new ItemStack(Items.SPYGLASS), x + 5, y + 2);
+        gui.drawString(minecraft.font, Component.literal("ELIJAH"), x + 23, y + 6, GOLD, true);
+        gui.drawString(minecraft.font, Component.literal("POWERS"), x + 78, y + 6, MUTED, false);
     }
 
     private static void drawResources(GuiGraphics gui, Minecraft minecraft, int x, int y) {
-        gui.drawString(minecraft.font, Component.literal("CURSE"), x, y + 1, WHITE, true);
-        int barX = x + 38;
-        int barWidth = 77;
-        gui.fill(barX, y + 2, barX + barWidth, y + 10, 0xFF351119);
+        gui.drawString(minecraft.font, Component.literal("CURSE"), x, y, WHITE, true);
+        int barX = x + 36;
+        int barWidth = 60;
+        gui.fill(barX, y + 1, barX + barWidth, y + 8, 0xFF351119);
         int fill = Math.round(barWidth * ClientHudState.bloodResource() / 100.0F);
-        gui.fill(barX, y + 2, barX + fill, y + 10,
+        gui.fill(barX, y + 1, barX + fill, y + 8,
                 ClientHudState.overdriveActive() ? 0xFFB71C35 : 0xFF7A1D32);
-        gui.fill(barX, y + 2, barX + barWidth, y + 3, 0xFFDC5262);
+        gui.fill(barX, y + 1, barX + barWidth, y + 2, 0xFFDC5262);
         gui.drawString(minecraft.font, Component.literal(ClientHudState.bloodResource() + "%"),
-                x + 119, y + 1, MUTED, false);
+                x + 99, y, MUTED, false);
 
-        gui.drawString(minecraft.font, Component.literal("CREW"), x, y + 13, WHITE, true);
-        int crewX = x + 38;
+        gui.drawString(minecraft.font, Component.literal("CREW"), x, y + 9, WHITE, true);
+        int crewX = x + 36;
         for (int i = 0; i < 4; i++) {
-            int segmentX = crewX + i * 19;
-            gui.fill(segmentX, y + 15, segmentX + 16, y + 22, 0xFF252525);
+            int segmentX = crewX + i * 15;
+            gui.fill(segmentX, y + 10, segmentX + 13, y + 16, 0xFF252525);
             if (i < ClientHudState.crewResource()) {
-                gui.fill(segmentX + 1, y + 16, segmentX + 15, y + 21, 0xFFB8872F);
+                gui.fill(segmentX + 1, y + 11, segmentX + 12, y + 15, 0xFFB8872F);
             }
         }
         if (ClientHudState.crewResource() < 4 && ClientHudState.crewRecharge() > 0) {
             gui.drawString(minecraft.font, Component.literal(seconds(ClientHudState.crewRecharge()) + "s"),
-                    x + 119, y + 13, MUTED, false);
+                    x + 99, y + 9, MUTED, false);
         }
     }
 
@@ -111,9 +114,9 @@ public final class PirateHudRenderer {
                                  Item item, String name, String status, int statusColor) {
         gui.fill(x, y, x + CELL_WIDTH, y + CELL_HEIGHT - 1, 0x553A6970);
         gui.fill(x, y, x + 2, y + CELL_HEIGHT - 1, 0x664F9295);
-        gui.renderItem(new ItemStack(item), x + 3, y + 3);
-        gui.drawString(minecraft.font, Component.literal(name), x + 21, y + 2, WHITE, true);
-        gui.drawString(minecraft.font, Component.literal(status), x + 21, y + 13, statusColor, false);
+        gui.renderItem(new ItemStack(item), x + 1, y + 1);
+        gui.drawString(minecraft.font, Component.literal(name), x + 19, y, WHITE, true);
+        gui.drawString(minecraft.font, Component.literal(status), x + 19, y + 9, statusColor, false);
     }
 
     private static String dirtyStatus() {
