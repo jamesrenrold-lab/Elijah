@@ -113,8 +113,19 @@ public final class PirateAbilities {
 
     @SubscribeEvent
     public static void onPirateTick(TickEvent.PlayerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)
-                || !ElijahPirate.isPirate(player)) return;
+        if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)) return;
+        if (!ElijahPirate.isPirate(player)) {
+            // Origin swaps do not necessarily unload the player or fire a
+            // matching cleanup callback, so remove every Java-owned modifier
+            // on the first server tick after Elijah is no longer active.
+            removeModifier(player.getAttribute(Attributes.ARMOR), FRAILTY_ARMOR_ID);
+            removeModifier(player.getAttribute(Attributes.MAX_HEALTH), FRAILTY_HEALTH_ID);
+            removeModifier(player.getAttribute(Attributes.MOVEMENT_SPEED), LAND_LEGS_ID);
+            Attribute swimAttribute = ForgeRegistries.ATTRIBUTES.getValue(
+                    new ResourceLocation("forge", "swim_speed"));
+            removeModifier(swimAttribute == null ? null : player.getAttribute(swimAttribute), SEA_SWIM_ID);
+            return;
+        }
         addModifier(player.getAttribute(Attributes.ARMOR), FRAILTY_ARMOR_ID,
                 "Pirate Frailty armor", -0.15D, AttributeModifier.Operation.MULTIPLY_TOTAL);
         AttributeInstance health = player.getAttribute(Attributes.MAX_HEALTH);

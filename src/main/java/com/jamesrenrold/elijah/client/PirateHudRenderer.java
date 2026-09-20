@@ -16,6 +16,7 @@ import net.minecraftforge.fml.common.Mod;
 /** Draws the Java-owned resources and timers without feeding anything back into gameplay. */
 @Mod.EventBusSubscriber(modid = ElijahPirate.MOD_ID, value = Dist.CLIENT)
 public final class PirateHudRenderer {
+    private static final float HUD_SCALE = 0.72F;
     // Compact lower-left layout: two short columns above the hotbar instead
     // of the large square panel that previously occupied the right side.
     private static final int PANEL_WIDTH = 132;
@@ -39,29 +40,33 @@ public final class PirateHudRenderer {
 
         GuiGraphics gui = event.getGuiGraphics();
         int x = 8;
-        int y = minecraft.getWindow().getGuiScaledHeight() - PANEL_HEIGHT - 8;
+        int y = minecraft.getWindow().getGuiScaledHeight() - Math.round(PANEL_HEIGHT * HUD_SCALE) - 8;
 
-        drawPanel(gui, minecraft, x, y);
-        drawResources(gui, minecraft, x + 6, y + 22);
+        gui.pose().pushPose();
+        gui.pose().translate(x, y, 0);
+        gui.pose().scale(HUD_SCALE, HUD_SCALE, 1.0F);
+        drawPanel(gui, minecraft, 0, 0);
+        drawResources(gui, minecraft, 6, 22);
 
-        int gridY = y + 48;
-        drawCell(gui, minecraft, x + 4, gridY,
+        int gridY = 48;
+        drawCell(gui, minecraft, 4, gridY,
                 Items.BONE, "Dirty", dirtyStatus(), dirtyColor());
-        drawCell(gui, minecraft, x + 66, gridY,
+        drawCell(gui, minecraft, 66, gridY,
                 Items.ENDER_EYE, "Curse", cursedStatus(), cursedColor());
-        drawCell(gui, minecraft, x + 4, gridY + CELL_HEIGHT,
+        drawCell(gui, minecraft, 4, gridY + CELL_HEIGHT,
                 Items.FLINT_AND_STEEL, "Flint", timerStatus(ClientHudState.shotCooldown()),
                 timerColor(ClientHudState.shotCooldown()));
-        drawCell(gui, minecraft, x + 66, gridY + CELL_HEIGHT,
+        drawCell(gui, minecraft, 66, gridY + CELL_HEIGHT,
                 Items.REDSTONE, "Hunt", huntStatus(), huntColor());
-        drawCell(gui, minecraft, x + 4, gridY + CELL_HEIGHT * 2,
+        drawCell(gui, minecraft, 4, gridY + CELL_HEIGHT * 2,
                 Items.GUNPOWDER, "Pouch", "OPEN", READY);
-        drawCell(gui, minecraft, x + 66, gridY + CELL_HEIGHT * 2,
+        drawCell(gui, minecraft, 66, gridY + CELL_HEIGHT * 2,
                 Items.FEATHER, "Wings", wingsStatus(), wingsColor());
-        drawCell(gui, minecraft, x + 4, gridY + CELL_HEIGHT * 3,
+        drawCell(gui, minecraft, 4, gridY + CELL_HEIGHT * 3,
                 Items.SKELETON_SKULL, "Crew", crewStatus(), crewColor());
-        drawCell(gui, minecraft, x + 66, gridY + CELL_HEIGHT * 3,
+        drawCell(gui, minecraft, 66, gridY + CELL_HEIGHT * 3,
                 Items.COMPASS, "Domain", domainStatus(), domainColor());
+        gui.pose().popPose();
     }
 
     private static void drawPanel(GuiGraphics gui, Minecraft minecraft, int x, int y) {

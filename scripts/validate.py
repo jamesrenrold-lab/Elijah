@@ -14,6 +14,10 @@ origin = parsed["data/elijah/origins/pirate.json"]
 assert origin["powers"] == ["elijah:pirate_marker"]
 assert "elijah:pirate_marker" in origin["powers"]
 assert "elijah:pirate" in parsed["data/origins/origin_layers/origin.json"]["origins"]
+for power_name in ("Dirty Tactics", "Flintlock", "Powder Pouch", "Undead Crew",
+                    "Cursed Form", "Blood Hunt", "Blood Wings", "Drowned Domain"):
+    assert power_name in origin["description"]
+assert "Primary" in origin["description"] and "Octonary" in origin["description"]
 
 domain = parsed["data/elijah/dimension/drowned_domain.json"]
 assert domain["generator"]["settings"]["layers"] == [
@@ -41,7 +45,8 @@ assert "isPirate(ServerPlayer player)" in java
 assert "AbilityNetwork.send(ability)" in client
 assert "silenceDomainSunbeams" in client
 assert "entity.sunbeam.windup" in client and "entity.sunbeam.impact" in client
-assert "PANEL_WIDTH = 132" in hud
+assert "HUD_SCALE = 0.72F" in hud
+assert "gui.pose().scale(HUD_SCALE" in hud
 assert "int x = 8" in hud
 assert "mapping.isDown()" in client
 assert "KEY_WAS_DOWN" in client
@@ -76,6 +81,8 @@ assert "ElijahPirateOwner" in java
 assert "PLAYER_STATES" in java and "public static PowderPouch state(ServerPlayer player)" in java
 assert "public static void saveState(ServerPlayer player, PowderPouch state)" in java
 assert "FRAILTY_ARMOR_ID" in pirate and "onFallDamage" in pirate
+assert "if (!ElijahPirate.isPirate(player))" in pirate
+assert "removeModifier(player.getAttribute(Attributes.MAX_HEALTH), FRAILTY_HEALTH_ID)" in pirate
 
 # Active ability resources keep their required Apoli entity-action bridge, while
 # the actual gameplay remains authoritative in the Java command handlers.
