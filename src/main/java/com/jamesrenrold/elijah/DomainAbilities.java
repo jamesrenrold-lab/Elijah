@@ -32,6 +32,7 @@ import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -117,7 +118,6 @@ public final class DomainAbilities {
     private static final BlockPos ARENA_MARKER = new BlockPos(0, 61, 0);
     private static final Vector3f CANNON_DUST = new Vector3f(0.08F, 0.08F, 0.08F);
     private static boolean arenaReady;
-    private static boolean sunbeamUnavailable;
     private static boolean sunbeamApiUnavailable;
     private static boolean sunbeamSpawnWarned;
 
@@ -620,7 +620,16 @@ public final class DomainAbilities {
         return Math.max(1.0F, attackDamage + curseDamage);
     }
 
-    /** Spawns the actual Iron's Spells & Spellbooks SunbeamEntity. */
+    /**
+     * Casts the actual registered Iron's Spellbooks sunbeam. The previous
+     * implementation tried two different construction paths and used the
+     * wrong TargetEntityCastData package, so it silently fell back to an
+     * entity that was never created through Iron's spell pipeline. This path
+     * deliberately has one source of truth: the native SunbeamSpell creates
+     * and registers the client-rendered SunbeamEntity, then we move that
+     * freshly-created entity onto the lagoon coordinate before the spawn
+     * packet is sent.
+     */
     private static void fireSunbeamBarrage(Session session, ServerPlayer owner,
                                            LivingEntity target, float cannonballDamage, int count) {
         float damage = Math.max(1.0F, cannonballDamage * SUNBEAM_DAMAGE_SCALE);
@@ -632,52 +641,21 @@ public final class DomainAbilities {
 
     private static void spawnSunbeam(ServerLevel domain, ServerPlayer owner, LivingEntity target,
                                      Vec3 aim, float damage) {
+        Class<?> sunbeamClass;
         try {
-            Class<?> sunbeamClass = Class.forName(
+            sunbeamClass = Class.forName(
                     "io.redspace.ironsspellbooks.entity.spells.sunbeam.SunbeamEntity");
-            // Use Iron's registered spell first. This is the exact path that
-            // installs the native entity's synced data and client renderer.
-            // The entity is relocated immediately after the spell creates it,
-            // so the arena can choose a water-only aim without making a fake
-            // Elijah beam or marker.
-            if (tryNativeSunbeamSpell(domain, owner, target, aim, damage, sunbeamClass)) {
-                return;
-            }
-            Object value;
-            try {
-                value = sunbeamClass.getConstructor(Level.class).newInstance(domain);
-            } catch (NoSuchMethodException missingLevelConstructor) {
-                EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.get(
-                        new ResourceLocation("irons_spellbooks", "sunbeam"));
-                if (type == null) throw missingLevelConstructor;
-                value = sunbeamClass.getConstructor(EntityType.class, Level.class)
-                        .newInstance(type, domain);
-            }
-            if (!(value instanceof Entity sunbeam)) return;
-            sunbeamClass.getMethod("setOwner", Entity.class).invoke(sunbeam, owner);
-            sunbeamClass.getMethod("setTarget", LivingEntity.class).invoke(sunbeam, target);
-            sunbeamClass.getMethod("setDamage", float.class).invoke(sunbeam, damage);
-            // Match Iron's own spell cast: moveTo establishes the entity's
-            // initial/previous position as well as its live position, which
-            // keeps the client renderer and its ground-relative beam aligned.
-            sunbeam.moveTo(aim.x, aim.y, aim.z, 0.0F, 0.0F);
-            if (!domain.addFreshEntity(sunbeam)) {
-                sunbeam.discard();
-                return;
-            }
-            SoundEvent windup = BuiltInRegistries.SOUND_EVENT.get(
-                    new ResourceLocation("irons_spellbooks", "entity.sunbeam.windup"));
-            if (windup != null) {
-                domain.playSound(null, aim.x, aim.y, aim.z, windup,
-                        SoundSource.NEUTRAL, 3.5F, 1.0F);
-            }
         } catch (ClassNotFoundException error) {
-            if (!sunbeamUnavailable) {
-                sunbeamUnavailable = true;
-                LOGGER.warn("Iron's Spells & Spellbooks is unavailable; skipping domain sunbeams");
+            if (!sunbeamSpawnWarned) {
+                sunbeamSpawnWarned = true;
+                LOGGER.error("Iron's Spellbooks SunbeamEntity is missing; domain sunbeams cannot render", error);
             }
-        } catch (Throwable error) {
-            LOGGER.warn("Could not spawn an Iron's Spellbooks sunbeam", error);
+            return;
+        }
+        if (!tryNativeSunbeamSpell(domain, owner, target, aim, damage, sunbeamClass)
+                && !sunbeamSpawnWarned) {
+            sunbeamSpawnWarned = true;
+            LOGGER.error("Native Iron's Spellbooks sunbeam did not create a SunbeamEntity");
         }
     }
 
@@ -691,7 +669,7 @@ public final class DomainAbilities {
             Class<?> castDataInterface = Class.forName(
                     "io.redspace.ironsspellbooks.api.spells.ICastData");
             Class<?> targetCastDataClass = Class.forName(
-                    "io.redspace.ironsspellbooks.api.spells.TargetEntityCastData");
+                    "io.redspace.ironsspellbooks.capabilities.magic.TargetEntityCastData");
             Class<?> spellRegistryClass = Class.forName(
                     "io.redspace.ironsspellbooks.api.registry.SpellRegistry");
             Class<?> castSourceClass = Class.forName(
@@ -737,7 +715,16 @@ public final class DomainAbilities {
                 return false;
             }
             sunbeamClass.getMethod("setDamage", float.class).invoke(spawned, damage);
+            // SunbeamRenderer uses the entity position as the column origin.
+            // Set both live and previous positions so interpolation cannot
+            // pull the first frame back to the target on the beach.
             spawned.moveTo(aim.x, aim.y, aim.z, 0.0F, 0.0F);
+            spawned.xo = aim.x;
+            spawned.yo = aim.y;
+            spawned.zo = aim.z;
+            spawned.xOld = aim.x;
+            spawned.yOld = aim.y;
+            spawned.zOld = aim.z;
             return true;
         } catch (ClassNotFoundException | NoSuchFieldException | NoSuchMethodException error) {
             sunbeamApiUnavailable = true;
@@ -919,8 +906,8 @@ public final class DomainAbilities {
     private static Vec3 waterAim(ServerLevel domain, int shot) {
         double angle = shot * 2.399963229728653D;
         double normalizedRadius = ((shot * 97L) % 997L) / 996.0D;
-        double radius = WATER_TARGET_RADIUS * Math.sqrt(normalizedRadius);
-        return findArenaSurface(domain, null, Math.cos(angle) * radius, Math.sin(angle) * radius);
+        double radius = 4.0D + (WATER_TARGET_RADIUS - 4.0D) * Math.sqrt(normalizedRadius);
+        return lagoonCoordinate(domain, Math.cos(angle) * radius, Math.sin(angle) * radius, shot);
     }
 
     private static Vec3 waterCoordinate(ServerLevel domain, double x, double z) {
@@ -930,7 +917,38 @@ public final class DomainAbilities {
             x *= scale;
             z *= scale;
         }
-        return findArenaSurface(domain, null, x, z);
+        return lagoonCoordinate(domain, x, z, (int) Math.round(radius * 17.0D));
+    }
+
+    /**
+     * Returns a point whose block is definitely one of the arena's lagoon
+     * water blocks. A fluid raycast is not sufficient here: it can report a
+     * nearby solid edge or a miss after CBC has altered a chunk, which was
+     * the reason earlier beams were sometimes created on the sand or below
+     * the visible water surface.
+     */
+    private static Vec3 lagoonCoordinate(ServerLevel domain, double x, double z, int seed) {
+        for (int attempt = 0; attempt < 32; attempt++) {
+            double candidateX = x;
+            double candidateZ = z;
+            if (attempt > 0) {
+                double angle = (seed + attempt * 0.618033988749895D)
+                        * 2.399963229728653D;
+                double radius = Math.min(WATER_TARGET_RADIUS - 0.75D,
+                        1.5D + attempt * 0.65D);
+                candidateX = Math.cos(angle) * radius;
+                candidateZ = Math.sin(angle) * radius;
+            }
+            int blockX = Mth.floor(candidateX);
+            int blockZ = Mth.floor(candidateZ);
+            if (domain.getBlockState(new BlockPos(blockX, 64, blockZ)).is(Blocks.WATER)
+                    && domain.getBlockState(new BlockPos(blockX, 63, blockZ)).is(Blocks.WATER)) {
+                return new Vec3(blockX + 0.5D, 65.05D, blockZ + 0.5D);
+            }
+        }
+        // The arena is rebuilt with this exact source-water layout, so this
+        // is only a defensive fallback if another mod edits the lagoon.
+        return new Vec3(0.5D, 65.05D, 0.5D);
     }
 
     private static void applyDomainBuffs(ServerPlayer player) {
