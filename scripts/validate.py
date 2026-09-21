@@ -83,6 +83,9 @@ assert "public static void saveState(ServerPlayer player, PowderPouch state)" in
 assert "FRAILTY_ARMOR_ID" in pirate and "onFallDamage" in pirate
 assert "if (!ElijahPirate.isPirate(player))" in pirate
 assert "removeModifier(player.getAttribute(Attributes.MAX_HEALTH), FRAILTY_HEALTH_ID)" in pirate
+assert "target instanceof FakePlayer" in domain_java
+assert "getEntitiesOfClass(LivingEntity.class" in domain_java
+assert "isValidDomainTarget" in domain_java
 
 # Active ability resources keep their required Apoli entity-action bridge, while
 # the actual gameplay remains authoritative in the Java command handlers.

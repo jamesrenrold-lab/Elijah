@@ -44,6 +44,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.util.ITeleporter;
+import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
@@ -272,7 +273,11 @@ public final class DomainAbilities {
                                            double x, double y, double z,
                                            float yaw, float pitch,
                                            boolean persistenceRequired) {
-        if (target instanceof ServerPlayer || destination == null
+        // Real players are valid domain opponents. Forge fake players are not:
+        // they have no normal client/session lifecycle and must never be sent
+        // through Connector/Origins dimension-transfer code.
+        if (target instanceof FakePlayer || (target instanceof ServerPlayer player && player.isSpectator())
+                || destination == null
                 || !(target.level() instanceof ServerLevel) || target.isRemoved()) return null;
         ITeleporter directTeleporter = new ITeleporter() {
             @Override
@@ -543,14 +548,13 @@ public final class DomainAbilities {
         AABB area = player.getBoundingBox().expandTowards(direction.scale(40.0D)).inflate(2.0D);
         LivingEntity best = null;
         double bestDistance = Double.MAX_VALUE;
-        for (Mob mob : player.serverLevel().getEntitiesOfClass(Mob.class, area,
-                candidate -> candidate.isAlive() && !(candidate instanceof UndeadCrewmate)
-                        && !candidate.isAlliedTo(player))) {
-            Optional<Vec3> hit = mob.getBoundingBox().inflate(0.25D).clip(eye, visibleEnd);
+        for (LivingEntity candidate : player.serverLevel().getEntitiesOfClass(LivingEntity.class, area,
+                entity -> isValidDomainTarget(entity, player))) {
+            Optional<Vec3> hit = candidate.getBoundingBox().inflate(0.25D).clip(eye, visibleEnd);
             if (hit.isPresent()) {
                 double distance = eye.distanceToSqr(hit.get());
                 if (distance < bestDistance) {
-                    best = mob;
+                    best = candidate;
                     bestDistance = distance;
                 }
             }
@@ -562,16 +566,24 @@ public final class DomainAbilities {
         AABB area = player.getBoundingBox().inflate(40.0D);
         LivingEntity best = null;
         double bestDistance = Double.MAX_VALUE;
-        for (Mob mob : player.serverLevel().getEntitiesOfClass(Mob.class, area,
-                candidate -> candidate.isAlive() && !(candidate instanceof UndeadCrewmate)
-                        && !candidate.isAlliedTo(player))) {
-            double distance = player.distanceToSqr(mob);
+        for (LivingEntity candidate : player.serverLevel().getEntitiesOfClass(LivingEntity.class, area,
+                entity -> isValidDomainTarget(entity, player))) {
+            double distance = player.distanceToSqr(candidate);
             if (distance < bestDistance) {
-                best = mob;
+                best = candidate;
                 bestDistance = distance;
             }
         }
         return best;
+    }
+
+    private static boolean isValidDomainTarget(LivingEntity candidate, ServerPlayer owner) {
+        if (candidate == null || candidate == owner || !candidate.isAlive()
+                || candidate instanceof UndeadCrewmate || candidate instanceof FakePlayer) return false;
+        if (candidate instanceof ServerPlayer player) {
+            return !player.isSpectator() && player.level() == owner.level();
+        }
+        return candidate instanceof Mob mob && !mob.isAlliedTo(owner);
     }
 
     private static void fireCannonBarrage(Session session, ServerPlayer owner, LivingEntity target) {
