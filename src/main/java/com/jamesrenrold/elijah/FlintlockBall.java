@@ -103,9 +103,14 @@ public final class FlintlockBall extends ThrowableProjectile {
     protected void onHitEntity(EntityHitResult hit) {
         if (level().isClientSide) return;
         Entity target = hit.getEntity();
+        // Domain shells must be able to damage other players even when the
+        // server's ordinary player-versus-player rule is disabled. Keeping
+        // the owner out of the target loop below provides the immunity; using
+        // the projectile rather than the player as the damage source avoids
+        // Player.hurt() rejecting the hit as normal PvP damage.
         DamageSource source = new DamageSource(
                 level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE)
-                        .getHolderOrThrow(DAMAGE_TYPE), this, getOwner());
+                        .getHolderOrThrow(DAMAGE_TYPE), this, cannonball ? null : getOwner());
         // Respect shields, invulnerability and other mods cancelling damage.
         if (!cannonball && target.hurt(source, shotDamage) && target instanceof LivingEntity living) {
             living.addEffect(new MobEffectInstance(MobEffects.DARKNESS, effectTicks, 0), getOwner());

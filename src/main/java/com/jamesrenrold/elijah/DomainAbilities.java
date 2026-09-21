@@ -111,6 +111,9 @@ public final class DomainAbilities {
     private static final double BEACH_SPAWN_Y = 67.0D;
     private static final UUID DOMAIN_SPEED_ID = UUID.fromString("c01c5046-3b27-49c5-9384-95f1f1cdb5db");
     private static final UUID DOMAIN_LIFESTEAL_ID = UUID.fromString("6e39eb13-5420-4de8-bf2d-5895e1cbbd7c");
+    private static final ResourceKey<net.minecraft.world.damagesource.DamageType> DOMAIN_DAMAGE_TYPE =
+            ResourceKey.create(Registries.DAMAGE_TYPE,
+                    new ResourceLocation(ElijahPirate.MOD_ID, "flintlock"));
     private static final Map<UUID, Session> SESSIONS = new HashMap<>();
     private static final Map<UUID, Long> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Float> CBC_PROJECTILE_DAMAGE = new HashMap<>();
@@ -314,8 +317,7 @@ public final class DomainAbilities {
     @SubscribeEvent
     public static void onLivingAttack(LivingAttackEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        Session session = SESSIONS.get(player.getUUID());
-        if (session == null || session.ending) return;
+        if (!isDomainOwner(player)) return;
         DamageSource source = event.getSource();
         if (source.is(DamageTypeTags.IS_EXPLOSION)
                 || isCbcBarrageProjectile(source.getDirectEntity())
@@ -372,9 +374,14 @@ public final class DomainAbilities {
             Float fixedDamage = getCbcDamage(source);
             if (fixedDamage != null) {
                 long expiresAt = event.getLevel().getGameTime() + 2L;
+                // CBC's native damage can be rejected by Minecraft's normal
+                // PvP gate before the ordinary hurt event reaches our fixed
+                // damage handler. Remove only players from the native victim
+                // list and apply domain damage directly: the owner remains
+                // immune, while every other non-spectator player is harmed.
                 event.getAffectedEntities().removeIf(entity ->
                         entity instanceof ServerPlayer player
-                                && SESSIONS.containsKey(player.getUUID()));
+                                && (isDomainOwner(player) || forceDomainPlayerDamage(player, source, fixedDamage)));
                 for (Entity entity : event.getAffectedEntities()) {
                     if (entity instanceof LivingEntity living && living.isAlive()) {
                         CBC_EXPLOSION_DAMAGE.put(living.getUUID(),
@@ -383,6 +390,21 @@ public final class DomainAbilities {
                 }
             }
         }
+    }
+
+    private static boolean forceDomainPlayerDamage(ServerPlayer player, Entity directSource,
+                                                   float amount) {
+        if (player.isSpectator() || !player.isAlive()) return true;
+        DamageSource source = new DamageSource(
+                player.level().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE)
+                        .getHolderOrThrow(DOMAIN_DAMAGE_TYPE), directSource);
+        player.hurt(source, amount);
+        return true;
+    }
+
+    private static boolean isDomainOwner(ServerPlayer player) {
+        Session session = SESSIONS.get(player.getUUID());
+        return session != null && !session.ending && session.ownerId.equals(player.getUUID());
     }
 
     /** Suppress CBC's native cloud/blast-wave packet while preserving its damage. */
