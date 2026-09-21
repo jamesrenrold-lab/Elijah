@@ -86,6 +86,10 @@ assert "removeModifier(player.getAttribute(Attributes.MAX_HEALTH), FRAILTY_HEALT
 assert "target instanceof FakePlayer" in domain_java
 assert "getEntitiesOfClass(LivingEntity.class" in domain_java
 assert "isValidDomainTarget" in domain_java
+assert "ORIGIN_MISSING_GRACE_CHECKS" in java
+assert "deactivatePirate(ServerPlayer player)" in java
+assert "cancelForOwner" in domain_java
+assert "removePirateModifiers(ServerPlayer player)" in blood
 
 # Active ability resources keep their required Apoli entity-action bridge, while
 # the actual gameplay remains authoritative in the Java command handlers.

@@ -115,15 +115,7 @@ public final class PirateAbilities {
     public static void onPirateTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)) return;
         if (!ElijahPirate.isPirate(player)) {
-            // Origin swaps do not necessarily unload the player or fire a
-            // matching cleanup callback, so remove every Java-owned modifier
-            // on the first server tick after Elijah is no longer active.
-            removeModifier(player.getAttribute(Attributes.ARMOR), FRAILTY_ARMOR_ID);
-            removeModifier(player.getAttribute(Attributes.MAX_HEALTH), FRAILTY_HEALTH_ID);
-            removeModifier(player.getAttribute(Attributes.MOVEMENT_SPEED), LAND_LEGS_ID);
-            Attribute swimAttribute = ForgeRegistries.ATTRIBUTES.getValue(
-                    new ResourceLocation("forge", "swim_speed"));
-            removeModifier(swimAttribute == null ? null : player.getAttribute(swimAttribute), SEA_SWIM_ID);
+            removePirateModifiers(player);
             return;
         }
         addModifier(player.getAttribute(Attributes.ARMOR), FRAILTY_ARMOR_ID,
@@ -185,6 +177,15 @@ public final class PirateAbilities {
 
     private static void removeModifier(AttributeInstance instance, java.util.UUID id) {
         if (instance != null) instance.removeModifier(id);
+    }
+
+    public static void removePirateModifiers(ServerPlayer player) {
+        removeModifier(player.getAttribute(Attributes.ARMOR), FRAILTY_ARMOR_ID);
+        removeModifier(player.getAttribute(Attributes.MAX_HEALTH), FRAILTY_HEALTH_ID);
+        removeModifier(player.getAttribute(Attributes.MOVEMENT_SPEED), LAND_LEGS_ID);
+        Attribute swimAttribute = ForgeRegistries.ATTRIBUTES.getValue(
+                new ResourceLocation("forge", "swim_speed"));
+        removeModifier(swimAttribute == null ? null : player.getAttribute(swimAttribute), SEA_SWIM_ID);
     }
 
     private PirateAbilities() {}

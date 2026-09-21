@@ -269,6 +269,21 @@ public final class BloodAbilities {
         if (exhaustedAttackDamage != null) exhaustedAttackDamage.removeModifier(EXHAUSTED_ATTACK_DAMAGE_ID);
     }
 
+    public static void removePirateModifiers(ServerPlayer player) {
+        removeBloodModifiers(player);
+        PowderPouch state = pouch(player);
+        state.cursedFormActive = false;
+        state.bloodActiveWindow = false;
+        state.bloodHuntUntil = 0L;
+        state.bloodFlightUntil = 0L;
+        state.bloodOverdriveUntil = 0L;
+        state.bloodExhaustedUntil = 0L;
+        player.removeEffect(MobEffects.BLINDNESS);
+        player.removeEffect(MobEffects.DARKNESS);
+        player.removeEffect(MobEffects.DAMAGE_BOOST);
+        player.removeEffect(MobEffects.DOLPHINS_GRACE);
+    }
+
     private static void removeRushModifiers(ServerPlayer player) {
         AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
         AttributeInstance attackSpeed = player.getAttribute(Attributes.ATTACK_SPEED);

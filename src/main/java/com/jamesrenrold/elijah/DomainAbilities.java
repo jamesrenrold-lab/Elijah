@@ -256,6 +256,12 @@ public final class DomainAbilities {
         return Math.max(0, (int) Math.min(Integer.MAX_VALUE, remaining));
     }
 
+    public static void cancelForOwner(UUID ownerId, MinecraftServer server, String reason) {
+        PENDING_ACTIVATIONS.remove(ownerId);
+        Session session = SESSIONS.get(ownerId);
+        if (session != null) finishSession(session, server, true, reason);
+    }
+
     private static void recoverFinishedSessions(MinecraftServer server) {
         long now = server.overworld().getGameTime();
         for (Session session : new ArrayList<>(SESSIONS.values())) {
@@ -440,7 +446,7 @@ public final class DomainAbilities {
 
     private static void tickSession(MinecraftServer server, Session session) {
             ServerPlayer owner = server.getPlayerList().getPlayer(session.ownerId);
-            if (owner == null || !owner.isAlive()) {
+            if (owner == null || !owner.isAlive() || !ElijahPirate.isPirate(owner)) {
                 finishSession(session, server, true, "caster unavailable");
                 return;
             }

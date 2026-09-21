@@ -32,6 +32,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -78,6 +79,8 @@ public final class ElijahPirate {
                     .build(MOD_ID + ":undead_crewmate"));
     private static final Set<UUID> KNOWN_PIRATES = new HashSet<>();
     private static final Map<UUID, PowderPouch> PLAYER_STATES = new HashMap<>();
+    private static final Map<UUID, Integer> MISSING_ORIGIN_CHECKS = new HashMap<>();
+    private static final int ORIGIN_MISSING_GRACE_CHECKS = 3;
     private static final String PERSISTENT_STATE = "ElijahPouchState";
     private static final String PERSISTENT_PIRATE = "ElijahPirateOwner";
 
@@ -119,6 +122,7 @@ public final class ElijahPirate {
 
     /** A durable Java-side marker; it is deliberately not an Origins power. */
     public static boolean isPirate(ServerPlayer player) {
+        if (player instanceof FakePlayer) return false;
         boolean persistentOwner = player.getPersistentData().getBoolean(PERSISTENT_PIRATE);
         PowderPouch pouch = state(player);
         if (pouch.pirateOrigin || persistentOwner || KNOWN_PIRATES.contains(player.getUUID())) {
@@ -130,9 +134,33 @@ public final class ElijahPirate {
         return false;
     }
 
+    /** Removes Elijah only after the marker has been absent for the grace window. */
+    public static void deactivatePirate(ServerPlayer player) {
+        PowderPouch pouch = state(player);
+        pouch.pirateOrigin = false;
+        pouch.wisdomOfTheSea = false;
+        pouch.dirtyTacticsArmed = false;
+        pouch.cursedFormActive = false;
+        pouch.bloodActiveWindow = false;
+        pouch.bloodBuffUntil = 0L;
+        pouch.bloodHuntUntil = 0L;
+        pouch.bloodFlightUntil = 0L;
+        pouch.bloodOverdriveUntil = 0L;
+        pouch.bloodExhaustedUntil = 0L;
+        pouch.bloodLockedTarget = null;
+        player.getPersistentData().putBoolean(PERSISTENT_PIRATE, false);
+        KNOWN_PIRATES.remove(player.getUUID());
+        MISSING_ORIGIN_CHECKS.remove(player.getUUID());
+        DomainAbilities.cancelForOwner(player.getUUID(), player.getServer(), "Elijah origin removed");
+        BloodAbilities.removePirateModifiers(player);
+        PirateAbilities.removePirateModifiers(player);
+        saveState(player, pouch);
+    }
+
     public static void clearKnownPirates() {
         KNOWN_PIRATES.clear();
         PLAYER_STATES.clear();
+        MISSING_ORIGIN_CHECKS.clear();
     }
 
     private void playerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
@@ -141,23 +169,31 @@ public final class ElijahPirate {
         }
         PLAYER_STATES.remove(event.getEntity().getUUID());
         KNOWN_PIRATES.remove(event.getEntity().getUUID());
+        MISSING_ORIGIN_CHECKS.remove(event.getEntity().getUUID());
     }
 
     @SubscribeEvent
     public static void detectPirateOrigin(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player)
-                || player.tickCount % 20 != 0) return;
+                || player instanceof FakePlayer || player.tickCount % 20 != 0) return;
+        if (player.getServer() == null) return;
         PowderPouch pouch = state(player);
-        if (isPirate(player) || player.getServer() == null) return;
         int result = player.getServer().getCommands().performPrefixedCommand(
                 player.createCommandSourceStack().withPermission(4).withSuppressedOutput(),
                 "power has @s elijah:pirate_marker");
         if (result > 0) {
+            MISSING_ORIGIN_CHECKS.remove(player.getUUID());
+            boolean wasPirate = pouch.pirateOrigin || player.getPersistentData().getBoolean(PERSISTENT_PIRATE)
+                    || KNOWN_PIRATES.contains(player.getUUID());
             pouch.pirateOrigin = true;
             KNOWN_PIRATES.add(player.getUUID());
             player.getPersistentData().putBoolean(PERSISTENT_PIRATE, true);
             pouch.wisdomOfTheSea = true;
             saveState(player, pouch);
+        } else if (pouch.pirateOrigin || player.getPersistentData().getBoolean(PERSISTENT_PIRATE)
+                || KNOWN_PIRATES.contains(player.getUUID())) {
+            int missing = MISSING_ORIGIN_CHECKS.merge(player.getUUID(), 1, Integer::sum);
+            if (missing >= ORIGIN_MISSING_GRACE_CHECKS) deactivatePirate(player);
         }
     }
 
