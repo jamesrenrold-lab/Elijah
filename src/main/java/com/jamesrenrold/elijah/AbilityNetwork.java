@@ -37,32 +37,36 @@ public final class AbilityNetwork {
     /** Sends display-only state. The server remains the only authority for abilities. */
     public static void syncState(ServerPlayer player) {
         PowderPouch state = ElijahPirate.state(player);
-        if (!ElijahPirate.isPirate(player)) return;
-            long now = player.getServer() == null
-                    ? player.serverLevel().getGameTime()
-                    : player.getServer().overworld().getGameTime();
-            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ClientStatePacket(
-                    state.pirateOrigin,
-                    state.bloodResource,
-                    state.crewResource,
-                    state.cursedFormActive,
-                    state.bloodHuntUntil > now,
-                    state.bloodFlightUntil > now,
-                    state.bloodOverdriveUntil > now,
-                    state.bloodExhaustedUntil > now,
-                    state.dirtyTacticsArmed,
-                    remaining(state.dirtyTacticsReadyAt, now),
-                    remaining(state.nextShotTick, now),
-                    remaining(state.bloodCooldownUntil, now),
-                    remaining(state.bloodHuntUntil, now),
-                    remaining(state.bloodHuntCooldownUntil, now),
-                    remaining(state.bloodFlightUntil, now),
-                    remaining(state.bloodFlightCooldownUntil, now),
-                    remaining(state.bloodOverdriveUntil, now),
-                    remaining(state.bloodExhaustedUntil, now),
-                    DomainAbilities.activeRemaining(player),
-                    DomainAbilities.cooldownRemaining(player),
-                    remaining(state.nextCrewRechargeTick, now)));
+        boolean pirate = ElijahPirate.isPirate(player);
+        long now = player.getServer() == null
+                ? player.serverLevel().getGameTime()
+                : player.getServer().overworld().getGameTime();
+
+        // Always send a packet, including the false state. Previously this
+        // method returned without sending anything after an origin change,
+        // leaving the client rendering the last Elijah HUD forever.
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ClientStatePacket(
+                pirate,
+                pirate ? state.bloodResource : 0,
+                pirate ? state.crewResource : 0,
+                pirate && state.cursedFormActive,
+                pirate && state.bloodHuntUntil > now,
+                pirate && state.bloodFlightUntil > now,
+                pirate && state.bloodOverdriveUntil > now,
+                pirate && state.bloodExhaustedUntil > now,
+                pirate && state.dirtyTacticsArmed,
+                pirate ? remaining(state.dirtyTacticsReadyAt, now) : 0,
+                pirate ? remaining(state.nextShotTick, now) : 0,
+                pirate ? remaining(state.bloodCooldownUntil, now) : 0,
+                pirate ? remaining(state.bloodHuntUntil, now) : 0,
+                pirate ? remaining(state.bloodHuntCooldownUntil, now) : 0,
+                pirate ? remaining(state.bloodFlightUntil, now) : 0,
+                pirate ? remaining(state.bloodFlightCooldownUntil, now) : 0,
+                pirate ? remaining(state.bloodOverdriveUntil, now) : 0,
+                pirate ? remaining(state.bloodExhaustedUntil, now) : 0,
+                pirate ? DomainAbilities.activeRemaining(player) : 0,
+                pirate ? DomainAbilities.cooldownRemaining(player) : 0,
+                pirate ? remaining(state.nextCrewRechargeTick, now) : 0));
     }
 
     private static int remaining(long until, long now) {
